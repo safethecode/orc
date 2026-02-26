@@ -46,32 +46,35 @@ export async function startRepl(
 
     setImmediate(() => {
       const line = rl.line;
+
+      // Only touch the terminal for / commands (ASCII-only, safe to use .length)
+      // Non-slash input (Korean, etc.) is left entirely to readline
+      if (!line.startsWith("/")) return;
+
       const endCol = PROMPT_VIS + line.length + 1; // 1-indexed
       const cursorCol = PROMPT_VIS + rl.cursor + 1;
 
-      // Always clear previous hint (everything past user input)
+      // Clear previous hint (everything past user input)
       process.stdout.write(`\x1b[${endCol}G\x1b[K`);
 
-      if (line.startsWith("/")) {
-        let display: string;
-        if (line.startsWith("/lang ")) {
-          const partial = line.slice(6).toLowerCase();
-          const hits = LANGUAGES.filter((l) => l.startsWith(partial));
-          display = (hits.length ? hits : LANGUAGES).join(" · ");
-        } else {
-          const hits = COMMANDS.filter((c) => c.startsWith(line));
-          display = (hits.length ? hits : COMMANDS).join("  ");
-        }
+      let display: string;
+      if (line.startsWith("/lang ")) {
+        const partial = line.slice(6).toLowerCase();
+        const hits = LANGUAGES.filter((l) => l.startsWith(partial));
+        display = (hits.length ? hits : LANGUAGES).join(" · ");
+      } else {
+        const hits = COMMANDS.filter((c) => c.startsWith(line));
+        display = (hits.length ? hits : COMMANDS).join("  ");
+      }
 
-        // Truncate to fit terminal width (2 chars gap + content)
-        const termW = process.stdout.columns || 80;
-        const available = termW - endCol - 2;
-        if (available > 3) {
-          const hint = display.length > available
-            ? display.slice(0, available - 1) + "\u2026"
-            : display;
-          process.stdout.write(`  \x1b[2m${hint}\x1b[0m`);
-        }
+      // Truncate to fit terminal width
+      const termW = process.stdout.columns || 80;
+      const available = termW - endCol - 2;
+      if (available > 3) {
+        const hint = display.length > available
+          ? display.slice(0, available - 1) + "\u2026"
+          : display;
+        process.stdout.write(`  \x1b[2m${hint}\x1b[0m`);
       }
 
       // Restore cursor to where the user is typing
