@@ -197,3 +197,13 @@ export interface ConflictCheckResult {
     permission: "owns" | "reads";
   }>;
 }
+
+// ── REPL Conversation Types ──────────────────────────────────────────
+
+export interface ConversationTurn {
+  role: "user" | "assistant";
+  content: string;
+  agentName?: string;
+  tier?: ModelTier;
+  timestamp: string;
+}
