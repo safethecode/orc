@@ -37,9 +37,13 @@ export async function startRepl(
   let hintShown = false;
   let promptActive = false;
 
+  // Visible width of PROMPT ("❯ ") = 2 chars → input starts at column 3
+  const PROMPT_WIDTH = 2;
+
   const clearHint = () => {
     if (hintShown) {
-      process.stdout.write("\x1b[s\n\x1b[2K\x1b[u");
+      // Move down to hint line, clear it, move back up (relative movement)
+      process.stdout.write("\n\x1b[2K\x1b[A");
       hintShown = false;
     }
   };
@@ -52,7 +56,9 @@ export async function startRepl(
     }
     setImmediate(() => {
       const line = rl.line;
-      process.stdout.write("\x1b[s\n\x1b[2K");
+
+      // Move down to hint line and clear it
+      process.stdout.write("\n\x1b[2K");
 
       if (line.startsWith("/")) {
         let display: string;
@@ -70,7 +76,8 @@ export async function startRepl(
         hintShown = false;
       }
 
-      process.stdout.write("\x1b[u");
+      // Move back up to prompt line, restore cursor column (relative movement)
+      process.stdout.write(`\x1b[A\x1b[${PROMPT_WIDTH + 1 + rl.cursor}G`);
     });
   });
 
