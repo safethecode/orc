@@ -36,7 +36,7 @@ export function routeTask(
     }
   }
 
-  let bestTier: "simple" | "medium" | "complex" = "medium";
+  let bestTier: "simple" | "medium" | "complex" = "simple";
   let bestScore = 0;
 
   for (const tierName of tierNames) {
@@ -65,7 +65,7 @@ export function routeTask(
   const reason =
     bestScore > 0
       ? `Matched ${bestScore} keyword(s) for tier "${bestTier}"`
-      : `No keyword matches, defaulting to "medium" tier`;
+      : "";
 
   return { tier: bestTier, model, multiAgent, reason };
 }

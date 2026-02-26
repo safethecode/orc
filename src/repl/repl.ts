@@ -99,8 +99,10 @@ async function handleNaturalInput(
     return;
   }
 
-  // Show agent header
-  renderer.agentHeader(agentName, route.model, route.reason);
+  // Show agent header (only show routing reason when keywords matched)
+  if (route.reason) {
+    renderer.agentHeader(agentName, route.model, route.reason);
+  }
 
   // Build prompt with conversation context
   const fullPrompt = conversation.buildPrompt(input);
