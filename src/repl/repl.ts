@@ -3,7 +3,7 @@ import type { Orchestrator } from "../core/orchestrator.ts";
 import type { OrchestratorConfig } from "../config/types.ts";
 import { routeTask, suggestAgent } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
-import { AgentStreamer } from "./streamer.ts";
+import { AgentStreamer, type ToolUseEvent } from "./streamer.ts";
 import { Conversation } from "./conversation.ts";
 import { isCommand, handleCommand, COMMANDS, LANGUAGES } from "./commands.ts";
 import * as renderer from "./renderer.ts";
@@ -185,14 +185,22 @@ async function handleNaturalInput(
   const streamer = new AgentStreamer();
   onStreamer(streamer);
 
-  let firstChunk = true;
-  streamer.on("text", (chunk: string) => {
-    if (firstChunk) {
+  let boxOpen = false;
+
+  streamer.on("tool_use", (tool: ToolUseEvent) => {
+    renderer.stopSpinner();
+    const input = tool.input ?? {};
+    const detail = (input.file_path as string) ?? (input.command as string) ?? (input.pattern as string) ?? undefined;
+    renderer.toolUse(tool.name, detail);
+  });
+
+  streamer.on("text_complete", (fullText: string) => {
+    if (!boxOpen) {
       renderer.stopSpinner();
       renderer.startBox(route.model);
-      firstChunk = false;
+      boxOpen = true;
     }
-    renderer.text(chunk);
+    renderer.text(fullText);
   });
 
   streamer.on("error", (msg: string) => {
@@ -207,7 +215,7 @@ async function handleNaturalInput(
     renderer.stopSpinner();
     const durationMs = Date.now() - startTime;
 
-    if (!firstChunk) {
+    if (boxOpen) {
       renderer.endBox();
     }
 

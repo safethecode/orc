@@ -197,6 +197,13 @@ function renderMarkdownLine(line: string): string {
   return line;
 }
 
+// ── Tool Use ────────────────────────────────────────────────────────
+
+export function toolUse(name: string, detail?: string): void {
+  const label = detail ? `${name} ${detail}` : name;
+  process.stdout.write(`  ${DIM}${YELLOW}▸${RESET} ${DIM}${label}${RESET}\n`);
+}
+
 // ── Cost / Stats ─────────────────────────────────────────────────────
 
 export function cost(usd: number, inputTokens: number, outputTokens: number, durationMs?: number): void {
