@@ -13,29 +13,31 @@ export function loadConfig(overridePath?: string): OrchestratorConfig {
   }
 
   const defaultRaw = readFileSync(DEFAULT_CONFIG_PATH, "utf-8");
-  let config = parseYaml(defaultRaw) as OrchestratorConfig;
+  let config = parseYaml(defaultRaw) as Record<string, unknown>;
 
   if (overridePath) {
     const resolved = resolvePath(overridePath);
     if (existsSync(resolved)) {
       const overrideRaw = readFileSync(resolved, "utf-8");
-      const overrideConfig = parseYaml(overrideRaw) as Partial<OrchestratorConfig>;
+      const overrideConfig = parseYaml(overrideRaw) as Record<string, unknown>;
       config = deepMerge(config, overrideConfig);
     }
   }
 
   if (existsSync(USER_CONFIG_PATH)) {
     const userRaw = readFileSync(USER_CONFIG_PATH, "utf-8");
-    const userConfig = parseYaml(userRaw) as Partial<OrchestratorConfig>;
+    const userConfig = parseYaml(userRaw) as Record<string, unknown>;
     config = deepMerge(config, userConfig);
   }
 
-  // Resolve ~ in path fields
-  config.orchestrator.dataDir = resolvePath(config.orchestrator.dataDir);
-  config.orchestrator.db = resolvePath(config.orchestrator.db);
-  config.orchestrator.logDir = resolvePath(config.orchestrator.logDir);
+  const typed = config as unknown as OrchestratorConfig;
 
-  return config;
+  // Resolve ~ in path fields
+  typed.orchestrator.dataDir = resolvePath(typed.orchestrator.dataDir);
+  typed.orchestrator.db = resolvePath(typed.orchestrator.db);
+  typed.orchestrator.logDir = resolvePath(typed.orchestrator.logDir);
+
+  return typed;
 }
 
 export function resolvePath(p: string): string {
@@ -45,10 +47,10 @@ export function resolvePath(p: string): string {
   return resolve(p);
 }
 
-function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
   const result = { ...target };
 
-  for (const key of Object.keys(source) as (keyof T)[]) {
+  for (const key of Object.keys(source)) {
     const srcVal = source[key];
     const tgtVal = target[key];
 
@@ -63,9 +65,9 @@ function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial
       result[key] = deepMerge(
         tgtVal as Record<string, unknown>,
         srcVal as Record<string, unknown>,
-      ) as T[keyof T];
+      );
     } else if (srcVal !== undefined) {
-      result[key] = srcVal as T[keyof T];
+      result[key] = srcVal;
     }
   }
 
