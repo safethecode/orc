@@ -40,6 +40,11 @@ let atLineStart = true;
 const BOX_PAD = "  ";
 const boxBorder = () => `${boxColor}│${RESET} `;
 
+// ── Markdown State ──────────────────────────────────────────────────
+
+let lineBuffer = "";
+let inCodeBlock = false;
+
 // ── Prompt ───────────────────────────────────────────────────────────
 
 export const PROMPT = `${BOLD}${MAGENTA}❯${RESET} `;
@@ -76,13 +81,21 @@ export function startBox(tier: ModelTier): void {
   const color = TIER_COLORS[tier];
   boxColor = color;
   atLineStart = true;
+  lineBuffer = "";
+  inCodeBlock = false;
 
   const w = (process.stdout.columns || 80) - 4;
   process.stdout.write(`${BOX_PAD}${color}╭${"─".repeat(w)}${RESET}\n`);
 }
 
 export function endBox(): void {
-  // ensure we're on a new line
+  // flush remaining partial line
+  if (lineBuffer) {
+    const rendered = renderMarkdownLine(lineBuffer);
+    process.stdout.write(`${atLineStart ? `${BOX_PAD}${boxBorder()}` : ""}${rendered}`);
+    lineBuffer = "";
+    atLineStart = false;
+  }
   if (!atLineStart) {
     process.stdout.write("\n");
   }
@@ -90,26 +103,73 @@ export function endBox(): void {
   process.stdout.write(`${BOX_PAD}${boxColor}╰${"─".repeat(w)}${RESET}\n`);
 }
 
-// ── Streaming Text (writes inside box) ──────────────────────────────
+// ── Streaming Text (writes inside box with markdown) ────────────────
 
 export function text(content: string): void {
-  let out = "";
-
   for (const ch of content) {
-    if (atLineStart) {
-      out += `${BOX_PAD}${boxBorder()}`;
-      atLineStart = false;
-    }
-
     if (ch === "\n") {
-      out += "\n";
+      const rendered = renderMarkdownLine(lineBuffer);
+      process.stdout.write(
+        `${atLineStart ? `${BOX_PAD}${boxBorder()}` : ""}${rendered}\n`,
+      );
+      lineBuffer = "";
       atLineStart = true;
     } else {
-      out += ch;
+      lineBuffer += ch;
     }
   }
+}
 
-  process.stdout.write(out);
+// ── Markdown → ANSI ─────────────────────────────────────────────────
+
+function renderMarkdownLine(line: string): string {
+  // Code block delimiter
+  if (line.startsWith("```")) {
+    inCodeBlock = !inCodeBlock;
+    if (inCodeBlock) {
+      const lang = line.slice(3).trim();
+      const w = (process.stdout.columns || 80) - 10;
+      const label = lang ? ` ${lang} ` : "";
+      return `${DIM}${label}${"╌".repeat(Math.max(0, w - label.length))}${RESET}`;
+    }
+    const w = (process.stdout.columns || 80) - 10;
+    return `${DIM}${"╌".repeat(w)}${RESET}`;
+  }
+
+  // Inside code block — dim, no markdown processing
+  if (inCodeBlock) {
+    return `${DIM}${line}${RESET}`;
+  }
+
+  // Horizontal rule
+  if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) {
+    const w = (process.stdout.columns || 80) - 10;
+    return `${DIM}${"─".repeat(w)}${RESET}`;
+  }
+
+  // Headers
+  const h3 = line.match(/^### (.+)/);
+  if (h3) return `${BOLD}${h3[1]}${RESET}`;
+
+  const h2 = line.match(/^## (.+)/);
+  if (h2) return `${BOLD}${h2[1]}${RESET}`;
+
+  const h1 = line.match(/^# (.+)/);
+  if (h1) return `${BOLD}${WHITE}${h1[1]}${RESET}`;
+
+  // Bullet list
+  line = line.replace(/^(\s*)- /, "$1• ");
+
+  // Bold
+  line = line.replace(/\*\*(.+?)\*\*/g, `${BOLD}$1${RESET}`);
+
+  // Italic
+  line = line.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, `${ITALIC}$1${RESET}`);
+
+  // Inline code
+  line = line.replace(/`(.+?)`/g, `${DIM}$1${RESET}`);
+
+  return line;
 }
 
 // ── Cost / Stats ─────────────────────────────────────────────────────
