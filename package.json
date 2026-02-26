@@ -4,7 +4,7 @@
   "description": "Terminal AI agent orchestration system",
   "type": "module",
   "bin": {
-    "orch": "./src/index.ts"
+    "orc": "./src/index.ts"
   },
   "scripts": {
     "dev": "bun run src/index.ts",
