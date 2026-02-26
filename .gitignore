@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.db
+*.db-journal
+logs/*.jsonl
+.env
+.DS_Store
+bun.lock
