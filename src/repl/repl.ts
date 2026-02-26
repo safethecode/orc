@@ -19,7 +19,7 @@ export async function startRepl(
     input: process.stdin,
     output: process.stdout,
     terminal: true,
-    completer: (line: string) => {
+    completer: (line: string): [string[], string] => {
       if (line.startsWith("/lang ")) {
         const partial = line.slice(6).toLowerCase();
         const hits = LANGUAGES.filter((l) => l.startsWith(partial));
