@@ -33,17 +33,18 @@ export async function startRepl(
     },
   });
 
-  // ── Keypress hint for / commands ──────────────────────────────────
+  // ── Keypress hint for / commands (inline, same line) ─────────────
   let hintShown = false;
   let promptActive = false;
 
   // Visible width of PROMPT ("❯ ") = 2 chars → input starts at column 3
-  const PROMPT_WIDTH = 2;
+  const PROMPT_COL = 3;
 
   const clearHint = () => {
     if (hintShown) {
-      // Move down to hint line, clear it, move back up (relative movement)
-      process.stdout.write("\n\x1b[2K\x1b[A");
+      // Move to end of input text, erase to end of line
+      process.stdout.write(`\x1b[${PROMPT_COL + rl.line.length}G\x1b[K`);
+      process.stdout.write(`\x1b[${PROMPT_COL + rl.cursor}G`);
       hintShown = false;
     }
   };
@@ -57,8 +58,8 @@ export async function startRepl(
     setImmediate(() => {
       const line = rl.line;
 
-      // Move down to hint line and clear it
-      process.stdout.write("\n\x1b[2K");
+      // Clear previous hint: jump to end of input, erase rest of line
+      process.stdout.write(`\x1b[${PROMPT_COL + line.length}G\x1b[K`);
 
       if (line.startsWith("/")) {
         let display: string;
@@ -76,8 +77,8 @@ export async function startRepl(
         hintShown = false;
       }
 
-      // Move back up to prompt line, restore cursor column (relative movement)
-      process.stdout.write(`\x1b[A\x1b[${PROMPT_WIDTH + 1 + rl.cursor}G`);
+      // Restore cursor to correct position within input
+      process.stdout.write(`\x1b[${PROMPT_COL + rl.cursor}G`);
     });
   });
 
