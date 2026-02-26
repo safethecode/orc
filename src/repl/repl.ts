@@ -33,58 +33,8 @@ export async function startRepl(
     },
   });
 
-  // ── Keypress hint for / commands (inline, same line) ─────────────
-  let hintShown = false;
-  let promptActive = false;
-
-  // Visible width of PROMPT ("❯ ") = 2 chars → input starts at column 3
-  const PROMPT_COL = 3;
-
-  const clearHint = () => {
-    if (hintShown) {
-      // Move to end of input text, erase to end of line
-      process.stdout.write(`\x1b[${PROMPT_COL + rl.line.length}G\x1b[K`);
-      process.stdout.write(`\x1b[${PROMPT_COL + rl.cursor}G`);
-      hintShown = false;
-    }
-  };
-
-  process.stdin.on("keypress", (_str: string | undefined, key: { name?: string }) => {
-    if (!promptActive) return;
-    if (key?.name === "return" || key?.name === "enter") {
-      clearHint();
-      return;
-    }
-    setImmediate(() => {
-      const line = rl.line;
-
-      // Clear previous hint: jump to end of input, erase rest of line
-      process.stdout.write(`\x1b[${PROMPT_COL + line.length}G\x1b[K`);
-
-      if (line.startsWith("/")) {
-        let display: string;
-        if (line.startsWith("/lang ")) {
-          const partial = line.slice(6).toLowerCase();
-          const hits = LANGUAGES.filter((l) => l.startsWith(partial));
-          display = (hits.length ? hits : LANGUAGES).join(" · ");
-        } else {
-          const hits = COMMANDS.filter((c) => c.startsWith(line));
-          display = (hits.length ? hits : COMMANDS).join("  ");
-        }
-        process.stdout.write(`  \x1b[2m${display}\x1b[0m`);
-        hintShown = true;
-      } else {
-        hintShown = false;
-      }
-
-      // Restore cursor to correct position within input
-      process.stdout.write(`\x1b[${PROMPT_COL + rl.cursor}G`);
-    });
-  });
-
   // Ctrl+C handling: abort running generation, keep REPL alive
   process.on("SIGINT", () => {
-    clearHint();
     if (currentStreamer?.isRunning) {
       currentStreamer.abort();
       process.stdout.write("\n");
@@ -104,11 +54,8 @@ export async function startRepl(
     while (true) {
       let input: string;
       try {
-        promptActive = true;
         input = await rl.question(renderer.PROMPT);
-        promptActive = false;
       } catch {
-        promptActive = false;
         break;
       }
 
