@@ -10,6 +10,7 @@ export interface CommandOptions {
   maxBudgetUsd?: number;
   systemPrompt?: string;
   workdir?: string;
+  useStdin?: boolean;
 }
 
 export function buildCommand(
@@ -23,17 +24,31 @@ export function buildCommand(
   let cmd: string[];
 
   if (provider.command === "claude") {
-    cmd = [
-      "claude",
-      "-p",
-      options.prompt,
-      "--model",
-      model,
-      "--output-format",
-      "stream-json",
-      "--max-budget-usd",
-      String(budget),
-    ];
+    if (options.useStdin) {
+      // Long prompts: omit -p, caller pipes via stdin
+      cmd = [
+        "claude",
+        "-p", "-",
+        "--model",
+        model,
+        "--output-format",
+        "stream-json",
+        "--max-budget-usd",
+        String(budget),
+      ];
+    } else {
+      cmd = [
+        "claude",
+        "-p",
+        options.prompt,
+        "--model",
+        model,
+        "--output-format",
+        "stream-json",
+        "--max-budget-usd",
+        String(budget),
+      ];
+    }
 
     if (options.systemPrompt) {
       cmd.push("--system-prompt", options.systemPrompt);
