@@ -30,6 +30,7 @@ export async function startRepl(
     } else {
       process.stdout.write("\n");
       rl.close();
+      process.exit(0);
     }
   });
 
