@@ -33,6 +33,52 @@ export async function startRepl(
     },
   });
 
+  // ── Inline ghost hint for / commands ─────────────────────────────
+  // Writes dim text AFTER the cursor on the SAME line. No \n ever.
+  // Truncated to terminal width so it never wraps.
+  let promptActive = false;
+  const PROMPT_VIS = 2; // visible width of "❯ "
+
+  process.stdin.on("keypress", (_str: string | undefined, key: { name?: string }) => {
+    if (!promptActive) return;
+    // On enter, readline handles the newline — nothing to do
+    if (key?.name === "return" || key?.name === "enter") return;
+
+    setImmediate(() => {
+      const line = rl.line;
+      const endCol = PROMPT_VIS + line.length + 1; // 1-indexed
+      const cursorCol = PROMPT_VIS + rl.cursor + 1;
+
+      // Always clear previous hint (everything past user input)
+      process.stdout.write(`\x1b[${endCol}G\x1b[K`);
+
+      if (line.startsWith("/")) {
+        let display: string;
+        if (line.startsWith("/lang ")) {
+          const partial = line.slice(6).toLowerCase();
+          const hits = LANGUAGES.filter((l) => l.startsWith(partial));
+          display = (hits.length ? hits : LANGUAGES).join(" · ");
+        } else {
+          const hits = COMMANDS.filter((c) => c.startsWith(line));
+          display = (hits.length ? hits : COMMANDS).join("  ");
+        }
+
+        // Truncate to fit terminal width (2 chars gap + content)
+        const termW = process.stdout.columns || 80;
+        const available = termW - endCol - 2;
+        if (available > 3) {
+          const hint = display.length > available
+            ? display.slice(0, available - 1) + "\u2026"
+            : display;
+          process.stdout.write(`  \x1b[2m${hint}\x1b[0m`);
+        }
+      }
+
+      // Restore cursor to where the user is typing
+      process.stdout.write(`\x1b[${cursorCol}G`);
+    });
+  });
+
   // Ctrl+C handling: abort running generation, keep REPL alive
   process.on("SIGINT", () => {
     if (currentStreamer?.isRunning) {
@@ -54,8 +100,11 @@ export async function startRepl(
     while (true) {
       let input: string;
       try {
+        promptActive = true;
         input = await rl.question(renderer.PROMPT);
+        promptActive = false;
       } catch {
+        promptActive = false;
         break;
       }
 
