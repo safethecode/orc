@@ -161,12 +161,14 @@ export function startSpinner(agentName: string, tier: ModelTier): void {
     text: `${DIM}${agentName} is thinking...${RESET}`,
     color,
     indent: 2,
+    stream: process.stdout,
   }).start();
 }
 
 export function stopSpinner(): void {
   if (spinner) {
     spinner.stop();
+    process.stdout.write("\r\x1b[K");
     spinner = null;
   }
 }
