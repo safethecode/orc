@@ -96,7 +96,7 @@ export async function startRepl(
   });
 
   // Clear screen and move cursor to top
-  process.stdout.write("\x1b[2J\x1b[H");
+  process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
 
   // Welcome with profile names
   const profiles = orchestrator.getRegistry().list().map((p) => p.name);
