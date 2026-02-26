@@ -65,5 +65,18 @@ export function initDb(dbPath: string): Database {
     FOREIGN KEY (task_id) REFERENCES tasks(id)
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS file_ownership (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pattern TEXT NOT NULL,
+    agent_name TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    permission TEXT NOT NULL CHECK(permission IN ('owns', 'reads')),
+    declared_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (agent_name) REFERENCES agents(name),
+    FOREIGN KEY (task_id) REFERENCES tasks(id)
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ownership_agent ON file_ownership(agent_name)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ownership_pattern ON file_ownership(pattern)`);
+
   return db;
 }
