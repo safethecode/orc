@@ -167,7 +167,6 @@ export function startSpinner(agentName: string, tier: ModelTier): void {
 export function stopSpinner(): void {
   if (spinner) {
     spinner.stop();
-    process.stdout.write("\x1b[A\x1b[K"); // clear spinner line
     spinner = null;
   }
 }
