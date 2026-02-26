@@ -265,6 +265,51 @@ export class Store {
     stmt.run(id);
   }
 
+  // ── File Ownership ───────────────────────────────────────────────────
+
+  declareOwnership(declaration: { agentName: string; taskId: string; owns: string[]; reads: string[] }): void {
+    const stmt = this.db.prepare(
+      `INSERT INTO file_ownership (pattern, agent_name, task_id, permission) VALUES (?, ?, ?, ?)`
+    );
+    for (const pattern of declaration.owns) {
+      stmt.run(pattern, declaration.agentName, declaration.taskId, "owns");
+    }
+    for (const pattern of declaration.reads) {
+      stmt.run(pattern, declaration.agentName, declaration.taskId, "reads");
+    }
+  }
+
+  getOwnership(agentName: string): Array<{ pattern: string; permission: string }> {
+    const stmt = this.db.prepare(
+      `SELECT pattern, permission FROM file_ownership WHERE agent_name = ?`
+    );
+    return stmt.all(agentName) as Array<{ pattern: string; permission: string }>;
+  }
+
+  getOwnersOfPattern(pattern: string): Array<{ agentName: string; permission: string; taskId: string }> {
+    const stmt = this.db.prepare(
+      `SELECT agent_name, permission, task_id FROM file_ownership WHERE pattern = ? AND permission = 'owns'`
+    );
+    const rows = stmt.all(pattern) as Array<{ agent_name: string; permission: string; task_id: string }>;
+    return rows.map(r => ({ agentName: r.agent_name, permission: r.permission, taskId: r.task_id }));
+  }
+
+  revokeOwnership(agentName: string, taskId?: string): void {
+    if (taskId) {
+      this.db.prepare(`DELETE FROM file_ownership WHERE agent_name = ? AND task_id = ?`).run(agentName, taskId);
+    } else {
+      this.db.prepare(`DELETE FROM file_ownership WHERE agent_name = ?`).run(agentName);
+    }
+  }
+
+  getAllOwnership(): Array<{ pattern: string; agentName: string; taskId: string; permission: string }> {
+    const stmt = this.db.prepare(
+      `SELECT pattern, agent_name, task_id, permission FROM file_ownership`
+    );
+    const rows = stmt.all() as Array<{ pattern: string; agent_name: string; task_id: string; permission: string }>;
+    return rows.map(r => ({ pattern: r.pattern, agentName: r.agent_name, taskId: r.task_id, permission: r.permission }));
+  }
+
   // ── Private Helpers ──────────────────────────────────────────────────
 
   private mapTask(row: Record<string, unknown>): Task {
