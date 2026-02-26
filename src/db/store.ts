@@ -62,13 +62,13 @@ export class Store {
     };
 
     const sets: string[] = [];
-    const values: unknown[] = [];
+    const values: (string | number | null)[] = [];
 
     for (const [key, value] of Object.entries(updates)) {
       const col = columnMap[key];
       if (col) {
         sets.push(`${col} = ?`);
-        values.push(value);
+        values.push(value as string | number | null);
       }
     }
 
@@ -84,7 +84,7 @@ export class Store {
   listTasks(filter?: { status?: TaskStatus; agentName?: string }): Task[] {
     let sql = `SELECT * FROM tasks`;
     const conditions: string[] = [];
-    const values: unknown[] = [];
+    const values: (string | number | null)[] = [];
 
     if (filter?.status) {
       conditions.push("status = ?");
