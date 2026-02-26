@@ -18,6 +18,14 @@ async function main() {
   const orchestrator = new Orchestrator(config);
   await orchestrator.initialize();
 
+  // Also load profiles from project-local profiles/ directory
+  const localProfileDir = new URL("../profiles", import.meta.url).pathname;
+  try {
+    await orchestrator.getRegistry().loadProfiles(localProfileDir);
+  } catch {
+    // local profiles directory may not exist
+  }
+
   switch (command) {
     case "spawn": {
       const agentName = args[1];
