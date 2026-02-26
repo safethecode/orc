@@ -1,0 +1,34 @@
+orchestrator:
+  sessionPrefix: "orc-"
+  maxConcurrentAgents: 3
+  dataDir: "~/.orchestrator"
+  db: "~/.orchestrator/orchestrator.db"
+  logDir: "~/.orchestrator/logs"
+
+budget:
+  defaultMaxPerTask: 0.50
+  globalDailyLimit: 10.00
+  warningThreshold: 0.80
+
+providers:
+  claude:
+    command: "claude"
+    defaultModel: "sonnet"
+    flags: ["-p", "--output-format", "stream-json"]
+  codex:
+    command: "codex"
+    subcommand: "exec"
+    defaultModel: null
+    flags: ["--full-auto"]
+
+routing:
+  tiers:
+    simple:
+      model: "haiku"
+      keywords: ["format", "rename", "typo", "lint", "style"]
+    medium:
+      model: "sonnet"
+      keywords: ["refactor", "test", "review", "implement", "fix"]
+    complex:
+      model: "opus"
+      keywords: ["architect", "design", "security", "optimize", "migrate"]
