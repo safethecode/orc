@@ -89,12 +89,8 @@ export function startBox(tier: ModelTier): void {
 }
 
 export function endBox(): void {
-  // flush remaining partial line
   if (lineBuffer) {
-    const rendered = renderMarkdownLine(lineBuffer);
-    process.stdout.write(`${atLineStart ? `${BOX_PAD}${boxBorder()}` : ""}${rendered}`);
-    lineBuffer = "";
-    atLineStart = false;
+    flushLineBuffer();
   }
   if (!atLineStart) {
     process.stdout.write("\n");
@@ -108,16 +104,45 @@ export function endBox(): void {
 export function text(content: string): void {
   for (const ch of content) {
     if (ch === "\n") {
-      const rendered = renderMarkdownLine(lineBuffer);
-      process.stdout.write(
-        `${atLineStart ? `${BOX_PAD}${boxBorder()}` : ""}${rendered}\n`,
-      );
-      lineBuffer = "";
-      atLineStart = true;
+      flushLineBuffer();
     } else {
       lineBuffer += ch;
     }
   }
+}
+
+function flushLineBuffer(): void {
+  const maxW = (process.stdout.columns || 80) - 4;
+  const wrapped = wrapText(lineBuffer, maxW);
+  for (const wline of wrapped) {
+    process.stdout.write(`${BOX_PAD}${boxBorder()}${renderMarkdownLine(wline)}\n`);
+  }
+  lineBuffer = "";
+  atLineStart = true;
+}
+
+// ── Word Wrap ───────────────────────────────────────────────────────
+
+function wrapText(text: string, maxWidth: number): string[] {
+  if (text.length <= maxWidth) return [text];
+
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    if (!current) {
+      current = word;
+    } else if (current.length + 1 + word.length > maxWidth) {
+      lines.push(current);
+      current = word;
+    } else {
+      current += " " + word;
+    }
+  }
+  if (current) lines.push(current);
+
+  return lines.length > 0 ? lines : [text];
 }
 
 // ── Markdown → ANSI ─────────────────────────────────────────────────
