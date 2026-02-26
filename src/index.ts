@@ -103,12 +103,12 @@ async function main() {
       break;
     }
 
-    case "help":
-    case undefined: {
+    case "help": {
       console.log(`
 orc - Terminal AI Agent Orchestrator
 
 Commands:
+  (no args)           Start interactive REPL
   spawn <agent>       Spawn an agent in a tmux session
   task <prompt>       Route and assign a task to an agent
   status              Show all agent statuses
@@ -117,6 +117,13 @@ Commands:
   dashboard           Open the TUI dashboard
   help                Show this help message
 `);
+      break;
+    }
+
+    case undefined: {
+      // No args → interactive REPL
+      const { startRepl } = await import("./repl/repl.ts");
+      await startRepl(orchestrator, config);
       break;
     }
 
