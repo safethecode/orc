@@ -244,6 +244,14 @@ export class Orchestrator {
     });
   }
 
+  getRegistry(): AgentRegistry {
+    return this.registry;
+  }
+
+  getConfig(): OrchestratorConfig {
+    return this.config;
+  }
+
   async shutdown(): Promise<void> {
     this.health.stop();
     await this.sessionManager.destroyAll();
