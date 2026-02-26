@@ -21,14 +21,16 @@ export async function handleCommand(
     case "status": {
       const agents = await ctx.orchestrator.listAgents();
       if (agents.length === 0) {
-        renderer.info("No agents registered.");
+        renderer.info("no agents running");
       } else {
-        renderer.info("\nAgent Status:");
-        renderer.info("\u2500".repeat(50));
+        process.stdout.write("\n");
+        renderer.separator();
         for (const agent of agents) {
-          const taskInfo = agent.currentTask ? ` [task: ${agent.currentTask}]` : "";
-          renderer.info(`  ${agent.name}: ${agent.status}${taskInfo}`);
+          const taskInfo = agent.currentTask ? `  \x1b[90mtask: ${agent.currentTask}\x1b[0m` : "";
+          const statusColor = agent.status === "running" ? "\x1b[32m" : "\x1b[90m";
+          renderer.info(`${statusColor}●\x1b[0m ${agent.name} \x1b[90m${agent.status}\x1b[0m${taskInfo}`);
         }
+        renderer.separator();
       }
       return "continue";
     }
@@ -36,33 +38,32 @@ export async function handleCommand(
     case "stop": {
       const agentName = args[0];
       if (!agentName) {
-        renderer.error("Usage: /stop <agent-name>");
+        renderer.error("usage: /stop <agent-name>");
         return "continue";
       }
       try {
         await ctx.orchestrator.stopAgent(agentName);
-        renderer.info(`Stopped agent: ${agentName}`);
+        renderer.info(`✓ stopped ${agentName}`);
       } catch (e) {
-        renderer.error(`Failed to stop agent: ${(e as Error).message}`);
+        renderer.error((e as Error).message);
       }
       return "continue";
     }
 
     case "clear": {
       ctx.conversation.clear();
-      renderer.info("Conversation cleared.");
+      renderer.info("✓ conversation cleared");
       return "continue";
     }
 
     case "help": {
-      renderer.info(`
-Commands:
-  /status           Show all agent statuses
-  /stop <agent>     Stop a running agent
-  /clear            Clear conversation history
-  /help             Show this help
-  /quit             Exit the REPL
-`);
+      process.stdout.write("\n");
+      renderer.info("\x1b[1m/status\x1b[0m\x1b[2m           agent statuses");
+      renderer.info("\x1b[1m/stop\x1b[0m \x1b[2m<agent>     stop a running agent");
+      renderer.info("\x1b[1m/clear\x1b[0m\x1b[2m            clear conversation");
+      renderer.info("\x1b[1m/help\x1b[0m\x1b[2m             this help");
+      renderer.info("\x1b[1m/quit\x1b[0m\x1b[2m             exit");
+      process.stdout.write("\n");
       return "continue";
     }
 
@@ -73,7 +74,7 @@ Commands:
     }
 
     default: {
-      renderer.error(`Unknown command: /${cmd}. Type /help for available commands.`);
+      renderer.error(`unknown command: /${cmd}`);
       return "continue";
     }
   }
