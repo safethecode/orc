@@ -47,7 +47,7 @@ export class Inbox extends EventEmitter {
 
   getHistory(agentName: string, limit?: number): AgentMessage[] {
     let sql = `SELECT * FROM messages WHERE from_agent = ? OR to_agent = ? ORDER BY timestamp DESC`;
-    const params: unknown[] = [agentName, agentName];
+    const params: (string | number)[] = [agentName, agentName];
 
     if (limit !== undefined) {
       sql += ` LIMIT ?`;
