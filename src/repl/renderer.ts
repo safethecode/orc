@@ -33,6 +33,13 @@ const TIER_BG: Record<ModelTier, string> = {
   haiku: BG_GREEN,
 };
 
+// ── Box State (for streaming bordered output) ────────────────────────
+
+let boxColor = GRAY;
+let atLineStart = true;
+const BOX_PAD = "  ";
+const boxBorder = () => `${boxColor}│${RESET} `;
+
 // ── Prompt ───────────────────────────────────────────────────────────
 
 export const PROMPT = `${BOLD}${MAGENTA}❯${RESET} `;
@@ -59,14 +66,50 @@ export function agentHeader(name: string, tier: ModelTier, reason: string): void
   const reasonText = reason ? `  ${GRAY}${ITALIC}${reason}${RESET}` : "";
 
   process.stdout.write(
-    `\n  ${color}${BOLD}${name}${RESET} ${badge}${reasonText}\n\n`,
+    `\n  ${color}${BOLD}${name}${RESET} ${badge}${reasonText}\n`,
   );
 }
 
-// ── Streaming Text ───────────────────────────────────────────────────
+// ── Response Box ─────────────────────────────────────────────────────
+
+export function startBox(tier: ModelTier): void {
+  const color = TIER_COLORS[tier];
+  boxColor = color;
+  atLineStart = true;
+
+  const w = (process.stdout.columns || 80) - 4;
+  process.stdout.write(`${BOX_PAD}${color}╭${"─".repeat(w)}${RESET}\n`);
+}
+
+export function endBox(): void {
+  // ensure we're on a new line
+  if (!atLineStart) {
+    process.stdout.write("\n");
+  }
+  const w = (process.stdout.columns || 80) - 4;
+  process.stdout.write(`${BOX_PAD}${boxColor}╰${"─".repeat(w)}${RESET}\n`);
+}
+
+// ── Streaming Text (writes inside box) ──────────────────────────────
 
 export function text(content: string): void {
-  process.stdout.write(content);
+  let out = "";
+
+  for (const ch of content) {
+    if (atLineStart) {
+      out += `${BOX_PAD}${boxBorder()}`;
+      atLineStart = false;
+    }
+
+    if (ch === "\n") {
+      out += "\n";
+      atLineStart = true;
+    } else {
+      out += ch;
+    }
+  }
+
+  process.stdout.write(out);
 }
 
 // ── Cost / Stats ─────────────────────────────────────────────────────
@@ -74,10 +117,10 @@ export function text(content: string): void {
 export function cost(usd: number, inputTokens: number, outputTokens: number, durationMs?: number): void {
   const price = usd < 0.01 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`;
   const tokens = `${inputTokens.toLocaleString()} → ${outputTokens.toLocaleString()}`;
-  const duration = durationMs ? `  ${GRAY}${(durationMs / 1000).toFixed(1)}s${RESET}` : "";
+  const duration = durationMs ? `  ${(durationMs / 1000).toFixed(1)}s` : "";
 
   process.stdout.write(
-    `\n  ${GRAY}${price}  ${DIM}│${RESET}  ${GRAY}${tokens} tokens${RESET}${duration}\n`,
+    `  ${GRAY}${price}  │  ${tokens} tokens${duration}${RESET}\n`,
   );
 }
 

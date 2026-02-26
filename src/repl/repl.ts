@@ -124,6 +124,7 @@ async function handleNaturalInput(
   streamer.on("text", (chunk: string) => {
     if (firstChunk) {
       renderer.stopSpinner();
+      renderer.startBox(route.model);
       firstChunk = false;
     }
     renderer.text(chunk);
@@ -140,6 +141,10 @@ async function handleNaturalInput(
     const result = await streamer.run(cmd);
     renderer.stopSpinner();
     const durationMs = Date.now() - startTime;
+
+    if (!firstChunk) {
+      renderer.endBox();
+    }
 
     if (result.inputTokens > 0 || result.outputTokens > 0) {
       renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
