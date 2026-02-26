@@ -9,15 +9,19 @@ export interface StreamResult {
 
 interface StreamJsonMessage {
   type: string;
-  content_block?: { text?: string };
-  delta?: { text?: string };
+  subtype?: string;
+  // assistant message (Claude CLI format)
   message?: {
+    content?: Array<{ type: string; text?: string }>;
     usage?: { input_tokens?: number; output_tokens?: number };
   };
-  usage?: { input_tokens?: number; output_tokens?: number };
+  // content_block_delta (API streaming format)
+  content_block?: { text?: string };
+  delta?: { text?: string };
+  // result message
   result?: string;
-  subtype?: string;
-  cost_usd?: number;
+  total_cost_usd?: number;
+  usage?: { input_tokens?: number; output_tokens?: number };
 }
 
 export class AgentStreamer extends EventEmitter {
@@ -87,52 +91,40 @@ export class AgentStreamer extends EventEmitter {
       reader.releaseLock();
     }
 
-    await this.proc.exited;
-    this.emit("exit", result);
+    // Capture stderr for error reporting
+    const stderrText = await new Response(this.proc.stderr).text();
+
+    const exitCode = await this.proc.exited;
     this.proc = null;
 
+    if (exitCode !== 0 && !result.text && stderrText) {
+      this.emit("error", stderrText.trim());
+    }
+
+    this.emit("exit", result);
     return result;
   }
 
   private processMessage(msg: StreamJsonMessage, result: StreamResult): void {
-    // Claude stream-json: content_block_delta with text
-    if (msg.type === "content_block_delta" && msg.delta?.text) {
-      result.text += msg.delta.text;
-      this.emit("text", msg.delta.text);
-      return;
-    }
-
-    // Claude stream-json: assistant message with text content
-    if (msg.type === "content_block_start" && msg.content_block?.text) {
-      result.text += msg.content_block.text;
-      this.emit("text", msg.content_block.text);
-      return;
-    }
-
-    // Claude stream-json: message_delta with usage/cost
-    if (msg.type === "message_delta") {
-      if (msg.usage) {
-        result.inputTokens += msg.usage.input_tokens ?? 0;
-        result.outputTokens += msg.usage.output_tokens ?? 0;
+    // Claude CLI: assistant message with content array
+    if (msg.type === "assistant" && msg.message?.content) {
+      for (const block of msg.message.content) {
+        if (block.type === "text" && block.text) {
+          result.text += block.text;
+          this.emit("text", block.text);
+        }
+      }
+      if (msg.message.usage) {
+        result.inputTokens += msg.message.usage.input_tokens ?? 0;
+        result.outputTokens += msg.message.usage.output_tokens ?? 0;
       }
       return;
     }
 
-    // Claude stream-json: message_start with initial usage
-    if (msg.type === "message_start" && msg.message?.usage) {
-      result.inputTokens += msg.message.usage.input_tokens ?? 0;
-      result.outputTokens += msg.message.usage.output_tokens ?? 0;
-      return;
-    }
-
-    // Claude CLI stream-json: result message
+    // Claude CLI: result summary
     if (msg.type === "result") {
-      if (msg.result) {
-        result.text += msg.result;
-        this.emit("text", msg.result);
-      }
-      if (msg.cost_usd) {
-        result.costUsd = msg.cost_usd;
+      if (msg.total_cost_usd) {
+        result.costUsd = msg.total_cost_usd;
       }
       if (msg.usage) {
         result.inputTokens = msg.usage.input_tokens ?? result.inputTokens;
@@ -141,9 +133,11 @@ export class AgentStreamer extends EventEmitter {
       return;
     }
 
-    // Claude CLI stream-json: content_block with text type
-    if (msg.type === "assistant" && msg.subtype === "text") {
-      // Some versions emit assistant text blocks
+    // API streaming: content_block_delta
+    if (msg.type === "content_block_delta" && msg.delta?.text) {
+      result.text += msg.delta.text;
+      this.emit("text", msg.delta.text);
+      return;
     }
   }
 

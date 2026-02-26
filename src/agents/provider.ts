@@ -25,28 +25,24 @@ export function buildCommand(
 
   if (provider.command === "claude") {
     if (options.useStdin) {
-      // Long prompts: omit -p, caller pipes via stdin
       cmd = [
         "claude",
         "-p", "-",
-        "--model",
-        model,
-        "--output-format",
-        "stream-json",
-        "--max-budget-usd",
-        String(budget),
+        "--model", model,
+        "--output-format", "stream-json",
+        "--verbose",
+        "--max-turns", "1",
+        "--max-budget-usd", String(budget),
       ];
     } else {
       cmd = [
         "claude",
-        "-p",
-        options.prompt,
-        "--model",
-        model,
-        "--output-format",
-        "stream-json",
-        "--max-budget-usd",
-        String(budget),
+        "-p", options.prompt,
+        "--model", model,
+        "--output-format", "stream-json",
+        "--verbose",
+        "--max-turns", "1",
+        "--max-budget-usd", String(budget),
       ];
     }
 

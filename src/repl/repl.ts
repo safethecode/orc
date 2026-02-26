@@ -130,6 +130,10 @@ async function handleNaturalInput(
     renderer.text(chunk);
   });
 
+  streamer.on("error", (msg: string) => {
+    renderer.error(msg);
+  });
+
   try {
     const result = await streamer.run(cmd);
 
