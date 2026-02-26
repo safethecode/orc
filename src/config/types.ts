@@ -171,3 +171,29 @@ export interface HealthStatus {
   lastHeartbeat: string | null;
   consecutiveFailures: number;
 }
+
+// ── File Ownership ────────────────────────────────────────────────────
+
+export interface FileOwnership {
+  pattern: string;       // glob pattern like "src/auth/**"
+  agentName: string;
+  taskId: string;
+  permission: "owns" | "reads";
+  declaredAt: string;
+}
+
+export interface OwnershipDeclaration {
+  agentName: string;
+  taskId: string;
+  owns: string[];        // glob patterns of files agent can write
+  reads: string[];       // glob patterns of files agent can only read
+}
+
+export interface ConflictCheckResult {
+  allowed: boolean;
+  conflicts: Array<{
+    pattern: string;
+    heldBy: string;
+    permission: "owns" | "reads";
+  }>;
+}
