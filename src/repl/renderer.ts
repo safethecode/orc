@@ -1,3 +1,4 @@
+import ora, { type Ora } from "ora";
 import type { ModelTier } from "../config/types.ts";
 
 // ── ANSI Escape Codes ────────────────────────────────────────────────
@@ -107,12 +108,23 @@ export function separator(): void {
   process.stdout.write(`${GRAY}${"─".repeat(w)}${RESET}\n`);
 }
 
-// ── Thinking indicator ───────────────────────────────────────────────
+// ── Spinner ──────────────────────────────────────────────────────────
 
-export function thinking(agentName: string): void {
-  process.stdout.write(`  ${DIM}${agentName} is thinking...${RESET}`);
+let spinner: Ora | null = null;
+
+export function startSpinner(agentName: string, tier: ModelTier): void {
+  const color = tier === "opus" ? "magenta" : tier === "sonnet" ? "cyan" : "green";
+  spinner = ora({
+    text: `${DIM}${agentName} is thinking...${RESET}`,
+    color,
+    indent: 2,
+  }).start();
 }
 
-export function clearThinking(): void {
-  process.stdout.write("\r\x1b[K");
+export function stopSpinner(): void {
+  if (spinner) {
+    spinner.stop();
+    process.stdout.write("\x1b[A\x1b[K"); // clear spinner line
+    spinner = null;
+  }
 }

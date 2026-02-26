@@ -96,8 +96,11 @@ async function handleNaturalInput(
     return;
   }
 
-  // Always show agent header — clean badge style
+  // Show agent header
   renderer.agentHeader(agentName, route.model, route.reason);
+
+  // Start spinner while waiting for response
+  renderer.startSpinner(agentName, route.model);
 
   const fullPrompt = conversation.buildPrompt(input);
 
@@ -120,14 +123,14 @@ async function handleNaturalInput(
   let firstChunk = true;
   streamer.on("text", (chunk: string) => {
     if (firstChunk) {
-      renderer.clearThinking();
+      renderer.stopSpinner();
       firstChunk = false;
     }
     renderer.text(chunk);
   });
 
   streamer.on("error", (msg: string) => {
-    renderer.clearThinking();
+    renderer.stopSpinner();
     renderer.error(msg);
   });
 
@@ -135,6 +138,7 @@ async function handleNaturalInput(
 
   try {
     const result = await streamer.run(cmd);
+    renderer.stopSpinner();
     const durationMs = Date.now() - startTime;
 
     if (result.inputTokens > 0 || result.outputTokens > 0) {
