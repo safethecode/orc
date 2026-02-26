@@ -5,7 +5,7 @@ import { routeTask, suggestAgent } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { AgentStreamer } from "./streamer.ts";
 import { Conversation } from "./conversation.ts";
-import { isCommand, handleCommand } from "./commands.ts";
+import { isCommand, handleCommand, COMMANDS, LANGUAGES } from "./commands.ts";
 import * as renderer from "./renderer.ts";
 
 export async function startRepl(
@@ -19,10 +19,64 @@ export async function startRepl(
     input: process.stdin,
     output: process.stdout,
     terminal: true,
+    completer: (line: string) => {
+      if (line.startsWith("/lang ")) {
+        const partial = line.slice(6).toLowerCase();
+        const hits = LANGUAGES.filter((l) => l.startsWith(partial));
+        return [hits.map((l) => `/lang ${l}`), line];
+      }
+      if (line.startsWith("/")) {
+        const hits = COMMANDS.filter((c) => c.startsWith(line));
+        return [hits.length ? hits : COMMANDS, line];
+      }
+      return [[], line];
+    },
+  });
+
+  // ── Keypress hint for / commands ──────────────────────────────────
+  let hintShown = false;
+  let promptActive = false;
+
+  const clearHint = () => {
+    if (hintShown) {
+      process.stdout.write("\x1b[s\n\x1b[2K\x1b[u");
+      hintShown = false;
+    }
+  };
+
+  process.stdin.on("keypress", (_str: string | undefined, key: { name?: string }) => {
+    if (!promptActive) return;
+    if (key?.name === "return" || key?.name === "enter") {
+      clearHint();
+      return;
+    }
+    setImmediate(() => {
+      const line = rl.line;
+      process.stdout.write("\x1b[s\n\x1b[2K");
+
+      if (line.startsWith("/")) {
+        let display: string;
+        if (line.startsWith("/lang ")) {
+          const partial = line.slice(6).toLowerCase();
+          const hits = LANGUAGES.filter((l) => l.startsWith(partial));
+          display = (hits.length ? hits : LANGUAGES).join(" · ");
+        } else {
+          const hits = COMMANDS.filter((c) => c.startsWith(line));
+          display = (hits.length ? hits : COMMANDS).join("  ");
+        }
+        process.stdout.write(`  \x1b[2m${display}\x1b[0m`);
+        hintShown = true;
+      } else {
+        hintShown = false;
+      }
+
+      process.stdout.write("\x1b[u");
+    });
   });
 
   // Ctrl+C handling: abort running generation, keep REPL alive
   process.on("SIGINT", () => {
+    clearHint();
     if (currentStreamer?.isRunning) {
       currentStreamer.abort();
       process.stdout.write("\n");
@@ -42,8 +96,11 @@ export async function startRepl(
     while (true) {
       let input: string;
       try {
+        promptActive = true;
         input = await rl.question(renderer.PROMPT);
+        promptActive = false;
       } catch {
+        promptActive = false;
         break;
       }
 
@@ -110,11 +167,19 @@ async function handleNaturalInput(
     timestamp: new Date().toISOString(),
   });
 
+  let systemPrompt = profile.systemPrompt;
+  const lang = conversation.getLanguage();
+  if (lang) {
+    systemPrompt = systemPrompt
+      ? `${systemPrompt}\n\nAlways respond in ${lang}.`
+      : `Always respond in ${lang}.`;
+  }
+
   const cmd = buildCommand(providerConfig, profile, {
     prompt: fullPrompt,
     model: route.model,
     maxBudgetUsd: profile.maxBudgetUsd,
-    systemPrompt: profile.systemPrompt,
+    systemPrompt,
   });
 
   const streamer = new AgentStreamer();

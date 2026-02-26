@@ -2,6 +2,15 @@ import type { ConversationTurn } from "../config/types.ts";
 
 export class Conversation {
   private turns: ConversationTurn[] = [];
+  private language: string | undefined;
+
+  setLanguage(lang: string): void {
+    this.language = lang;
+  }
+
+  getLanguage(): string | undefined {
+    return this.language;
+  }
 
   add(turn: ConversationTurn): void {
     this.turns.push(turn);

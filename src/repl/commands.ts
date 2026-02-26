@@ -2,6 +2,14 @@ import type { Orchestrator } from "../core/orchestrator.ts";
 import type { Conversation } from "./conversation.ts";
 import * as renderer from "./renderer.ts";
 
+export const COMMANDS = ["/status", "/stop", "/clear", "/lang", "/help", "/quit"];
+
+export const LANGUAGES = [
+  "korean", "english", "japanese", "chinese",
+  "spanish", "french", "german", "portuguese",
+  "russian", "arabic", "italian", "dutch",
+];
+
 export interface CommandContext {
   orchestrator: Orchestrator;
   conversation: Conversation;
@@ -56,11 +64,28 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "lang": {
+      const lang = args[0];
+      if (!lang) {
+        const current = ctx.conversation.getLanguage();
+        process.stdout.write("\n");
+        renderer.info(current ? `current: \x1b[1m${current}\x1b[0m` : "no language set (default)");
+        renderer.info(`\x1b[2m${LANGUAGES.join(" · ")}\x1b[0m`);
+        renderer.info("\x1b[2musage: /lang <language>\x1b[0m");
+        process.stdout.write("\n");
+      } else {
+        ctx.conversation.setLanguage(lang);
+        renderer.info(`✓ language set to ${lang}`);
+      }
+      return "continue";
+    }
+
     case "help": {
       process.stdout.write("\n");
       renderer.info("\x1b[1m/status\x1b[0m\x1b[2m           agent statuses");
       renderer.info("\x1b[1m/stop\x1b[0m \x1b[2m<agent>     stop a running agent");
       renderer.info("\x1b[1m/clear\x1b[0m\x1b[2m            clear conversation");
+      renderer.info("\x1b[1m/lang\x1b[0m \x1b[2m<language>   set response language");
       renderer.info("\x1b[1m/help\x1b[0m\x1b[2m             this help");
       renderer.info("\x1b[1m/quit\x1b[0m\x1b[2m             exit");
       process.stdout.write("\n");
@@ -71,6 +96,14 @@ export async function handleCommand(
     case "exit":
     case "q": {
       return "quit";
+    }
+
+    case "": {
+      // bare "/" — show available commands
+      process.stdout.write("\n");
+      renderer.info(`\x1b[2m${COMMANDS.join("  ")}\x1b[0m`);
+      process.stdout.write("\n");
+      return "continue";
     }
 
     default: {
