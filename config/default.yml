@@ -80,3 +80,26 @@ supervisor:
   maxRetries: 2
   costAware: true
   preferredProviders: ["claude", "codex", "gemini", "kiro"]
+  multiTurn:
+    defaultMaxTurns: 25
+    simpleMaxTurns: 5
+    standardMaxTurns: 15
+    complexMaxTurns: 50
+    checkpointIntervalTurns: 5
+    progressPollIntervalMs: 3000
+    idleTimeoutMs: 120000
+  feedback:
+    enabled: true
+    checkIntervalMs: 30000
+    maxCorrections: 3
+    qualityGateOnComplete: true
+    qaLoopOnFail: true
+  workerBus:
+    enabled: true
+    broadcastArtifacts: true
+  contextPropagation:
+    enabled: true
+    includeCodebaseMap: true
+    includeMemory: true
+    maxContextTokens: 4000
+    summarizeSiblingResults: true

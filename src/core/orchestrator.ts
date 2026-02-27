@@ -44,6 +44,7 @@ import { CrashRecovery } from "./crash-recovery.ts";
 import { CostEstimator } from "./cost-estimator.ts";
 import { CheckpointManager } from "./checkpoint.ts";
 import { Supervisor } from "./supervisor.ts";
+import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
 
@@ -136,7 +137,7 @@ export class Orchestrator {
     this.supervisor = new Supervisor(
       {
         config: this.config,
-        spawnWorker: async (subtask: SubTask) => {
+        spawnWorker: async (subtask: SubTask, maxTurns: number, enrichedPrompt: string) => {
           const agentName = `worker-${subtask.id.slice(0, 8)}`;
           const providerConfig = this.config.providers[subtask.provider];
           if (!providerConfig) throw new Error(`Unknown provider: ${subtask.provider}`);
@@ -150,12 +151,13 @@ export class Orchestrator {
             requires: [],
             worktree: false,
             systemPrompt: "",
+            maxTurns,
           };
 
           this.registry.register(profile);
           const session = await this.spawnAgent(agentName);
 
-          await this.sessionManager.sendInput(agentName, subtask.prompt);
+          await this.sessionManager.sendInput(agentName, enrichedPrompt);
 
           return { agentName, sessionId: session.name };
         },
@@ -178,6 +180,13 @@ export class Orchestrator {
         stopWorker: async (agentName: string) => {
           await this.stopAgent(agentName);
         },
+        sessionManager: this.sessionManager,
+        checkpointManager: this.checkpointManager,
+        recoveryManager: this.recovery,
+        contextBuilder: this.contextBuilder,
+        inbox: this.inbox,
+        compressor: this.compressor,
+        store: this.store,
       },
       {
         workerTimeoutMs: this.config.supervisor?.workerTimeout ?? 300_000,
@@ -250,6 +259,7 @@ export class Orchestrator {
       model: profile.model,
       maxBudgetUsd: profile.maxBudgetUsd,
       systemPrompt: profile.systemPrompt,
+      maxTurns: profile.maxTurns,
     });
 
     const session = await this.sessionManager.spawnSession(profile, command.join(" "));
@@ -568,6 +578,10 @@ export class Orchestrator {
 
   getSupervisor(): Supervisor {
     return this.supervisor;
+  }
+
+  getWorkerBus(): WorkerBus {
+    return this.supervisor.getWorkerBus();
   }
 
   async shutdown(): Promise<void> {
