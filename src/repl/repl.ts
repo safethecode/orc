@@ -3,6 +3,7 @@ import type { Orchestrator } from "../core/orchestrator.ts";
 import type { OrchestratorConfig } from "../config/types.ts";
 import { routeTask, suggestAgent } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
+import { buildHarness } from "../agents/harness.ts";
 import { AgentStreamer, type ToolUseEvent } from "./streamer.ts";
 import { Conversation } from "./conversation.ts";
 import { isCommand, handleCommand, COMMANDS, LANGUAGES } from "./commands.ts";
@@ -266,7 +267,15 @@ async function handleNaturalInput(
   conversation.add(userTurn);
   rollout.append({ type: "turn", timestamp: userTurn.timestamp, data: userTurn });
 
-  let systemPrompt = profile.systemPrompt;
+  const harness = buildHarness({
+    agentName,
+    role: (profile.role ?? "coder") as import("../config/types.ts").AgentRole,
+    provider: profile.provider as import("../config/types.ts").ProviderName,
+    parentTaskId: "repl",
+    isWorker: false,
+  });
+  let systemPrompt = harness.systemPrompt;
+  if (profile.systemPrompt) systemPrompt += "\n\n" + profile.systemPrompt;
   const lang = conversation.getLanguage();
   if (lang) {
     systemPrompt = systemPrompt
