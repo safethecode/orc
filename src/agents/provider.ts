@@ -11,6 +11,7 @@ export interface CommandOptions {
   systemPrompt?: string;
   workdir?: string;
   useStdin?: boolean;
+  maxTurns?: number;
 }
 
 export function buildCommand(
@@ -31,7 +32,7 @@ export function buildCommand(
         "--model", model,
         "--output-format", "stream-json",
         "--verbose",
-        "--max-turns", "1",
+        "--max-turns", String(options.maxTurns ?? 1),
         "--max-budget-usd", String(budget),
       ];
     } else {
@@ -41,7 +42,7 @@ export function buildCommand(
         "--model", model,
         "--output-format", "stream-json",
         "--verbose",
-        "--max-turns", "1",
+        "--max-turns", String(options.maxTurns ?? 1),
         "--max-budget-usd", String(budget),
       ];
     }
