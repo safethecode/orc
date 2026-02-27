@@ -258,10 +258,9 @@ export class Supervisor {
         // 7. Start feedback monitoring
         this.feedbackLoop.startMonitoring(worker.id, subtask);
 
-        // 8. Wait for result
-        const outcome = await this.deps.waitForResult(
-          agentName,
-          this.options.workerTimeoutMs,
+        // 8. Wait for result (event-driven with polling fallback)
+        const outcome = await this.waitForWorkerCompletion(
+          worker.id, agentName, this.options.workerTimeoutMs,
         );
 
         // 9. Stop monitoring
@@ -353,6 +352,59 @@ export class Supervisor {
     const failedStatus: TaskStatus = "failed";
     subtask.status = failedStatus;
     subtask.result = lastError;
+  }
+
+  private waitForWorkerCompletion(
+    workerId: string,
+    agentName: string,
+    timeoutMs: number,
+  ): Promise<{ result: string; tokenUsage: number; costUsd: number } | null> {
+    return new Promise((resolve) => {
+      let settled = false;
+
+      const settle = (value: { result: string; tokenUsage: number; costUsd: number } | null) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+
+      // EventBus listeners for instant completion
+      const onComplete = (e: { workerId: string; tokenUsage: number; costUsd: number }) => {
+        if (e.workerId !== workerId) return;
+        const worker = this.pool.get(workerId);
+        if (worker?.result) {
+          settle({ result: worker.result, tokenUsage: e.tokenUsage, costUsd: e.costUsd });
+        }
+      };
+
+      const onFail = (e: { workerId: string; error: string }) => {
+        if (e.workerId !== workerId) return;
+        settle(null);
+      };
+
+      eventBus.on("worker:complete", onComplete as (e: unknown) => void);
+      eventBus.on("worker:fail", onFail as (e: unknown) => void);
+
+      // Polling fallback — workers may write to DB directly
+      const pollInterval = setInterval(async () => {
+        if (settled) return;
+        try {
+          const result = await this.deps.waitForResult(agentName, 0);
+          if (result) settle(result);
+        } catch { /* ignore polling errors */ }
+      }, 2000);
+
+      // Timeout
+      const timer = setTimeout(() => settle(null), timeoutMs);
+
+      const cleanup = () => {
+        eventBus.removeListener("worker:complete", onComplete as (e: unknown) => void);
+        eventBus.removeListener("worker:fail", onFail as (e: unknown) => void);
+        clearInterval(pollInterval);
+        clearTimeout(timer);
+      };
+    });
   }
 
   private calculateMaxTurns(subtask: SubTask): number {
