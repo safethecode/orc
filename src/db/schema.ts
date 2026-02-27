@@ -142,5 +142,69 @@ export function initDb(dbPath: string): Database {
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS prompt_cache (
+    hash TEXT PRIMARY KEY,
+    prompt TEXT NOT NULL,
+    response TEXT NOT NULL,
+    model TEXT NOT NULL,
+    tokens INTEGER NOT NULL DEFAULT 0,
+    hit_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_hit_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS decisions (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    decision TEXT NOT NULL,
+    context TEXT NOT NULL DEFAULT '',
+    decided_by TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    superseded_by TEXT
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_decisions_status ON decisions(status)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_decisions_tags ON decisions(tags_json)`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS logical_conflicts (
+    id TEXT PRIMARY KEY,
+    agent_a TEXT NOT NULL,
+    agent_b TEXT NOT NULL,
+    description TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'warning',
+    files_json TEXT NOT NULL DEFAULT '[]',
+    detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+    resolved INTEGER NOT NULL DEFAULT 0
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS port_allocations (
+    port INTEGER PRIMARY KEY,
+    agent_name TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    purpose TEXT NOT NULL DEFAULT '',
+    allocated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS cleanup_queue (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    target TEXT NOT NULL,
+    agent_name TEXT NOT NULL,
+    registered_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_cleanup_agent ON cleanup_queue(agent_name)`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS checkpoints (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    agent_name TEXT NOT NULL,
+    sha TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_checkpoint_task ON checkpoints(task_id)`);
+
   return db;
 }
