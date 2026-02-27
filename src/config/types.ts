@@ -435,3 +435,96 @@ export interface ContextChunk {
   relevance: number;
   type: "file" | "memory" | "codebase_map" | "insight";
 }
+
+// ── Semantic Prompt Cache ───────────────────────────────────────────
+
+export interface CacheEntry {
+  hash: string;
+  prompt: string;
+  response: string;
+  model: ModelTier;
+  tokens: number;
+  hitCount: number;
+  createdAt: string;
+  lastHitAt: string;
+}
+
+export interface CacheStats {
+  totalEntries: number;
+  hitRate: number;
+  tokensSaved: number;
+  costSaved: number;
+}
+
+// ── Decision Registry ───────────────────────────────────────────────
+
+export type DecisionStatus = "active" | "superseded" | "revoked";
+
+export interface ArchitecturalDecision {
+  id: string;
+  title: string;
+  decision: string;
+  context: string;
+  decidedBy: string;
+  status: DecisionStatus;
+  tags: string[];
+  createdAt: string;
+  supersededBy?: string;
+}
+
+// ── Conflict Watcher ────────────────────────────────────────────────
+
+export type ConflictSeverity = "info" | "warning" | "critical";
+
+export interface LogicalConflict {
+  id: string;
+  agentA: string;
+  agentB: string;
+  description: string;
+  severity: ConflictSeverity;
+  files: string[];
+  detectedAt: string;
+  resolved: boolean;
+}
+
+// ── Port Manager ────────────────────────────────────────────────────
+
+export interface PortAllocation {
+  port: number;
+  agentName: string;
+  taskId: string;
+  purpose: string;
+  allocatedAt: string;
+}
+
+// ── Crash Recovery ──────────────────────────────────────────────────
+
+export interface CleanupEntry {
+  id: string;
+  type: "process" | "lock" | "worktree" | "port" | "temp_file";
+  target: string;
+  agentName: string;
+  registeredAt: string;
+}
+
+// ── Cost Estimator ──────────────────────────────────────────────────
+
+export interface CostEstimate {
+  singleAgent: { model: ModelTier; estimatedTokens: number; estimatedCostUsd: number; estimatedDurationMs: number };
+  multiAgent: { agents: number; estimatedTokens: number; estimatedCostUsd: number; estimatedDurationMs: number; overheadRatio: number };
+  recommendation: "single" | "multi";
+  reason: string;
+  savingsUsd: number;
+}
+
+// ── Checkpoint System ───────────────────────────────────────────────
+
+export interface Checkpoint {
+  id: string;
+  taskId: string;
+  agentName: string;
+  sha: string;
+  label: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
