@@ -337,8 +337,6 @@ async function handleNaturalInput(
 
     if (result.inputTokens > 0 || result.outputTokens > 0) {
       renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
-      const totalTokens = result.inputTokens + result.outputTokens;
-      orchestrator.getBudget().recordUsage(agentName, "repl", totalTokens, result.costUsd);
       eventBus.publish({
         type: "agent:done", agent: agentName,
         cost: result.costUsd, inputTokens: result.inputTokens,
