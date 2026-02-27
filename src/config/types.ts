@@ -683,6 +683,14 @@ export interface WorkerTurnProgress {
 }
 
 // ── Worker Bus Types ────────────────────────────────────────
+export interface WorkerBusMarker {
+  type: WorkerMessageType;
+  target: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  raw: string;
+}
+
 export type WorkerMessageType = "artifact" | "request" | "status" | "warning" | "dependency";
 
 export interface WorkerMessage {
