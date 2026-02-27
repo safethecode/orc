@@ -271,10 +271,14 @@ export class Supervisor {
         this.feedbackLoop.stopMonitoring(worker.id);
 
         if (outcome) {
-          this.pool.markCompleted(worker.id, outcome.result, {
-            tokenUsage: outcome.tokenUsage,
-            costUsd: outcome.costUsd,
-          });
+          // Only mark completed if FeedbackLoop hasn't already done so
+          const currentState = this.pool.get(worker.id);
+          if (currentState?.status !== "completed") {
+            this.pool.markCompleted(worker.id, outcome.result, {
+              tokenUsage: outcome.tokenUsage,
+              costUsd: outcome.costUsd,
+            });
+          }
 
           // Collect result with role and domain
           const updatedWorker = this.pool.get(worker.id);
@@ -389,11 +393,24 @@ export class Supervisor {
       idleTimers.set(workerId, timer);
     };
 
+    // Handle idle timeout — nudge stuck workers
+    const onIdleTimeout = (e: { workerId: string; idleMs: number }) => {
+      const worker = this.pool.get(e.workerId);
+      if (!worker || worker.status !== "running") return;
+
+      this.feedbackLoop.sendCorrection(
+        e.workerId,
+        `[Supervisor]: No activity detected for ${Math.round(e.idleMs / 1000)}s. Are you stuck? Please continue with the task or report your status.`,
+      ).catch(() => {});
+    };
+
     eventBus.on("worker:turn", onTurn as (e: unknown) => void);
+    eventBus.on("worker:idle_timeout", onIdleTimeout as (e: unknown) => void);
 
     // Return cleanup function
     return () => {
       eventBus.removeListener("worker:turn", onTurn as (e: unknown) => void);
+      eventBus.removeListener("worker:idle_timeout", onIdleTimeout as (e: unknown) => void);
       for (const timer of idleTimers.values()) clearTimeout(timer);
       idleTimers.clear();
       turnCounts.clear();
@@ -432,13 +449,30 @@ export class Supervisor {
       eventBus.on("worker:complete", onComplete as (e: unknown) => void);
       eventBus.on("worker:fail", onFail as (e: unknown) => void);
 
-      // Polling fallback — workers may write to DB directly
-      const pollInterval = setInterval(async () => {
+      // Polling fallback — check pool state (updated by FeedbackLoop) + DB directly
+      const pollInterval = setInterval(() => {
         if (settled) return;
+        // Pool may have been updated by FeedbackLoop detecting session death
+        const worker = this.pool.get(workerId);
+        if (worker?.status === "completed" && worker.result) {
+          settle({ result: worker.result, tokenUsage: worker.tokenUsage, costUsd: worker.costUsd });
+          return;
+        }
+        if (worker?.status === "failed") {
+          settle(null);
+          return;
+        }
+        // Direct DB check — worker may write result without event
         try {
-          const result = await this.deps.waitForResult(agentName, 0);
-          if (result) settle(result);
-        } catch { /* ignore polling errors */ }
+          const tasks = this.deps.store.listTasks({ agentName, status: "completed" });
+          if (tasks.length > 0) {
+            const t = tasks[0];
+            settle({ result: t.result ?? "", tokenUsage: t.tokenUsage, costUsd: t.costUsd });
+            return;
+          }
+          const failed = this.deps.store.listTasks({ agentName, status: "failed" });
+          if (failed.length > 0) settle(null);
+        } catch { /* ignore DB errors */ }
       }, 2000);
 
       // Timeout
