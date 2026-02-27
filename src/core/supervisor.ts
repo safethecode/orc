@@ -8,18 +8,37 @@ import type {
   ProviderCapability,
   WorkerState,
   OrchestratorConfig,
+  MultiTurnConfig,
+  FeedbackLoopConfig,
 } from "../config/types.ts";
-import { decompose } from "./decomposer.ts";
+import type { SessionManager } from "../session/manager.ts";
+import type { CheckpointManager } from "./checkpoint.ts";
+import type { RecoveryManager } from "./recovery.ts";
+import type { ContextBuilder } from "../memory/context-builder.ts";
+import type { Inbox } from "../messaging/inbox.ts";
+import type { ContextCompressor } from "../messaging/context-compressor.ts";
+import type { Store } from "../db/store.ts";
+import { decompose, detectDomains } from "./decomposer.ts";
 import { ProviderSelector } from "./provider-selector.ts";
 import { WorkerPool } from "./worker-pool.ts";
 import { ResultCollector } from "./result-collector.ts";
+import { WorkerBus } from "./worker-bus.ts";
+import { ContextPropagator } from "./context-propagator.ts";
+import { FeedbackLoop } from "./feedback-loop.ts";
 import { eventBus } from "./events.ts";
 
 export interface SupervisorDeps {
   config: OrchestratorConfig;
-  spawnWorker: (subtask: SubTask) => Promise<{ agentName: string; sessionId: string }>;
+  spawnWorker: (subtask: SubTask, maxTurns: number, enrichedPrompt: string) => Promise<{ agentName: string; sessionId: string }>;
   waitForResult: (agentName: string, timeoutMs: number) => Promise<{ result: string; tokenUsage: number; costUsd: number } | null>;
   stopWorker: (agentName: string) => Promise<void>;
+  sessionManager: SessionManager;
+  checkpointManager: CheckpointManager;
+  recoveryManager: RecoveryManager;
+  contextBuilder: ContextBuilder;
+  inbox: Inbox;
+  compressor: ContextCompressor;
+  store: Store;
 }
 
 export interface SupervisorOptions {
@@ -35,6 +54,10 @@ export class Supervisor {
   private pool: WorkerPool;
   private deps: SupervisorDeps;
   private options: Required<SupervisorOptions>;
+  private workerBus: WorkerBus;
+  private contextPropagator: ContextPropagator;
+  private feedbackLoop: FeedbackLoop;
+  private multiTurnConfig: Required<MultiTurnConfig>;
 
   constructor(deps: SupervisorDeps, options?: SupervisorOptions) {
     this.deps = deps;
@@ -55,6 +78,40 @@ export class Supervisor {
       timeoutMs: this.options.workerTimeoutMs,
       maxRetries: this.options.maxRetries,
     });
+
+    // Multi-turn config with defaults
+    const mt = deps.config.supervisor?.multiTurn;
+    this.multiTurnConfig = {
+      defaultMaxTurns: mt?.defaultMaxTurns ?? 25,
+      simpleMaxTurns: mt?.simpleMaxTurns ?? 5,
+      standardMaxTurns: mt?.standardMaxTurns ?? 15,
+      complexMaxTurns: mt?.complexMaxTurns ?? 50,
+      checkpointIntervalTurns: mt?.checkpointIntervalTurns ?? 5,
+      progressPollIntervalMs: mt?.progressPollIntervalMs ?? 3000,
+      idleTimeoutMs: mt?.idleTimeoutMs ?? 120000,
+    };
+
+    // Initialize WorkerBus
+    this.workerBus = new WorkerBus(deps.inbox, deps.sessionManager, deps.store);
+
+    // Initialize ContextPropagator
+    const cpConfig = deps.config.supervisor?.contextPropagation;
+    this.contextPropagator = new ContextPropagator(
+      deps.contextBuilder,
+      this.workerBus,
+      deps.compressor,
+      { maxContextTokens: cpConfig?.maxContextTokens ?? 4000 },
+    );
+
+    // Initialize FeedbackLoop
+    this.feedbackLoop = new FeedbackLoop(
+      deps.config.supervisor?.feedback,
+      deps.sessionManager,
+      this.pool,
+      deps.checkpointManager,
+      deps.recoveryManager,
+      deps.store,
+    );
   }
 
   async execute(taskId: string, prompt: string): Promise<AggregatedResult> {
@@ -73,7 +130,10 @@ export class Supervisor {
       estimatedCost: decomposition.estimatedTotalCost,
     });
 
-    // 4. Execute phase by phase
+    // 4. Initialize worker bus for this task
+    this.workerBus.clearTask(taskId);
+
+    // 5. Execute phase by phase
     const collector = new ResultCollector(taskId);
 
     for (const phase of plan.phases) {
@@ -82,16 +142,18 @@ export class Supervisor {
       );
 
       if (phase.parallelizable) {
-        await this.executeParallel(phaseSubtasks, collector);
+        await this.executeParallel(phaseSubtasks, collector, decomposition);
       } else {
-        await this.executeSequential(phaseSubtasks, collector);
+        await this.executeSequential(phaseSubtasks, collector, decomposition);
       }
     }
 
-    // 5. Aggregate and return
+    // 6. Aggregate and return
     const result = collector.aggregate();
 
-    // 6. Cleanup
+    // 7. Cleanup
+    this.feedbackLoop.stopAll();
+    this.workerBus.clearTask(taskId);
     this.pool.clear();
 
     return result;
@@ -103,6 +165,10 @@ export class Supervisor {
 
   getProviderSelector(): ProviderSelector {
     return this.providerSelector;
+  }
+
+  getWorkerBus(): WorkerBus {
+    return this.workerBus;
   }
 
   private assignProviders(subtasks: SubTask[]): void {
@@ -120,23 +186,26 @@ export class Supervisor {
   private async executeParallel(
     subtasks: SubTask[],
     collector: ResultCollector,
+    decomposition: DecompositionResult,
   ): Promise<void> {
-    const promises = subtasks.map(st => this.executeSubtask(st, collector));
+    const promises = subtasks.map(st => this.executeSubtask(st, collector, decomposition));
     await Promise.allSettled(promises);
   }
 
   private async executeSequential(
     subtasks: SubTask[],
     collector: ResultCollector,
+    decomposition: DecompositionResult,
   ): Promise<void> {
     for (const subtask of subtasks) {
-      await this.executeSubtask(subtask, collector);
+      await this.executeSubtask(subtask, collector, decomposition);
     }
   }
 
   private async executeSubtask(
     subtask: SubTask,
     collector: ResultCollector,
+    decomposition: DecompositionResult,
   ): Promise<void> {
     eventBus.publish({
       type: "supervisor:dispatch",
@@ -146,23 +215,54 @@ export class Supervisor {
       model: subtask.model,
     });
 
+    // 1. Calculate max turns based on complexity
+    const maxTurns = this.calculateMaxTurns(subtask);
+
+    // 2. Build enriched prompt with context propagation
+    let enrichedPrompt: string;
+    try {
+      enrichedPrompt = await this.contextPropagator.buildWorkerPrompt(
+        subtask, decomposition, collector,
+      );
+    } catch {
+      enrichedPrompt = subtask.prompt;
+    }
+
+    // 3. Infer domain for this subtask
+    const domain = this.inferDomain(subtask);
+
     let lastError: string | null = null;
     const maxAttempts = this.options.maxRetries + 1;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        // Spawn worker via deps callback
-        const { agentName } = await this.deps.spawnWorker(subtask);
+        // 4. Spawn worker via deps callback
+        const { agentName } = await this.deps.spawnWorker(subtask, maxTurns, enrichedPrompt);
 
-        // Track in pool
-        const worker = this.pool.spawn(subtask, agentName);
+        // 5. Track in pool with maxTurns
+        const worker = this.pool.spawn(subtask, agentName, maxTurns);
         this.pool.markRunning(worker.id);
 
-        // Wait for result
+        // 6. Register worker in bus for sibling communication
+        this.workerBus.registerWorker({
+          agentName,
+          subtaskId: subtask.id,
+          role: subtask.agentRole,
+          domain,
+          prompt: subtask.prompt.slice(0, 200),
+        });
+
+        // 7. Start feedback monitoring
+        this.feedbackLoop.startMonitoring(worker.id, subtask);
+
+        // 8. Wait for result
         const outcome = await this.deps.waitForResult(
           agentName,
           this.options.workerTimeoutMs,
         );
+
+        // 9. Stop monitoring
+        this.feedbackLoop.stopMonitoring(worker.id);
 
         if (outcome) {
           this.pool.markCompleted(worker.id, outcome.result, {
@@ -170,13 +270,33 @@ export class Supervisor {
             costUsd: outcome.costUsd,
           });
 
-          // Collect result
+          // Collect result with role and domain
           const updatedWorker = this.pool.get(worker.id);
           if (updatedWorker) {
-            collector.collect(updatedWorker);
+            collector.collect(updatedWorker, subtask.agentRole, domain);
           }
 
-          // Stop the worker session
+          // 10. Quality gate (if enabled)
+          const feedbackConfig = this.deps.config.supervisor?.feedback;
+          if (feedbackConfig?.qualityGateOnComplete) {
+            const critique = await this.feedbackLoop.runQualityGate(subtask, outcome.result);
+            if (!critique.passes && feedbackConfig?.qaLoopOnFail) {
+              await this.feedbackLoop.runQALoop(subtask, critique);
+            }
+          }
+
+          // 11. Broadcast artifacts to sibling workers
+          const busConfig = this.deps.config.supervisor?.workerBus;
+          if (busConfig?.broadcastArtifacts && updatedWorker) {
+            this.workerBus.broadcastArtifact(agentName, subtask.parentTaskId, {
+              files: collector.getResult(subtask.id)?.files,
+              apis: collector.extractApis(outcome.result),
+              schemas: collector.extractSchemas(outcome.result),
+            });
+          }
+
+          // 12. Cleanup worker registration
+          this.workerBus.unregisterWorker(agentName);
           await this.deps.stopWorker(agentName).catch(() => {});
           return; // Success
         }
@@ -184,6 +304,7 @@ export class Supervisor {
         // No result → timeout
         this.pool.markFailed(worker.id, "No result received");
         lastError = "No result received";
+        this.workerBus.unregisterWorker(agentName);
         await this.deps.stopWorker(agentName).catch(() => {});
 
       } catch (err) {
@@ -194,6 +315,10 @@ export class Supervisor {
         const existingWorker = this.pool.getBySubtask(subtask.id);
         if (existingWorker) {
           this.pool.markFailed(existingWorker.id, errMsg);
+          this.feedbackLoop.stopMonitoring(existingWorker.id);
+
+          // Use feedback loop's failure handling
+          this.feedbackLoop.handleFailure(existingWorker.id, subtask, err instanceof Error ? err : new Error(errMsg));
         }
       }
 
@@ -225,6 +350,30 @@ export class Supervisor {
     const failedStatus: TaskStatus = "failed";
     subtask.status = failedStatus;
     subtask.result = lastError;
+  }
+
+  private calculateMaxTurns(subtask: SubTask): number {
+    // Check if complexity hints exist in the prompt
+    const prompt = subtask.prompt.toLowerCase();
+    const domains = detectDomains(subtask.prompt);
+
+    // Multi-domain or complex keywords → complex
+    if (domains.length >= 3 || /architect|design|migrate|optimize/i.test(prompt)) {
+      return this.multiTurnConfig.complexMaxTurns;
+    }
+
+    // Simple keywords
+    if (/format|rename|typo|lint|style|fix\s+typo/i.test(prompt)) {
+      return this.multiTurnConfig.simpleMaxTurns;
+    }
+
+    // Standard by default
+    return this.multiTurnConfig.standardMaxTurns;
+  }
+
+  private inferDomain(subtask: SubTask): string {
+    const domains = detectDomains(subtask.prompt);
+    return domains[0] ?? "general";
   }
 
   private buildCapabilities(config: OrchestratorConfig): ProviderCapability[] {
