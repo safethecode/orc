@@ -1,7 +1,7 @@
 import * as readline from "node:readline/promises";
 import type { Orchestrator } from "../core/orchestrator.ts";
 import type { OrchestratorConfig } from "../config/types.ts";
-import { routeTask, suggestAgent } from "../core/router.ts";
+import { routeTask, suggestAgent, type RouteResult } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
 import { AgentStreamer, type ToolUseEvent } from "./streamer.ts";
@@ -23,6 +23,7 @@ export async function startRepl(
   let currentStreamer: AgentStreamer | null = null;
   let currentCancellation: CancellationToken | null = null;
   let hasInteraction = false;
+  let pinnedAgent: string | null = null;
 
   // Deferred rollout: only create file when user actually sends a message
   const rollout = new RolloutRecorder(
@@ -152,6 +153,8 @@ export async function startRepl(
         const result = await handleCommand(trimmed, {
           orchestrator,
           conversation,
+          getPinnedAgent: () => pinnedAgent,
+          setPinnedAgent: (name) => { pinnedAgent = name; },
         });
         if (result === "quit") break;
         continue;
@@ -171,6 +174,7 @@ export async function startRepl(
         rollout,
         cancellation,
         (streamer) => { currentStreamer = streamer; },
+        pinnedAgent,
       );
       hasInteraction = true;
       currentStreamer = null;
@@ -230,9 +234,25 @@ async function handleNaturalInput(
   rollout: RolloutRecorder,
   cancellation: CancellationToken,
   onStreamer: (s: AgentStreamer) => void,
+  pinned: string | null,
 ): Promise<void> {
-  const route = routeTask(input, config.routing);
-  const agentName = suggestAgent(route.tier);
+  let route: RouteResult;
+  let agentName: string;
+
+  if (pinned) {
+    const pinnedProfile = orchestrator.getRegistry().get(pinned);
+    if (!pinnedProfile) {
+      renderer.error(`Pinned profile "${pinned}" not found. Use /agents auto to reset.`);
+      return;
+    }
+    const model = pinnedProfile.model as import("../config/types.ts").ModelTier;
+    route = { tier: "medium", model, multiAgent: false, reason: `pinned to ${pinned}` };
+    agentName = pinned;
+  } else {
+    route = routeTask(input, config.routing);
+    agentName = suggestAgent(route.tier);
+  }
+
   const profile = orchestrator.getRegistry().get(agentName);
   if (!profile) {
     renderer.error(`No profile found for agent "${agentName}".`);

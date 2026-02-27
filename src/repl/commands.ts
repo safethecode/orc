@@ -22,6 +22,8 @@ export const LANGUAGES = [
 export interface CommandContext {
   orchestrator: Orchestrator;
   conversation: Conversation;
+  getPinnedAgent: () => string | null;
+  setPinnedAgent: (name: string | null) => void;
 }
 
 export function isCommand(input: string): boolean {
@@ -107,7 +109,26 @@ export async function handleCommand(
     }
 
     case "agents": {
+      const sub = args[0];
+
+      if (sub === "select") {
+        const name = args[1];
+        if (!name) { renderer.error("usage: /agents select <name>"); return "continue"; }
+        const profile = ctx.orchestrator.getRegistry().get(name);
+        if (!profile) { renderer.error(`unknown profile: "${name}"`); return "continue"; }
+        ctx.setPinnedAgent(name);
+        renderer.info(`✓ pinned to ${name} (${profile.provider}/${profile.model})`);
+        return "continue";
+      }
+
+      if (sub === "auto") {
+        ctx.setPinnedAgent(null);
+        renderer.info("✓ auto routing restored");
+        return "continue";
+      }
+
       const profiles = ctx.orchestrator.getRegistry().list();
+      const pinned = ctx.getPinnedAgent();
       if (profiles.length === 0) {
         renderer.info("no agent profiles loaded");
       } else {
@@ -116,7 +137,8 @@ export async function handleCommand(
           const health = ctx.orchestrator.getHealth().getStatus(p.name);
           const wt = p.worktree ? "worktree" : "shared";
           const statusIcon = health?.sessionAlive ? "\x1b[32m●\x1b[0m" : "\x1b[90m○\x1b[0m";
-          renderer.info(`${statusIcon} ${p.name} \x1b[2m(${p.provider}/${p.model}) ${wt} $${p.maxBudgetUsd}\x1b[0m`);
+          const pinMark = pinned === p.name ? " \x1b[33m← pinned\x1b[0m" : "";
+          renderer.info(`${statusIcon} ${p.name} \x1b[2m(${p.provider}/${p.model}) ${wt} $${p.maxBudgetUsd}\x1b[0m${pinMark}`);
         }
         process.stdout.write("\n");
       }
@@ -368,6 +390,8 @@ export async function handleCommand(
       renderer.info("\x1b[1m/budget\x1b[0m\x1b[2m              budget usage");
       renderer.info("\x1b[1m/trace\x1b[0m\x1b[2m               active traces");
       renderer.info("\x1b[1m/agents\x1b[0m\x1b[2m              agent profiles & health");
+      renderer.info("\x1b[1m/agents select\x1b[0m \x1b[2m<name> pin to a specific agent");
+      renderer.info("\x1b[1m/agents auto\x1b[0m\x1b[2m         restore auto routing");
       renderer.info("\x1b[1m/messages\x1b[0m \x1b[2m<agent>    message history");
       renderer.info("\x1b[1m/ownership\x1b[0m\x1b[2m           file ownership map");
       renderer.info("\x1b[1m/pause\x1b[0m\x1b[2m               save session snapshot");
