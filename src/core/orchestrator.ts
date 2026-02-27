@@ -187,6 +187,9 @@ export class Orchestrator {
         inbox: this.inbox,
         compressor: this.compressor,
         store: this.store,
+        budget: this.budget,
+        conflictWatcher: this.conflictWatcher,
+        ownership: this.ownership,
       },
       {
         workerTimeoutMs: this.config.supervisor?.workerTimeout ?? 300_000,
@@ -306,7 +309,16 @@ export class Orchestrator {
     prompt: string,
     options?: HandoffOptions,
   ): Promise<Task> {
-    const route = routeTask(prompt, this.config.routing);
+    // Cost-aware routing: estimate before deciding single vs multi
+    const costEstimate = this.costEstimator.estimate(prompt);
+    eventBus.publish({
+      type: "cost:estimate",
+      recommendation: costEstimate.recommendation,
+      singleCost: costEstimate.singleAgent.estimatedCostUsd,
+      multiCost: costEstimate.multiAgent.estimatedCostUsd,
+    });
+
+    const route = routeTask(prompt, this.config.routing, { costEstimate });
 
     const profile = this.registry.get(agentName);
     const agentLimit = profile?.maxBudgetUsd ?? this.config.budget.defaultMaxPerTask;
