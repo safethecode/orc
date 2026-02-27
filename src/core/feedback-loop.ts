@@ -75,6 +75,13 @@ export class FeedbackLoop {
       return;
     }
 
+    // Check if session is still alive — detect completion via session death
+    const sessionAlive = await this.sessionManager.isAlive(worker.agentName).catch(() => false);
+    if (!sessionAlive) {
+      await this.detectWorkerCompletion(workerId, worker, subtask);
+      return;
+    }
+
     // Capture tmux output
     let capturedOutput: string;
     try {
@@ -347,6 +354,27 @@ export class FeedbackLoop {
     });
 
     return decision;
+  }
+
+  private async detectWorkerCompletion(workerId: string, worker: WorkerState, subtask: SubTask): Promise<void> {
+    // Session died — check DB for result
+    const completed = this.store.listTasks({ agentName: worker.agentName, status: "completed" });
+    if (completed.length > 0) {
+      const t = completed[0];
+      this.pool.markCompleted(workerId, t.result ?? "", {
+        tokenUsage: t.tokenUsage,
+        costUsd: t.costUsd,
+      });
+    } else {
+      const failed = this.store.listTasks({ agentName: worker.agentName, status: "failed" });
+      if (failed.length > 0) {
+        this.pool.markFailed(workerId, failed[0].result ?? "Task failed");
+      } else {
+        // Session gone but no DB result — treat as failure
+        this.pool.markFailed(workerId, "Worker session terminated without result");
+      }
+    }
+    this.stopMonitoring(workerId);
   }
 
   private detectBusMessages(workerId: string, output: string, worker: WorkerState, subtask: SubTask): void {
