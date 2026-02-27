@@ -89,21 +89,6 @@ export async function handleCommand(
       return "continue";
     }
 
-    case "budget": {
-      const budget = ctx.orchestrator.getBudget();
-      const global = budget.checkGlobalBudget();
-      process.stdout.write("\n");
-      renderer.info(`\x1b[1mglobal\x1b[0m\x1b[2m  $${global.used.toFixed(4)} / $${global.limit}`);
-      const agents = await ctx.orchestrator.listAgents();
-      for (const agent of agents) {
-        const profile = ctx.orchestrator.getRegistry().get(agent.name);
-        const check = budget.checkAgentBudget(agent.name, profile?.maxBudgetUsd ?? 1);
-        renderer.info(`  ${agent.name}: $${check.used.toFixed(4)} / $${check.limit}`);
-      }
-      process.stdout.write("\n");
-      return "continue";
-    }
-
     case "trace": {
       const tracer = ctx.orchestrator.getTracer();
       const active = tracer.getActiveSpans();
