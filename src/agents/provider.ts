@@ -51,6 +51,19 @@ export function buildCommand(
     }
   } else if (provider.command === "codex") {
     cmd = ["codex", "exec", options.prompt, "--full-auto"];
+  } else if (provider.command === "gemini") {
+    cmd = ["gemini", "-p", options.prompt];
+    if (options.model) {
+      cmd.push("--model", options.model);
+    }
+    if (options.systemPrompt) {
+      cmd.push("--system-prompt", options.systemPrompt);
+    }
+  } else if (provider.command === "kiro") {
+    cmd = ["kiro", "cli", options.prompt];
+    if (options.systemPrompt) {
+      cmd.push("--system-prompt", options.systemPrompt);
+    }
   } else {
     cmd = [provider.command];
     if (provider.subcommand) {
