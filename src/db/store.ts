@@ -310,6 +310,76 @@ export class Store {
     return rows.map(r => ({ pattern: r.pattern, agentName: r.agent_name, taskId: r.task_id, permission: r.permission }));
   }
 
+  // ── Session Snapshots ───────────────────────────────────────────────
+
+  saveSnapshot(snapshot: {
+    id: string;
+    sessionName?: string;
+    turnsJson: string;
+    language?: string;
+    summary?: string;
+    turnCount: number;
+  }): void {
+    const stmt = this.db.prepare(
+      `INSERT OR REPLACE INTO session_snapshots (id, session_name, turns_json, language, summary, turn_count)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    );
+    stmt.run(
+      snapshot.id,
+      snapshot.sessionName ?? "repl",
+      snapshot.turnsJson,
+      snapshot.language ?? null,
+      snapshot.summary ?? null,
+      snapshot.turnCount,
+    );
+  }
+
+  getLatestSnapshot(sessionName = "repl"): {
+    id: string;
+    sessionName: string;
+    turnsJson: string;
+    language: string | null;
+    summary: string | null;
+    turnCount: number;
+    createdAt: string;
+  } | null {
+    const stmt = this.db.prepare(
+      `SELECT * FROM session_snapshots WHERE session_name = ? ORDER BY created_at DESC LIMIT 1`
+    );
+    const row = stmt.get(sessionName) as Record<string, unknown> | null;
+    if (!row) return null;
+    return {
+      id: row.id as string,
+      sessionName: row.session_name as string,
+      turnsJson: row.turns_json as string,
+      language: row.language as string | null,
+      summary: row.summary as string | null,
+      turnCount: row.turn_count as number,
+      createdAt: row.created_at as string,
+    };
+  }
+
+  listSnapshots(sessionName?: string, limit = 5): Array<{
+    id: string;
+    sessionName: string;
+    summary: string | null;
+    turnCount: number;
+    createdAt: string;
+  }> {
+    const sql = sessionName
+      ? `SELECT id, session_name, summary, turn_count, created_at FROM session_snapshots WHERE session_name = ? ORDER BY created_at DESC LIMIT ?`
+      : `SELECT id, session_name, summary, turn_count, created_at FROM session_snapshots ORDER BY created_at DESC LIMIT ?`;
+    const stmt = this.db.prepare(sql);
+    const rows = (sessionName ? stmt.all(sessionName, limit) : stmt.all(limit)) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: r.id as string,
+      sessionName: r.session_name as string,
+      summary: r.summary as string | null,
+      turnCount: r.turn_count as number,
+      createdAt: r.created_at as string,
+    }));
+  }
+
   // ── Private Helpers ──────────────────────────────────────────────────
 
   private mapTask(row: Record<string, unknown>): Task {
