@@ -2,6 +2,7 @@ import type {
   CollectedResult,
   AggregatedResult,
   WorkerState,
+  ProviderName,
 } from "../config/types.ts";
 import { eventBus } from "./events.ts";
 
@@ -84,6 +85,21 @@ export class ResultCollector {
 
   getCollectedCount(): number {
     return this.results.size;
+  }
+
+  getByProvider(provider: ProviderName): CollectedResult[] {
+    return [...this.results.values()].filter(r => r.provider === provider);
+  }
+
+  getCostByProvider(): Map<ProviderName, { tokens: number; cost: number }> {
+    const map = new Map<ProviderName, { tokens: number; cost: number }>();
+    for (const r of this.results.values()) {
+      const existing = map.get(r.provider) ?? { tokens: 0, cost: 0 };
+      existing.tokens += r.tokenUsage;
+      existing.cost += r.costUsd;
+      map.set(r.provider, existing);
+    }
+    return map;
   }
 
   clear(): void {
