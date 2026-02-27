@@ -45,7 +45,22 @@ export type OrcEvent =
   | { type: "result:collected"; taskId: string; subtaskId: string; success: boolean }
   | { type: "result:merged"; taskId: string; totalSubtasks: number; conflicts: number }
   | { type: "provider:selected"; subtaskId: string; provider: string; model: string; reason: string }
-  | { type: "provider:fallback"; subtaskId: string; from: string; to: string; reason: string };
+  | { type: "provider:fallback"; subtaskId: string; from: string; to: string; reason: string }
+  | { type: "worker:turn"; workerId: string; turn: number; maxTurns: number; toolUsed?: string }
+  | { type: "worker:turn_output"; workerId: string; turn: number; output: string; files: string[] }
+  | { type: "worker:idle_timeout"; workerId: string; idleMs: number }
+  | { type: "workerbus:message"; messageId: string; from: string; to: string; messageType: string }
+  | { type: "workerbus:broadcast"; messageId: string; from: string; messageType: string }
+  | { type: "workerbus:artifact"; from: string; files: string[]; apis: string[] }
+  | { type: "feedback:check"; workerId: string; subtaskId: string; turn: number }
+  | { type: "feedback:assessment"; workerId: string; action: string; reason: string }
+  | { type: "feedback:correction"; workerId: string; message: string }
+  | { type: "feedback:quality_gate"; subtaskId: string; passed: boolean; issues: string[] }
+  | { type: "feedback:qa_loop"; subtaskId: string; iteration: number }
+  | { type: "feedback:abort"; workerId: string; reason: string }
+  | { type: "feedback:recovery"; workerId: string; action: string; reason: string }
+  | { type: "context:propagate"; subtaskId: string; contextTokens: number; sources: string[] }
+  | { type: "context:sibling_summary"; subtaskId: string; siblingCount: number; filesShared: string[] };
 
 export class OrcEventBus extends EventEmitter {
   publish(event: OrcEvent): void {
