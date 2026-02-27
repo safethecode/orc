@@ -33,7 +33,19 @@ export type OrcEvent =
   | { type: "cleanup:run"; succeeded: number; failed: number }
   | { type: "checkpoint:created"; id: string; taskId: string; label: string }
   | { type: "checkpoint:rollback"; id: string; taskId: string }
-  | { type: "cost:estimate"; recommendation: string; singleCost: number; multiCost: number };
+  | { type: "cost:estimate"; recommendation: string; singleCost: number; multiCost: number }
+  | { type: "supervisor:decompose"; taskId: string; subtaskCount: number; strategy: string }
+  | { type: "supervisor:plan"; taskId: string; phases: number; estimatedCost: number }
+  | { type: "supervisor:dispatch"; taskId: string; subtaskId: string; provider: string; model: string }
+  | { type: "worker:spawn"; workerId: string; provider: string; model: string; role: string }
+  | { type: "worker:progress"; workerId: string; progress: number }
+  | { type: "worker:complete"; workerId: string; tokenUsage: number; costUsd: number; durationMs: number }
+  | { type: "worker:fail"; workerId: string; error: string }
+  | { type: "worker:timeout"; workerId: string; elapsedMs: number }
+  | { type: "result:collected"; taskId: string; subtaskId: string; success: boolean }
+  | { type: "result:merged"; taskId: string; totalSubtasks: number; conflicts: number }
+  | { type: "provider:selected"; subtaskId: string; provider: string; model: string; reason: string }
+  | { type: "provider:fallback"; subtaskId: string; from: string; to: string; reason: string };
 
 export class OrcEventBus extends EventEmitter {
   publish(event: OrcEvent): void {
