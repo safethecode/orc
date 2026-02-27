@@ -17,6 +17,9 @@ import type {
   PortAllocation,
   CleanupEntry,
   Checkpoint,
+  WorkerMessage,
+  FeedbackCheckpoint,
+  FeedbackAction,
 } from "../config/types.ts";
 
 export class Store {
@@ -635,6 +638,97 @@ export class Store {
     const row = this.db.prepare(`SELECT * FROM checkpoints WHERE task_id = ? ORDER BY created_at DESC LIMIT 1`).get(taskId) as Record<string, unknown> | null;
     if (!row) return null;
     return { id: row.id as string, taskId: row.task_id as string, agentName: row.agent_name as string, sha: row.sha as string, label: row.label as string, metadata: JSON.parse(row.metadata_json as string), createdAt: row.created_at as string };
+  }
+
+  // ── Worker Messages ──────────────────────────────────────────
+
+  addWorkerMessage(msg: {
+    id: string;
+    from: string;
+    to: string;
+    type: string;
+    content: string;
+    metadata?: Record<string, unknown>;
+    taskRef: string;
+    subtaskRef: string;
+  }): void {
+    this.db.prepare(
+      `INSERT INTO worker_messages (id, from_agent, to_agent, message_type, content, metadata_json, task_ref, subtask_ref)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      msg.id,
+      msg.from,
+      msg.to,
+      msg.type,
+      msg.content,
+      JSON.stringify(msg.metadata ?? {}),
+      msg.taskRef,
+      msg.subtaskRef,
+    );
+  }
+
+  getWorkerMessages(taskRef: string, toAgent?: string): WorkerMessage[] {
+    const sql = toAgent
+      ? `SELECT * FROM worker_messages WHERE task_ref = ? AND (to_agent = ? OR to_agent = 'all') ORDER BY timestamp ASC`
+      : `SELECT * FROM worker_messages WHERE task_ref = ? ORDER BY timestamp ASC`;
+    const rows = (toAgent
+      ? this.db.prepare(sql).all(taskRef, toAgent)
+      : this.db.prepare(sql).all(taskRef)
+    ) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: r.id as string,
+      from: r.from_agent as string,
+      to: r.to_agent as string,
+      type: r.message_type as WorkerMessage["type"],
+      content: r.content as string,
+      metadata: JSON.parse(r.metadata_json as string),
+      taskRef: r.task_ref as string,
+      subtaskRef: r.subtask_ref as string,
+      timestamp: r.timestamp as string,
+    }));
+  }
+
+  // ── Feedback Checkpoints ─────────────────────────────────────
+
+  saveFeedbackCheckpoint(cp: {
+    id: string;
+    workerId: string;
+    subtaskId: string;
+    turn: number;
+    capturedOutput: string;
+    filesModified: string[];
+    assessment: string;
+    correction: string | null;
+  }): void {
+    this.db.prepare(
+      `INSERT INTO feedback_checkpoints (id, worker_id, subtask_id, turn, captured_output, files_json, assessment, correction)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      cp.id,
+      cp.workerId,
+      cp.subtaskId,
+      cp.turn,
+      cp.capturedOutput,
+      JSON.stringify(cp.filesModified),
+      cp.assessment,
+      cp.correction,
+    );
+  }
+
+  getFeedbackCheckpoints(workerId: string): FeedbackCheckpoint[] {
+    const rows = this.db.prepare(
+      `SELECT * FROM feedback_checkpoints WHERE worker_id = ? ORDER BY created_at ASC`
+    ).all(workerId) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      workerId: r.worker_id as string,
+      subtaskId: r.subtask_id as string,
+      turn: r.turn as number,
+      capturedOutput: r.captured_output as string,
+      filesModified: JSON.parse(r.files_json as string),
+      assessment: r.assessment as FeedbackAction,
+      correctionSent: r.correction as string | null,
+      timestamp: r.created_at as string,
+    }));
   }
 
   // ── Private Helpers ──────────────────────────────────────────────────
