@@ -104,9 +104,9 @@ export class WorkerBus extends EventEmitter {
   }
 
   getSiblings(taskRef: string, excludeAgent?: string): WorkerManifest[] {
-    return [...this.manifests.values()].filter(
-      m => m.subtaskId.startsWith(taskRef.slice(0, 8)) || true // all registered workers are siblings
-    ).filter(m => m.agentName !== excludeAgent);
+    const prefix = taskRef.slice(0, 8);
+    return [...this.manifests.values()]
+      .filter(m => m.agentName !== excludeAgent && m.subtaskId.startsWith(prefix));
   }
 
   getMessagesFor(agentName: string): WorkerMessage[] {
