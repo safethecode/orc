@@ -144,7 +144,7 @@ export class Orchestrator {
           const profile: import("../config/types.ts").AgentProfile = {
             name: agentName,
             provider: subtask.provider,
-            model: subtask.model as import("../config/types.ts").ModelTier,
+            model: subtask.model,
             role: subtask.agentRole,
             maxBudgetUsd: this.config.budget.defaultMaxPerTask,
             requires: [],
@@ -180,10 +180,10 @@ export class Orchestrator {
         },
       },
       {
-        workerTimeoutMs: (this.config as any).supervisor?.workerTimeout ?? 300_000,
-        maxRetries: (this.config as any).supervisor?.maxRetries ?? 2,
-        costAware: (this.config as any).supervisor?.costAware ?? true,
-        preferredProviders: (this.config as any).supervisor?.preferredProviders ?? ["claude", "codex", "gemini", "kiro"],
+        workerTimeoutMs: this.config.supervisor?.workerTimeout ?? 300_000,
+        maxRetries: this.config.supervisor?.maxRetries ?? 2,
+        costAware: this.config.supervisor?.costAware ?? true,
+        preferredProviders: this.config.supervisor?.preferredProviders ?? ["claude", "codex", "gemini", "kiro"],
       },
     );
 
