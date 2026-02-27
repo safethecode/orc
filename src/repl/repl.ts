@@ -7,6 +7,11 @@ import { AgentStreamer, type ToolUseEvent } from "./streamer.ts";
 import { Conversation } from "./conversation.ts";
 import { isCommand, handleCommand, COMMANDS, LANGUAGES } from "./commands.ts";
 import { TIER_BUDGETS } from "../memory/token-optimizer.ts";
+import { CancellationToken } from "../utils/cancellation.ts";
+import { notify } from "../utils/notifications.ts";
+import { RolloutRecorder } from "../session/rollout.ts";
+import { eventBus } from "../core/events.ts";
+import { diffFromGhost } from "../utils/ghost-commit.ts";
 import * as renderer from "./renderer.ts";
 
 export async function startRepl(
@@ -15,6 +20,13 @@ export async function startRepl(
 ): Promise<void> {
   const conversation = new Conversation();
   let currentStreamer: AgentStreamer | null = null;
+  let currentCancellation: CancellationToken | null = null;
+  let hasInteraction = false;
+
+  // Deferred rollout: only create file when user actually sends a message
+  const rollout = new RolloutRecorder(
+    `${config.orchestrator.dataDir}/sessions`,
+  );
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -83,9 +95,13 @@ export async function startRepl(
     });
   });
 
-  // Ctrl+C handling: abort running generation, keep REPL alive
+  // Ctrl+C handling: abort running generation via cancellation token
   process.on("SIGINT", () => {
-    if (currentStreamer?.isRunning) {
+    if (currentCancellation && !currentCancellation.cancelled) {
+      currentCancellation.cancel();
+      process.stdout.write("\n");
+      renderer.info("Generation aborted.");
+    } else if (currentStreamer?.isRunning) {
       currentStreamer.abort();
       process.stdout.write("\n");
       renderer.info("Generation aborted.");
@@ -113,6 +129,9 @@ export async function startRepl(
     renderer.info("\x1b[2mType /resume to continue or start fresh\x1b[0m");
   }
 
+  // Prewarm DNS cache while user reads welcome screen
+  orchestrator.getPrewarmer().prewarm().catch(() => {});
+
   try {
     while (true) {
       let input: string;
@@ -137,19 +156,39 @@ export async function startRepl(
         continue;
       }
 
+      // Acquire sleep inhibitor during agent work
+      orchestrator.getSleepInhibitor().acquire();
+
+      const cancellation = new CancellationToken();
+      currentCancellation = cancellation;
+
       await handleNaturalInput(
         trimmed,
         orchestrator,
         config,
         conversation,
+        rollout,
+        cancellation,
         (streamer) => { currentStreamer = streamer; },
       );
+      hasInteraction = true;
       currentStreamer = null;
+      currentCancellation = null;
+
+      // Release sleep inhibitor after agent work
+      orchestrator.getSleepInhibitor().release();
+
+      // Desktop notification when terminal is likely unfocused
+      notify(`orc: response ready`);
+
+      // Prewarm for next request
+      orchestrator.getPrewarmer().prewarm().catch(() => {});
+
       process.stdout.write("\n");
     }
   } finally {
-    // Auto-save snapshot on exit
-    if (conversation.length > 0) {
+    // Auto-save snapshot on exit (only if user actually interacted)
+    if (hasInteraction && conversation.length > 0) {
       const snapshot = conversation.toSnapshot();
       orchestrator.getStore().saveSnapshot({
         id: crypto.randomUUID(),
@@ -158,8 +197,25 @@ export async function startRepl(
         summary: conversation.generateSummary(),
         turnCount: conversation.length,
       });
+      eventBus.publish({ type: "session:save", turnCount: conversation.length });
+
+      // Persist rollout (deferred: only written if there was interaction)
+      rollout.persist();
     }
 
+    // Show ghost commit diff summary on exit
+    const ghostSha = orchestrator.getGhostSha();
+    if (ghostSha) {
+      const diff = await diffFromGhost(ghostSha);
+      if (diff) {
+        renderer.info(`\x1b[2mSession changes:\x1b[0m`);
+        const lines = diff.split("\n").slice(0, 5);
+        for (const line of lines) renderer.info(`  \x1b[2m${line}\x1b[0m`);
+        if (diff.split("\n").length > 5) renderer.info(`  \x1b[2m...\x1b[0m`);
+      }
+    }
+
+    orchestrator.getSleepInhibitor().release();
     rl.close();
     renderer.info("Goodbye.");
   }
@@ -170,6 +226,8 @@ async function handleNaturalInput(
   orchestrator: Orchestrator,
   config: OrchestratorConfig,
   conversation: Conversation,
+  rollout: RolloutRecorder,
+  cancellation: CancellationToken,
   onStreamer: (s: AgentStreamer) => void,
 ): Promise<void> {
   const route = routeTask(input, config.routing);
@@ -186,6 +244,9 @@ async function handleNaturalInput(
     return;
   }
 
+  // Publish event
+  eventBus.publish({ type: "agent:start", agent: agentName, tier: route.model, reason: route.reason });
+
   // Show agent header
   renderer.agentHeader(agentName, route.model, route.reason);
 
@@ -196,11 +257,14 @@ async function handleNaturalInput(
   conversation.setTokenBudget(TIER_BUDGETS[route.model] ?? TIER_BUDGETS.sonnet);
   const fullPrompt = conversation.buildPrompt(input);
 
-  conversation.add({
-    role: "user",
+  // Record user turn
+  const userTurn = {
+    role: "user" as const,
     content: input,
     timestamp: new Date().toISOString(),
-  });
+  };
+  conversation.add(userTurn);
+  rollout.append({ type: "turn", timestamp: userTurn.timestamp, data: userTurn });
 
   let systemPrompt = profile.systemPrompt;
   const lang = conversation.getLanguage();
@@ -215,6 +279,7 @@ async function handleNaturalInput(
   const memoryCtx = orchestrator.getMemory().formatForPrompt(memories);
   if (memoryCtx) {
     systemPrompt = systemPrompt ? `${systemPrompt}\n${memoryCtx}` : memoryCtx;
+    eventBus.publish({ type: "memory:inject", count: memories.length });
   }
 
   // Tier-specific response length hint
@@ -241,6 +306,7 @@ async function handleNaturalInput(
     const input = tool.input ?? {};
     const detail = (input.file_path as string) ?? (input.command as string) ?? (input.pattern as string) ?? undefined;
     renderer.toolUse(tool.name, detail);
+    eventBus.publish({ type: "agent:tool", agent: agentName, tool: tool.name, detail });
   });
 
   streamer.on("text_complete", (fullText: string) => {
@@ -255,12 +321,13 @@ async function handleNaturalInput(
   streamer.on("error", (msg: string) => {
     renderer.stopSpinner();
     renderer.error(msg);
+    eventBus.publish({ type: "agent:error", agent: agentName, message: msg });
   });
 
   const startTime = Date.now();
 
   try {
-    const result = await streamer.run(cmd);
+    const result = await streamer.run(cmd, cancellation.signal);
     renderer.stopSpinner();
     const durationMs = Date.now() - startTime;
 
@@ -272,15 +339,22 @@ async function handleNaturalInput(
       renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
       const totalTokens = result.inputTokens + result.outputTokens;
       orchestrator.getBudget().recordUsage(agentName, "repl", totalTokens, result.costUsd);
+      eventBus.publish({
+        type: "agent:done", agent: agentName,
+        cost: result.costUsd, inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens, durationMs,
+      });
     }
 
-    conversation.add({
-      role: "assistant",
+    const assistantTurn = {
+      role: "assistant" as const,
       content: result.text,
       agentName,
       tier: route.model,
       timestamp: new Date().toISOString(),
-    });
+    };
+    conversation.add(assistantTurn);
+    rollout.append({ type: "turn", timestamp: assistantTurn.timestamp, data: assistantTurn });
   } catch (e) {
     renderer.error(`Agent execution failed: ${(e as Error).message}`);
   }
