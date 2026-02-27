@@ -19,11 +19,21 @@ import { Logger } from "../logging/logger.ts";
 import { Tracer } from "../logging/tracer.ts";
 import { HealthChecker } from "../logging/health.ts";
 import { checkRequirements } from "../agents/preflight.ts";
+import { OwnershipManager } from "./ownership.ts";
+import { WorktreeManager } from "../session/worktree.ts";
+import { Inbox } from "../messaging/inbox.ts";
+import { ContextCompressor } from "../messaging/context-compressor.ts";
+import type { Database } from "bun:sqlite";
 
 export class Orchestrator {
   private sessionManager: SessionManager;
   private store!: Store;
+  private db!: Database;
   private budget!: BudgetController;
+  private ownership!: OwnershipManager;
+  private worktree: WorktreeManager;
+  private inbox!: Inbox;
+  private compressor: ContextCompressor;
   private scheduler: Scheduler;
   private registry: AgentRegistry;
   private logger: Logger;
@@ -38,15 +48,33 @@ export class Orchestrator {
     this.registry = new AgentRegistry();
     this.logger = new Logger(config.orchestrator.logDir);
     this.tracer = new Tracer();
-    this.health = new HealthChecker(config.orchestrator.sessionPrefix, (status) => {
+    this.worktree = new WorktreeManager(process.cwd());
+    this.compressor = new ContextCompressor();
+    this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
+      if (status.consecutiveFailures >= 3) {
+        try {
+          await this.stopAgent(status.agentName);
+          this.store.updateAgentStatus(status.agentName, "error");
+        } catch { /* already dead */ }
+      }
     });
   }
 
   async initialize(): Promise<void> {
     const db = initDb(this.config.orchestrator.db);
+    this.db = db;
     this.store = new Store(db);
     this.budget = new BudgetController(this.store, this.config.budget);
+    this.ownership = new OwnershipManager(this.store);
+    this.inbox = new Inbox(this.store, db);
+
+    this.inbox.on("message", async ({ to, message }: { to: string; message: { from: string; content: string } }) => {
+      const session = this.sessionManager.getSession(to);
+      if (session) {
+        await this.sessionManager.sendInput(to, `[Message from ${message.from}]: ${message.content}`);
+      }
+    });
 
     const profileDir = `${this.config.orchestrator.dataDir}/profiles`;
     try {
@@ -91,6 +119,11 @@ export class Orchestrator {
     this.store.updateAgentStatus(profile.name, "running");
     this.health.registerAgent(profile.name);
 
+    if (profile.worktree) {
+      const taskId = crypto.randomUUID();
+      await this.worktree.create(profile.name, taskId);
+    }
+
     this.logger.log({
       ts: new Date().toISOString(),
       agent: profile.name,
@@ -105,6 +138,8 @@ export class Orchestrator {
   async stopAgent(agentName: string): Promise<void> {
     await this.sessionManager.destroySession(agentName);
     this.store.unlockByAgent(agentName);
+    this.ownership.release(agentName);
+    await this.worktree.removeByAgent(agentName);
     this.store.updateAgentStatus(agentName, "terminated");
     this.health.unregisterAgent(agentName);
 
@@ -171,6 +206,9 @@ export class Orchestrator {
             current &&
             (current.status === "completed" || current.status === "failed")
           ) {
+            if (current.tokenUsage > 0 || current.costUsd > 0) {
+              this.budget.recordUsage(agentName, taskId, current.tokenUsage, current.costUsd);
+            }
             this.tracer.endSpan(
               span.spanId,
               current.status === "completed" ? "completed" : "error",
@@ -208,18 +246,24 @@ export class Orchestrator {
     content: string,
     options?: SendMessageOptions,
   ): Promise<void> {
+    let finalContent = content;
+    if (content.length > 5000) {
+      const compressed = this.compressor.compress(content);
+      finalContent = compressed.summary;
+    }
+
     const msgId = crypto.randomUUID();
     this.store.addMessage({
       id: msgId,
       from,
       to,
-      content,
+      content: finalContent,
       taskRef: options?.taskRef,
     });
 
     const session = this.sessionManager.getSession(to);
     if (session) {
-      await this.sessionManager.sendInput(to, `[Message from ${from}]: ${content}`);
+      await this.sessionManager.sendInput(to, `[Message from ${from}]: ${finalContent}`);
     }
   }
 
@@ -252,9 +296,39 @@ export class Orchestrator {
     return this.config;
   }
 
+  getOwnership(): OwnershipManager {
+    return this.ownership;
+  }
+
+  getWorktree(): WorktreeManager {
+    return this.worktree;
+  }
+
+  getInbox(): Inbox {
+    return this.inbox;
+  }
+
+  getBudget(): BudgetController {
+    return this.budget;
+  }
+
+  getTracer(): Tracer {
+    return this.tracer;
+  }
+
+  getScheduler(): Scheduler {
+    return this.scheduler;
+  }
+
+  getHealth(): HealthChecker {
+    return this.health;
+  }
+
   async shutdown(): Promise<void> {
     this.health.stop();
     await this.sessionManager.destroyAll();
+    await this.worktree.cleanup();
+    this.compressor.clear();
 
     const agents = this.store.listAgents();
     for (const agent of agents) {
