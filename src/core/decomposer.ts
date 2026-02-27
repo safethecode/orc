@@ -1,4 +1,4 @@
-import type { SubTask, DecompositionResult, ExecutionPlan, ExecutionPhaseGroup, AgentRole } from "../config/types.ts";
+import type { SubTask, DecompositionResult, ExecutionPlan, ExecutionPhaseGroup, AgentRole, TaskStatus } from "../config/types.ts";
 import { assessComplexityHeuristic } from "./complexity.ts";
 import { eventBus } from "./events.ts";
 
@@ -166,6 +166,8 @@ export function buildExecutionPlan(
   };
 }
 
+const INITIAL_STATUS: TaskStatus = "queued";
+
 export function decompose(
   prompt: string,
   parentTaskId: string,
@@ -185,7 +187,7 @@ export function decompose(
       model: complexity.level === "simple" ? "haiku" : "sonnet", // placeholder — provider-selector overrides
       agentRole: inferRole(domains),
       priority: 1,
-      status: "queued",
+      status: INITIAL_STATUS,
       result: null,
       estimatedTokens: complexity.level === "simple" ? 4000 : 15000,
       actualTokens: 0,
@@ -228,7 +230,7 @@ export function decompose(
       model: complexity.level === "complex" ? "opus" : "sonnet", // placeholder — provider-selector overrides
       agentRole: role,
       priority: i + 1,
-      status: "queued",
+      status: INITIAL_STATUS,
       result: null,
       estimatedTokens,
       actualTokens: 0,
