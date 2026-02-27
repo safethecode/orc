@@ -2,7 +2,6 @@ import type {
   CollectedResult,
   AggregatedResult,
   WorkerState,
-  ProviderName,
 } from "../config/types.ts";
 import { eventBus } from "./events.ts";
 
@@ -17,7 +16,7 @@ export class ResultCollector {
   collect(worker: WorkerState): CollectedResult | null {
     if (worker.status !== "completed" || !worker.result) return null;
 
-    const durationMs = worker.lastActivityAt
+    const durationMs = worker.lastActivityAt && worker.startedAt
       ? new Date(worker.lastActivityAt).getTime() - new Date(worker.startedAt).getTime()
       : 0;
 
