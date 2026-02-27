@@ -14,6 +14,9 @@ import type {
 import type { SessionManager } from "../session/manager.ts";
 import type { CheckpointManager } from "./checkpoint.ts";
 import type { RecoveryManager } from "./recovery.ts";
+import type { BudgetController } from "./budget.ts";
+import type { ConflictWatcher } from "./watcher.ts";
+import type { OwnershipManager } from "./ownership.ts";
 import type { ContextBuilder } from "../memory/context-builder.ts";
 import type { Inbox } from "../messaging/inbox.ts";
 import type { ContextCompressor } from "../messaging/context-compressor.ts";
@@ -39,6 +42,9 @@ export interface SupervisorDeps {
   inbox: Inbox;
   compressor: ContextCompressor;
   store: Store;
+  budget?: BudgetController;
+  conflictWatcher?: ConflictWatcher;
+  ownership?: OwnershipManager;
 }
 
 export interface SupervisorOptions {
@@ -118,8 +124,33 @@ export class Supervisor {
   }
 
   async execute(taskId: string, prompt: string): Promise<AggregatedResult> {
+    // 0. Budget circuit breaker — abort before spending if budget exhausted
+    if (this.deps.budget) {
+      const budgetCheck = this.deps.budget.canProceed(
+        `supervisor-${taskId.slice(0, 8)}`,
+        this.deps.config.budget.defaultMaxPerTask,
+      );
+      if (!budgetCheck.allowed) {
+        return {
+          taskId, subtaskResults: [], mergedOutput: `Budget exceeded: ${budgetCheck.reason}`,
+          totalTokens: 0, totalCost: 0, totalDurationMs: 0, conflicts: [], success: false,
+        };
+      }
+    }
+
     // 1. Decompose task
     const decomposition = decompose(prompt, taskId);
+
+    // 1.5. Single-agent fallback — skip supervisor overhead for trivial decompositions
+    if (decomposition.subtasks.length <= 1) {
+      eventBus.publish({
+        type: "supervisor:plan",
+        taskId,
+        phases: 0,
+        estimatedCost: decomposition.estimatedTotalCost,
+      });
+      return this.executeSingleFallback(taskId, decomposition);
+    }
 
     // 2. Select optimal provider+model for each subtask
     this.assignProviders(decomposition.subtasks);
@@ -242,6 +273,19 @@ export class Supervisor {
     const maxAttempts = this.options.maxRetries + 1;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      // Budget check before each attempt
+      if (this.deps.budget) {
+        const check = this.deps.budget.canProceed(
+          `worker-${subtask.id.slice(0, 8)}`,
+          this.deps.config.budget.defaultMaxPerTask,
+        );
+        if (!check.allowed) {
+          subtask.status = "failed";
+          subtask.result = `Budget exceeded: ${check.reason}`;
+          return;
+        }
+      }
+
       try {
         // 4. Spawn worker via deps callback
         const { agentName } = await this.deps.spawnWorker(subtask, maxTurns, enrichedPrompt);
@@ -360,6 +404,27 @@ export class Supervisor {
     const failedStatus: TaskStatus = "failed";
     subtask.status = failedStatus;
     subtask.result = lastError;
+  }
+
+  private async executeSingleFallback(
+    taskId: string,
+    decomposition: DecompositionResult,
+  ): Promise<AggregatedResult> {
+    const subtask = decomposition.subtasks[0];
+    if (!subtask) {
+      return {
+        taskId, subtaskResults: [], mergedOutput: "No subtasks generated",
+        totalTokens: 0, totalCost: 0, totalDurationMs: 0, conflicts: [], success: false,
+      };
+    }
+
+    this.assignProviders([subtask]);
+    const collector = new ResultCollector(taskId);
+    await this.executeSubtask(subtask, collector, decomposition);
+
+    const result = collector.aggregate();
+    this.pool.clear();
+    return result;
   }
 
   private subscribeTurnEvents(taskId: string): () => void {
