@@ -29,6 +29,13 @@ import { eventBus } from "./events.ts";
 import { SleepInhibitor } from "../utils/sleep-inhibitor.ts";
 import { createGhostCommit } from "../utils/ghost-commit.ts";
 import { ConnectionPrewarmer } from "../session/prewarmer.ts";
+import { RecoveryManager } from "./recovery.ts";
+import { TaskLogger } from "../logging/task-logger.ts";
+import { CodebaseMap } from "../memory/codebase-map.ts";
+import { ContextBuilder } from "../memory/context-builder.ts";
+import { DynamicSecurityProfile } from "../sandbox/dynamic-profile.ts";
+import { AccountManager } from "../agents/account-manager.ts";
+import { TaskPredictor } from "./predictor.ts";
 import type { Database } from "bun:sqlite";
 
 const MAX_AGENT_DEPTH = 5;
@@ -51,6 +58,13 @@ export class Orchestrator {
   private consolidator!: MemoryConsolidator;
   private sleepInhibitor: SleepInhibitor;
   private prewarmer: ConnectionPrewarmer;
+  private recovery: RecoveryManager;
+  private taskLogger: TaskLogger;
+  private codemap!: CodebaseMap;
+  private contextBuilder!: ContextBuilder;
+  private dynamicSecurity: DynamicSecurityProfile;
+  private accountManager: AccountManager;
+  private predictor!: TaskPredictor;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -66,6 +80,10 @@ export class Orchestrator {
     this.compressor = new ContextCompressor();
     this.sleepInhibitor = new SleepInhibitor();
     this.prewarmer = new ConnectionPrewarmer();
+    this.recovery = new RecoveryManager();
+    this.taskLogger = new TaskLogger();
+    this.dynamicSecurity = new DynamicSecurityProfile();
+    this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
       if (status.consecutiveFailures >= 3) {
@@ -86,6 +104,9 @@ export class Orchestrator {
     this.memory = new MemoryStore(db);
     this.consolidator = new MemoryConsolidator(this.store, this.memory);
     this.inbox = new Inbox(this.store, db);
+    this.codemap = new CodebaseMap(db);
+    this.contextBuilder = new ContextBuilder(this.memory, this.codemap, db);
+    this.predictor = new TaskPredictor(this.memory, this.store);
 
     this.inbox.on("message", async ({ to, message }: { to: string; message: { from: string; content: string } }) => {
       const session = this.sessionManager.getSession(to);
@@ -397,6 +418,34 @@ export class Orchestrator {
 
   getGhostSha(): string | null {
     return this.ghostSha;
+  }
+
+  getRecovery(): RecoveryManager {
+    return this.recovery;
+  }
+
+  getTaskLogger(): TaskLogger {
+    return this.taskLogger;
+  }
+
+  getCodebaseMap(): CodebaseMap {
+    return this.codemap;
+  }
+
+  getContextBuilder(): ContextBuilder {
+    return this.contextBuilder;
+  }
+
+  getDynamicSecurity(): DynamicSecurityProfile {
+    return this.dynamicSecurity;
+  }
+
+  getAccountManager(): AccountManager {
+    return this.accountManager;
+  }
+
+  getPredictor(): TaskPredictor {
+    return this.predictor;
   }
 
   private async decomposeTask(prompt: string, parentTaskId: string): Promise<string[]> {
