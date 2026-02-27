@@ -9,12 +9,16 @@ import type {
   QAResult,
   RecoveryDecision,
   WorkerState,
+  WorkerMessageType,
+  ProviderConfig,
 } from "../config/types.ts";
 import type { SessionManager } from "../session/manager.ts";
 import type { WorkerPool } from "./worker-pool.ts";
+import type { WorkerBus } from "./worker-bus.ts";
 import type { CheckpointManager } from "./checkpoint.ts";
 import type { RecoveryManager } from "./recovery.ts";
 import type { Store } from "../db/store.ts";
+import { buildCritiquePrompt, parseCritiqueResponse } from "./critique.ts";
 import { eventBus } from "./events.ts";
 
 const DEFAULT_CONFIG: Required<FeedbackLoopConfig> = {
@@ -30,6 +34,7 @@ export class FeedbackLoop {
   private checkpoints: Map<string, FeedbackCheckpoint[]> = new Map();
   private correctionCounts: Map<string, number> = new Map();
   private timers: Map<string, ReturnType<typeof setInterval>> = new Map();
+  private processedMarkers: Map<string, Set<string>> = new Map();
 
   constructor(
     config: Partial<FeedbackLoopConfig> | undefined,
@@ -38,6 +43,8 @@ export class FeedbackLoop {
     private checkpointMgr: CheckpointManager,
     private recovery: RecoveryManager,
     private store: Store,
+    private workerBus?: WorkerBus,
+    private providerConfig?: ProviderConfig,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
@@ -58,6 +65,7 @@ export class FeedbackLoop {
       clearInterval(timer);
       this.timers.delete(workerId);
     }
+    this.processedMarkers.delete(workerId);
   }
 
   private async inspect(workerId: string, subtask: SubTask): Promise<void> {
@@ -81,6 +89,9 @@ export class FeedbackLoop {
       subtaskId: subtask.id,
       turn: worker.currentTurn,
     });
+
+    // Detect bus markers in tmux output
+    this.detectBusMessages(workerId, capturedOutput, worker, subtask);
 
     // Parse turn progress
     const progress = this.parseTurnProgress(capturedOutput, worker);
@@ -310,6 +321,55 @@ export class FeedbackLoop {
     return decision;
   }
 
+  private detectBusMessages(workerId: string, output: string, worker: WorkerState, subtask: SubTask): void {
+    if (!this.workerBus) return;
+
+    const pattern = /\[ORC:BUS:(\w+)\s+to=(\S+?)(?:\s+meta=(\{[^}]*\}))?\]\s+(.+)$/gm;
+    const seen = this.processedMarkers.get(workerId) ?? new Set<string>();
+
+    let match;
+    while ((match = pattern.exec(output)) !== null) {
+      const [raw, type, target, metaJson, content] = match;
+      const fingerprint = `${type}:${target}:${content.slice(0, 50)}`;
+
+      if (seen.has(fingerprint)) continue;
+      seen.add(fingerprint);
+
+      let metadata: Record<string, unknown> | undefined;
+      if (metaJson) {
+        try { metadata = JSON.parse(metaJson); } catch { /* ignore malformed meta */ }
+      }
+
+      const validTypes = new Set(["artifact", "request", "status", "warning", "dependency"]);
+      if (!validTypes.has(type)) continue;
+
+      // "supervisor" target → event only, no bus delivery
+      if (target === "supervisor") {
+        eventBus.publish({
+          type: "workerbus:message",
+          messageId: `marker-${Date.now().toString(36)}`,
+          from: worker.agentName,
+          to: "supervisor",
+          messageType: type,
+        });
+        continue;
+      }
+
+      // Route via WorkerBus
+      this.workerBus.send({
+        from: worker.agentName,
+        to: target as string,
+        type: type as WorkerMessageType,
+        content,
+        metadata: metadata as { files?: string[]; apis?: string[]; schemas?: string[]; ports?: number[] },
+        taskRef: subtask.parentTaskId,
+        subtaskRef: subtask.id,
+      });
+    }
+
+    this.processedMarkers.set(workerId, seen);
+  }
+
   private parseTurnProgress(
     output: string,
     worker: WorkerState,
@@ -404,5 +464,6 @@ export class FeedbackLoop {
     this.stopAll();
     this.checkpoints.clear();
     this.correctionCounts.clear();
+    this.processedMarkers.clear();
   }
 }
