@@ -528,3 +528,101 @@ export interface Checkpoint {
   metadata: Record<string, unknown>;
   createdAt: string;
 }
+
+// ── Provider Capability System ──────────────────────────────────────
+
+export type ProviderName = "claude" | "codex" | "gemini" | "kiro";
+
+export interface ProviderCapability {
+  name: ProviderName;
+  models: string[];
+  strengths: string[];
+  weaknesses: string[];
+  maxContextTokens: number;
+  supportsStreaming: boolean;
+  supportsToolUse: boolean;
+  costTier: "low" | "medium" | "high";
+}
+
+// ── Supervisor Types ────────────────────────────────────────────────
+
+export type AgentRole = "architect" | "coder" | "reviewer" | "tester" | "researcher" | "spec-writer";
+
+export interface SubTask {
+  id: string;
+  prompt: string;
+  parentTaskId: string;
+  dependencies: string[];
+  provider: ProviderName;
+  model: string;
+  agentRole: AgentRole;
+  priority: number;
+  status: TaskStatus;
+  result: string | null;
+  estimatedTokens: number;
+  actualTokens: number;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface DecompositionResult {
+  subtasks: SubTask[];
+  executionPlan: ExecutionPlan;
+  estimatedTotalCost: number;
+}
+
+export interface ExecutionPlan {
+  phases: ExecutionPhaseGroup[];
+  totalEstimatedDurationMs: number;
+  strategy: "sequential" | "parallel" | "pipeline";
+}
+
+export interface ExecutionPhaseGroup {
+  name: string;
+  subtaskIds: string[];
+  parallelizable: boolean;
+}
+
+// ── Worker Types ────────────────────────────────────────────────────
+
+export type WorkerStatus = "spawning" | "running" | "completed" | "failed" | "timeout";
+
+export interface WorkerState {
+  id: string;
+  agentName: string;
+  subtaskId: string;
+  provider: ProviderName;
+  model: string;
+  status: WorkerStatus;
+  progress: number;
+  startedAt: string;
+  lastActivityAt: string;
+  result: string | null;
+  error: string | null;
+  tokenUsage: number;
+  costUsd: number;
+}
+
+// ── Result Collection ───────────────────────────────────────────────
+
+export interface CollectedResult {
+  subtaskId: string;
+  agentName: string;
+  provider: ProviderName;
+  result: string;
+  files: string[];
+  tokenUsage: number;
+  costUsd: number;
+  durationMs: number;
+}
+
+export interface AggregatedResult {
+  taskId: string;
+  subtaskResults: CollectedResult[];
+  mergedOutput: string;
+  totalTokens: number;
+  totalCost: number;
+  totalDurationMs: number;
+  conflicts: string[];
+  success: boolean;
+}
