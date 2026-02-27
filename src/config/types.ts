@@ -60,6 +60,10 @@ export interface SupervisorConfig {
   maxRetries: number;
   costAware: boolean;
   preferredProviders: ProviderName[];
+  multiTurn?: MultiTurnConfig;
+  feedback?: FeedbackLoopConfig;
+  workerBus?: { enabled: boolean; broadcastArtifacts: boolean };
+  contextPropagation?: { enabled: boolean; includeCodebaseMap: boolean; includeMemory: boolean; maxContextTokens: number; summarizeSiblingResults: boolean };
 }
 
 export interface OrchestratorConfig {
@@ -87,6 +91,7 @@ export interface AgentProfile {
   requires: string[];
   worktree: boolean;
   systemPrompt: string;
+  maxTurns?: number;
 }
 
 // ── Task Types ────────────────────────────────────────────────────────
@@ -621,6 +626,11 @@ export interface WorkerState {
   error: string | null;
   tokenUsage: number;
   costUsd: number;
+  currentTurn: number;
+  maxTurns: number;
+  turnHistory: WorkerTurnProgress[];
+  corrections: string[];
+  intermediateResults: string[];
 }
 
 // ── Result Collection ───────────────────────────────────────────────
@@ -634,6 +644,8 @@ export interface CollectedResult {
   tokenUsage: number;
   costUsd: number;
   durationMs: number;
+  role: AgentRole;
+  domain: string;
 }
 
 export interface AggregatedResult {
@@ -645,4 +657,101 @@ export interface AggregatedResult {
   totalDurationMs: number;
   conflicts: string[];
   success: boolean;
+}
+
+// ── Multi-Turn Worker Types ─────────────────────────────────
+export interface MultiTurnConfig {
+  defaultMaxTurns: number;
+  simpleMaxTurns: number;
+  standardMaxTurns: number;
+  complexMaxTurns: number;
+  checkpointIntervalTurns: number;
+  progressPollIntervalMs: number;
+  idleTimeoutMs: number;
+}
+
+export interface WorkerTurnProgress {
+  workerId: string;
+  currentTurn: number;
+  maxTurns: number;
+  lastToolUse: string | null;
+  lastOutput: string | null;
+  filesModified: string[];
+  testsRun: boolean;
+  testsPassed: boolean | null;
+  timestamp: string;
+}
+
+// ── Worker Bus Types ────────────────────────────────────────
+export type WorkerMessageType = "artifact" | "request" | "status" | "warning" | "dependency";
+
+export interface WorkerMessage {
+  id: string;
+  from: string;
+  to: string | "all";
+  type: WorkerMessageType;
+  content: string;
+  metadata?: { files?: string[]; apis?: string[]; schemas?: string[]; ports?: number[] };
+  taskRef: string;
+  subtaskRef: string;
+  timestamp: string;
+}
+
+export interface WorkerManifest {
+  agentName: string;
+  subtaskId: string;
+  role: AgentRole;
+  domain: string;
+  prompt: string;
+}
+
+// ── Feedback Loop Types ─────────────────────────────────────
+export type FeedbackAction = "continue" | "correct" | "checkpoint" | "qa_review"
+  | "critique" | "abort" | "retry_with_context" | "recovery";
+
+export interface FeedbackCheckpoint {
+  workerId: string;
+  subtaskId: string;
+  turn: number;
+  capturedOutput: string;
+  filesModified: string[];
+  assessment: FeedbackAction;
+  correctionSent: string | null;
+  timestamp: string;
+}
+
+export interface FeedbackLoopConfig {
+  enabled: boolean;
+  checkIntervalMs: number;
+  maxCorrections: number;
+  qualityGateOnComplete: boolean;
+  qaLoopOnFail: boolean;
+}
+
+export interface SupervisorAssessment {
+  action: FeedbackAction;
+  reason: string;
+  correction?: string;
+  confidence: number;
+}
+
+// ── Context Propagation Types ───────────────────────────────
+export interface WorkerContext {
+  parentTask: { id: string; prompt: string; decompositionStrategy: string };
+  siblings: WorkerManifest[];
+  completedSiblings: SiblingResult[];
+  codebaseContext: string;
+  memoryContext: string;
+  workerBusMessages: WorkerMessage[];
+}
+
+export interface SiblingResult {
+  agentName: string;
+  subtaskId: string;
+  role: AgentRole;
+  domain: string;
+  summary: string;
+  filesChanged: string[];
+  apisCreated: string[];
+  schemasCreated: string[];
 }
