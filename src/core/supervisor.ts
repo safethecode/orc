@@ -183,6 +183,9 @@ export class Supervisor {
       } else {
         await this.executeSequential(phaseSubtasks, collector, decomposition);
       }
+
+      // After each phase: run conflict analysis on completed results
+      this.analyzePhaseConflicts(phaseSubtasks, collector);
     }
 
     // 7. Aggregate and return
@@ -303,6 +306,29 @@ export class Supervisor {
           prompt: subtask.prompt.slice(0, 200),
         });
 
+        // 6.5. Declare file ownership based on domain
+        if (this.deps.ownership) {
+          const ownershipResult = this.deps.ownership.declare({
+            agentName,
+            taskId: subtask.parentTaskId,
+            owns: [`src/${domain}/**`],
+            reads: ["src/shared/**", "src/config/**"],
+          });
+          if (!ownershipResult.allowed) {
+            const conflictInfo = ownershipResult.conflicts
+              .map(c => `${c.pattern} held by ${c.heldBy}`)
+              .join(", ");
+            eventBus.publish({
+              type: "conflict:detected",
+              id: `own-${Date.now().toString(36)}`,
+              severity: "warning",
+              agents: [agentName, ...ownershipResult.conflicts.map(c => c.heldBy)],
+            });
+            // Log but don't block — domain inference is heuristic
+            this.pool.addIntermediateResult(worker.id, `Ownership conflict: ${conflictInfo}`);
+          }
+        }
+
         // 7. Start feedback monitoring
         this.feedbackLoop.startMonitoring(worker.id, subtask);
 
@@ -404,6 +430,34 @@ export class Supervisor {
     const failedStatus: TaskStatus = "failed";
     subtask.status = failedStatus;
     subtask.result = lastError;
+  }
+
+  private analyzePhaseConflicts(subtasks: SubTask[], collector: ResultCollector): void {
+    if (!this.deps.conflictWatcher) return;
+
+    // Record diffs from completed subtasks in this phase
+    for (const subtask of subtasks) {
+      const result = collector.getResult(subtask.id);
+      if (!result) continue;
+
+      this.deps.conflictWatcher.recordDiff({
+        agentName: result.agentName,
+        taskId: subtask.parentTaskId,
+        files: result.files,
+        summary: result.result.slice(0, 500),
+      });
+    }
+
+    // Analyze for logical conflicts
+    const conflicts = this.deps.conflictWatcher.analyze();
+    for (const conflict of conflicts) {
+      eventBus.publish({
+        type: "conflict:detected",
+        id: conflict.id,
+        severity: conflict.severity,
+        agents: [conflict.agentA, conflict.agentB],
+      });
+    }
   }
 
   private async executeSingleFallback(
