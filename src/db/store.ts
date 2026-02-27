@@ -6,6 +6,10 @@ import type {
   TaskStatus,
   AgentStatus,
   ModelTier,
+  FileEntry,
+  ToolLogEntry,
+  LogPhase,
+  RecoveryAttempt,
 } from "../config/types.ts";
 
 export class Store {
@@ -376,6 +380,123 @@ export class Store {
       sessionName: r.session_name as string,
       summary: r.summary as string | null,
       turnCount: r.turn_count as number,
+      createdAt: r.created_at as string,
+    }));
+  }
+
+  // ── Codebase Map ────────────────────────────────────────────────────
+
+  upsertCodebaseEntry(path: string, purpose: string, agent?: string): void {
+    this.db.prepare(
+      `INSERT INTO codebase_map (file_path, purpose, last_agent, updated_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(file_path) DO UPDATE SET
+         purpose = excluded.purpose,
+         last_agent = excluded.last_agent,
+         updated_at = datetime('now')`,
+    ).run(path, purpose, agent ?? null);
+  }
+
+  getCodebaseEntry(path: string): FileEntry | null {
+    const row = this.db.prepare(
+      `SELECT * FROM codebase_map WHERE file_path = ?`,
+    ).get(path) as Record<string, unknown> | null;
+    if (!row) return null;
+    return {
+      path: row.file_path as string,
+      purpose: row.purpose as string,
+      lastAgent: row.last_agent as string | undefined,
+      lastUpdated: row.updated_at as string,
+    };
+  }
+
+  searchCodebase(query: string, limit = 10): FileEntry[] {
+    const pattern = `%${query}%`;
+    const rows = this.db.prepare(
+      `SELECT * FROM codebase_map WHERE file_path LIKE ? OR purpose LIKE ? ORDER BY updated_at DESC LIMIT ?`,
+    ).all(pattern, pattern, limit) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      path: r.file_path as string,
+      purpose: r.purpose as string,
+      lastAgent: r.last_agent as string | undefined,
+      lastUpdated: r.updated_at as string,
+    }));
+  }
+
+  // ── Task Log ──────────────────────────────────────────────────────
+
+  addToolLog(entry: { taskId: string; tool: string; detail?: string; phase?: LogPhase; startedAt: string; endedAt?: string; success?: boolean; durationMs?: number }): void {
+    this.db.prepare(
+      `INSERT INTO task_log (task_id, tool, detail, phase, started_at, ended_at, success, duration_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      entry.taskId,
+      entry.tool,
+      entry.detail ?? null,
+      entry.phase ?? "general",
+      entry.startedAt,
+      entry.endedAt ?? null,
+      entry.success != null ? (entry.success ? 1 : 0) : null,
+      entry.durationMs ?? null,
+    );
+  }
+
+  getToolLogs(taskId: string): ToolLogEntry[] {
+    const rows = this.db.prepare(
+      `SELECT * FROM task_log WHERE task_id = ? ORDER BY started_at ASC`,
+    ).all(taskId) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      tool: r.tool as string,
+      detail: r.detail as string | undefined,
+      phase: r.phase as LogPhase,
+      startedAt: r.started_at as string,
+      endedAt: r.ended_at as string | undefined,
+      success: r.success != null ? (r.success as number) === 1 : undefined,
+      durationMs: r.duration_ms as number | undefined,
+    }));
+  }
+
+  // ── Recovery History ──────────────────────────────────────────────
+
+  addRecoveryAttempt(attempt: RecoveryAttempt & { actionTaken: string }): void {
+    this.db.prepare(
+      `INSERT INTO recovery_history (task_id, failure_type, approach, action_taken, success)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(attempt.taskId, attempt.failureType, attempt.approach, attempt.actionTaken, attempt.success ? 1 : 0);
+  }
+
+  getRecoveryHistory(taskId: string): Array<{ taskId: string; failureType: string; approach: string; actionTaken: string; success: boolean; createdAt: string }> {
+    const rows = this.db.prepare(
+      `SELECT * FROM recovery_history WHERE task_id = ? ORDER BY created_at DESC`,
+    ).all(taskId) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      taskId: r.task_id as string,
+      failureType: r.failure_type as string,
+      approach: r.approach as string,
+      actionTaken: r.action_taken as string,
+      success: (r.success as number) === 1,
+      createdAt: r.created_at as string,
+    }));
+  }
+
+  // ── Predictions ───────────────────────────────────────────────────
+
+  savePrediction(prompt: string, risks: string, checklist: string): void {
+    this.db.prepare(
+      `INSERT INTO predictions (task_prompt, risks_json, checklist_json) VALUES (?, ?, ?)`,
+    ).run(prompt, risks, checklist);
+  }
+
+  getRecentPredictions(limit = 10): Array<{ id: number; taskPrompt: string; risksJson: string | null; checklistJson: string | null; outcome: string | null; createdAt: string }> {
+    const rows = this.db.prepare(
+      `SELECT * FROM predictions ORDER BY created_at DESC LIMIT ?`,
+    ).all(limit) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: r.id as number,
+      taskPrompt: r.task_prompt as string,
+      risksJson: r.risks_json as string | null,
+      checklistJson: r.checklist_json as string | null,
+      outcome: r.outcome as string | null,
       createdAt: r.created_at as string,
     }));
   }
