@@ -174,6 +174,19 @@ export class Orchestrator {
       prompt,
       tier: route.model,
     });
+
+    if (route.multiAgent) {
+      const subTaskIds = await this.decomposeTask(prompt, taskId);
+      for (const subId of subTaskIds) {
+        const subTask = this.store.getTask(subId)!;
+        const subRoute = routeTask(subTask.prompt, this.config.routing);
+        const subAgent = suggestAgent(subRoute.tier);
+        await this.assign(subAgent, subTask.prompt);
+      }
+      this.store.updateTask(taskId, { status: "running", startedAt: new Date().toISOString() });
+      return this.store.getTask(taskId)!;
+    }
+
     this.store.updateTask(taskId, {
       agentName,
       status: "assigned",
@@ -322,6 +335,22 @@ export class Orchestrator {
 
   getHealth(): HealthChecker {
     return this.health;
+  }
+
+  private async decomposeTask(prompt: string, parentTaskId: string): Promise<string[]> {
+    const parts = prompt
+      .split(/\b(?:and then|after that|then have|followed by|once done)\b/i)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const taskIds: string[] = [];
+    for (const part of parts) {
+      const route = routeTask(part, this.config.routing);
+      const taskId = crypto.randomUUID();
+      this.store.createTask({ id: taskId, prompt: part, tier: route.model, parentTaskId });
+      taskIds.push(taskId);
+    }
+    return taskIds;
   }
 
   async shutdown(): Promise<void> {
