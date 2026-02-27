@@ -90,6 +90,7 @@ export interface AgentProfile {
   worktree: boolean;
   systemPrompt: string;
   maxTurns?: number;
+  skills?: string[];
 }
 
 // ── Task Types ────────────────────────────────────────────────────────

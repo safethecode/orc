@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import { homedir } from "node:os";
 import type {
   OrchestratorConfig,
   AgentProfile,
@@ -218,8 +220,12 @@ export class Orchestrator {
     });
 
     const profileDir = `${this.config.orchestrator.dataDir}/profiles`;
+    const skillSearchDirs = [
+      join(process.cwd(), ".claude", "skills"),
+      join(homedir(), ".claude", "skills"),
+    ];
     try {
-      await this.registry.loadProfiles(profileDir);
+      await this.registry.loadProfiles(profileDir, skillSearchDirs);
     } catch {
       // profiles directory may not exist yet
     }

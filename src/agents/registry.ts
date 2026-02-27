@@ -8,13 +8,21 @@ export class AgentRegistry {
 
   constructor() {}
 
-  async loadProfiles(profileDir: string): Promise<void> {
+  async loadProfiles(profileDir: string, skillSearchDirs?: string[]): Promise<void> {
     const entries = await readdir(profileDir);
     const mdFiles = entries.filter((f) => f.endsWith(".md"));
 
     for (const file of mdFiles) {
       const content = await readFile(join(profileDir, file), "utf-8");
       const profile = parseProfile(content);
+
+      if (skillSearchDirs && profile.skills && profile.skills.length > 0) {
+        const skillBodies = await resolveSkills(profile.skills, skillSearchDirs);
+        if (skillBodies.length > 0) {
+          profile.systemPrompt += "\n\n" + skillBodies.join("\n\n");
+        }
+      }
+
       this.register(profile);
     }
   }
@@ -54,5 +62,41 @@ export function parseProfile(content: string): AgentProfile {
     requires: (frontmatter.requires as string[]) ?? [],
     worktree: (frontmatter.worktree as boolean) ?? false,
     systemPrompt,
+    skills: (frontmatter.skills as string[]) ?? [],
   };
+}
+
+export function stripFrontmatter(content: string): string {
+  const match = content.match(/^---\n[\s\S]*?\n---\n?/);
+  if (match) {
+    return content.slice(match[0].length).trim();
+  }
+  return content.trim();
+}
+
+export async function resolveSkills(
+  skillNames: string[],
+  searchDirs: string[],
+): Promise<string[]> {
+  const results: string[] = [];
+
+  for (const name of skillNames) {
+    let found = false;
+    for (const dir of searchDirs) {
+      const skillPath = join(dir, name, "SKILL.md");
+      try {
+        const raw = await readFile(skillPath, "utf-8");
+        results.push(stripFrontmatter(raw));
+        found = true;
+        break;
+      } catch {
+        // not found in this dir, try next
+      }
+    }
+    if (!found) {
+      console.warn(`[orc] skill "${name}" not found in any search directory`);
+    }
+  }
+
+  return results;
 }
