@@ -6,7 +6,7 @@ import type {
 
 export interface CommandOptions {
   prompt: string;
-  model?: ModelTier;
+  model?: ModelTier | string;
   maxBudgetUsd?: number;
   systemPrompt?: string;
   workdir?: string;
