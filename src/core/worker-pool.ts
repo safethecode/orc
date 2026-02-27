@@ -1,9 +1,9 @@
-import type { WorkerState, WorkerStatus, ProviderName, SubTask } from "../config/types.ts";
+import type { WorkerState, SubTask } from "../config/types.ts";
 import { eventBus } from "./events.ts";
 
 export class WorkerPool {
   private workers: Map<string, WorkerState> = new Map();
-  private timeoutTimers: Map<string, Timer> = new Map();
+  private timeoutTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private defaultTimeoutMs: number;
   private maxRetries: number;
   private retryCounts: Map<string, number> = new Map();
