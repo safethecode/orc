@@ -43,6 +43,8 @@ import { PortManager } from "./port-manager.ts";
 import { CrashRecovery } from "./crash-recovery.ts";
 import { CostEstimator } from "./cost-estimator.ts";
 import { CheckpointManager } from "./checkpoint.ts";
+import { Supervisor } from "./supervisor.ts";
+import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
 
 const MAX_AGENT_DEPTH = 5;
@@ -79,6 +81,7 @@ export class Orchestrator {
   private crashRecovery!: CrashRecovery;
   private costEstimator!: CostEstimator;
   private checkpointManager!: CheckpointManager;
+  private supervisor!: Supervisor;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -128,6 +131,61 @@ export class Orchestrator {
     this.crashRecovery = new CrashRecovery(this.store);
     this.costEstimator = new CostEstimator(this.store);
     this.checkpointManager = new CheckpointManager(this.store, process.cwd());
+
+    // Initialize Supervisor with dependency injection (avoids circular import)
+    this.supervisor = new Supervisor(
+      {
+        config: this.config,
+        spawnWorker: async (subtask: SubTask) => {
+          const agentName = `worker-${subtask.id.slice(0, 8)}`;
+          const providerConfig = this.config.providers[subtask.provider];
+          if (!providerConfig) throw new Error(`Unknown provider: ${subtask.provider}`);
+
+          const profile: import("../config/types.ts").AgentProfile = {
+            name: agentName,
+            provider: subtask.provider,
+            model: subtask.model as import("../config/types.ts").ModelTier,
+            role: subtask.agentRole,
+            maxBudgetUsd: this.config.budget.defaultMaxPerTask,
+            requires: [],
+            worktree: false,
+            systemPrompt: "",
+          };
+
+          this.registry.register(profile);
+          const session = await this.spawnAgent(agentName);
+
+          await this.sessionManager.sendInput(agentName, subtask.prompt);
+
+          return { agentName, sessionId: session.name };
+        },
+        waitForResult: async (agentName: string, timeoutMs: number) => {
+          const start = Date.now();
+          while (Date.now() - start < timeoutMs) {
+            const tasks = this.store.listTasks({ agentName, status: "completed" });
+            if (tasks.length > 0) {
+              const t = tasks[0];
+              return { result: t.result ?? "", tokenUsage: t.tokenUsage, costUsd: t.costUsd };
+            }
+            const failed = this.store.listTasks({ agentName, status: "failed" });
+            if (failed.length > 0) {
+              throw new Error(failed[0].result ?? "Task failed");
+            }
+            await new Promise(r => setTimeout(r, 2000));
+          }
+          return null;
+        },
+        stopWorker: async (agentName: string) => {
+          await this.stopAgent(agentName);
+        },
+      },
+      {
+        workerTimeoutMs: (this.config as any).supervisor?.workerTimeout ?? 300_000,
+        maxRetries: (this.config as any).supervisor?.maxRetries ?? 2,
+        costAware: (this.config as any).supervisor?.costAware ?? true,
+        preferredProviders: (this.config as any).supervisor?.preferredProviders ?? ["claude", "codex", "gemini", "kiro"],
+      },
+    );
 
     // Recover from any previous crash
     await this.crashRecovery.recoverFromCrash();
@@ -258,14 +316,19 @@ export class Orchestrator {
     });
 
     if (route.multiAgent) {
-      const subTaskIds = await this.decomposeTask(prompt, taskId);
-      for (const subId of subTaskIds) {
-        const subTask = this.store.getTask(subId)!;
-        const subRoute = routeTask(subTask.prompt, this.config.routing);
-        const subAgent = suggestAgent(subRoute.tier);
-        await this.assign(subAgent, subTask.prompt);
-      }
       this.store.updateTask(taskId, { status: "running", startedAt: new Date().toISOString() });
+
+      // Use Supervisor for intelligent multi-agent orchestration
+      const aggregated = await this.supervisor.execute(taskId, prompt);
+
+      this.store.updateTask(taskId, {
+        status: aggregated.success ? "completed" : "failed",
+        result: aggregated.mergedOutput,
+        tokenUsage: aggregated.totalTokens,
+        costUsd: aggregated.totalCost,
+        completedAt: new Date().toISOString(),
+      });
+
       return this.store.getTask(taskId)!;
     }
 
@@ -503,20 +566,8 @@ export class Orchestrator {
     return this.checkpointManager;
   }
 
-  private async decomposeTask(prompt: string, parentTaskId: string): Promise<string[]> {
-    const parts = prompt
-      .split(/\b(?:and then|after that|then have|followed by|once done)\b/i)
-      .map((p) => p.trim())
-      .filter(Boolean);
-
-    const taskIds: string[] = [];
-    for (const part of parts) {
-      const route = routeTask(part, this.config.routing);
-      const taskId = crypto.randomUUID();
-      this.store.createTask({ id: taskId, prompt: part, tier: route.model, parentTaskId });
-      taskIds.push(taskId);
-    }
-    return taskIds;
+  getSupervisor(): Supervisor {
+    return this.supervisor;
   }
 
   async shutdown(): Promise<void> {
