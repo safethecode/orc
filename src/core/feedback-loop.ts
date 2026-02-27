@@ -153,7 +153,13 @@ export class FeedbackLoop {
         this.checkpoints.set(workerId, existing);
         this.store.saveFeedbackCheckpoint({
           id: `fcp-${Date.now().toString(36)}`,
-          ...cp,
+          workerId: cp.workerId,
+          subtaskId: cp.subtaskId,
+          turn: cp.turn,
+          capturedOutput: cp.capturedOutput,
+          filesModified: cp.filesModified,
+          assessment: cp.assessment,
+          correction: cp.correctionSent,
         });
         break;
       }
