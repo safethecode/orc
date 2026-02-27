@@ -271,6 +271,15 @@ async function handleNaturalInput(
   // Show agent header
   renderer.agentHeader(agentName, route.model, route.reason);
 
+  // Dynamic skill matching (before spinner — dim output must not overlap spinner)
+  const skillIndex = orchestrator.getSkillIndex();
+  const matched = skillIndex.match(input, 3);
+  let skillBodies: string[] = [];
+  if (matched.length > 0) {
+    skillBodies = await skillIndex.resolve(matched);
+    renderer.dim(`  skills: ${matched.map(s => s.name).join(", ")}`);
+  }
+
   // Start spinner while waiting for response
   renderer.startSpinner(agentName, route.model);
 
@@ -297,15 +306,9 @@ async function handleNaturalInput(
   let systemPrompt = harness.systemPrompt;
   if (profile.systemPrompt) systemPrompt += "\n\n" + profile.systemPrompt;
 
-  // Dynamic skill injection based on task prompt
-  const skillIndex = orchestrator.getSkillIndex();
-  const matched = skillIndex.match(input, 3);
-  if (matched.length > 0) {
-    const skillBodies = await skillIndex.resolve(matched);
-    if (skillBodies.length > 0) {
-      systemPrompt += "\n\n" + skillBodies.join("\n\n");
-    }
-    renderer.dim(`  skills: ${matched.map(s => s.name).join(", ")}`);
+  // Append pre-resolved skill bodies
+  if (skillBodies.length > 0) {
+    systemPrompt += "\n\n" + skillBodies.join("\n\n");
   }
 
   const lang = conversation.getLanguage();
