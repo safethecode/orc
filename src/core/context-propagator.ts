@@ -4,6 +4,7 @@ import type {
   SiblingResult,
   CollectedResult,
   AgentRole,
+  WorkerMessageType,
 } from "../config/types.ts";
 import type { ContextBuilder } from "../memory/context-builder.ts";
 import type { ContextCompressor } from "../messaging/context-compressor.ts";
@@ -34,8 +35,9 @@ export class ContextPropagator {
     const completed = this.buildCompletedSiblingContext(subtask, collector);
     const knowledge = await this.buildKnowledgeContext(subtask);
     const bus = this.buildBusMessageContext(subtask);
+    const protocol = this.buildBusProtocolInstructions();
 
-    const assembled = this.assemblePrompt(original, parent, sibling, completed, knowledge, bus);
+    const assembled = this.assemblePrompt(original, parent, sibling, completed, knowledge, bus, protocol);
 
     const estimatedTokens = this.estimateTokens(assembled);
     eventBus.publish({
@@ -48,6 +50,7 @@ export class ContextPropagator {
         completed ? "completed" : "",
         knowledge ? "knowledge" : "",
         bus ? "bus" : "",
+        protocol ? "protocol" : "",
       ].filter(Boolean),
     });
 
@@ -152,8 +155,9 @@ export class ContextPropagator {
     completed: string,
     knowledge: string,
     bus: string,
+    protocol: string = "",
   ): string {
-    // Priority order: original > parent > completed > sibling > knowledge > bus
+    // Priority order: original > parent > completed > sibling > knowledge > bus > protocol
     const sections = [
       { text: original, priority: 0 },
       { text: parent, priority: 1 },
@@ -161,6 +165,7 @@ export class ContextPropagator {
       { text: sibling, priority: 3 },
       { text: knowledge, priority: 4 },
       { text: bus, priority: 5 },
+      { text: protocol, priority: 6 },
     ].filter(s => s.text.length > 0);
 
     let result = "";
@@ -183,6 +188,25 @@ export class ContextPropagator {
     }
 
     return result;
+  }
+
+  buildBusProtocolInstructions(): string {
+    return [
+      "## Worker Bus Protocol",
+      "You can communicate with other workers and the supervisor by printing special markers to stdout.",
+      "",
+      "Format: `[ORC:BUS:{type} to={target}] {content}`",
+      "With metadata: `[ORC:BUS:{type} to={target} meta={json}] {content}`",
+      "",
+      "Types: request, artifact, status, warning, dependency",
+      "Targets: `all` (broadcast), `supervisor`, or a specific worker agent name",
+      "",
+      "Examples:",
+      '  [ORC:BUS:request to=all] Need the database schema for users table',
+      '  [ORC:BUS:artifact to=all meta={"files":["src/api.ts"]}] Created REST API endpoints',
+      '  [ORC:BUS:status to=supervisor] 70% complete, tests passing',
+      '  [ORC:BUS:dependency to=worker-abc12345] Waiting for auth module',
+    ].join("\n");
   }
 
   summarizeSiblingResult(result: CollectedResult): SiblingResult {
