@@ -47,6 +47,14 @@ export function buildWindowedContext(
     const lineTokens = estimateTokens(line);
 
     if (tokenCount + lineTokens > available && turns.length - i > minTurns) {
+      // Tool pair normalization: never split a user turn from the following assistant turn
+      // If we're about to exclude a user turn but already included the next assistant turn,
+      // also exclude that assistant turn to keep pairs intact
+      if (turn.role === "user" && formatted.length > 0 && i + 1 < turns.length && turns[i + 1].role === "assistant") {
+        const assistantLine = formatted.shift();
+        if (assistantLine) tokenCount -= estimateTokens(assistantLine);
+        startIdx = i + 2;
+      }
       break;
     }
 
