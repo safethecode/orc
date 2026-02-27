@@ -9,6 +9,7 @@ export class Conversation {
   private turns: ConversationTurn[] = [];
   private language: string | undefined;
   private tokenBudget: TokenBudget = TIER_BUDGETS.sonnet;
+  private lastTier: string | undefined;
 
   setLanguage(lang: string): void {
     this.language = lang;
@@ -23,11 +24,27 @@ export class Conversation {
   }
 
   add(turn: ConversationTurn): void {
+    // Inject model switch notice when tier changes
+    if (turn.role === "assistant" && turn.tier && this.lastTier && turn.tier !== this.lastTier) {
+      this.turns.push({
+        role: "assistant",
+        content: `[Model switched from ${this.lastTier} to ${turn.tier}]`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    if (turn.role === "assistant") this.lastTier = turn.tier;
+
     if (turn.role === "assistant" && turn.content.length > 2000) {
       this.turns.push({ ...turn, content: this.compressTurn(turn.content) });
     } else {
       this.turns.push(turn);
     }
+  }
+
+  // Normalize: ensure tool call/output pairs are never split during windowing.
+  // If an assistant turn references a tool call, the preceding user turn must also be included.
+  getTurns(): ConversationTurn[] {
+    return this.turns;
   }
 
   buildPrompt(userInput: string): string {
