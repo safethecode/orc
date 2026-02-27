@@ -220,3 +220,218 @@ export interface ConversationTurn {
   tier?: ModelTier;
   timestamp: string;
 }
+
+// ── Self-Critique Quality Gate ──────────────────────────────────────
+
+export interface CritiqueResult {
+  passes: boolean;
+  issues: string[];
+  improvements: string[];
+  confidence: "low" | "medium" | "high";
+}
+
+export interface CritiqueChecklist {
+  patternAdherence: boolean;
+  errorHandling: boolean;
+  completeness: boolean;
+  codeQuality: boolean;
+}
+
+// ── Spec Creation Pipeline ──────────────────────────────────────────
+
+export type SpecPhase = "discovery" | "requirements" | "research" | "spec" | "critique" | "planning" | "validation";
+
+export interface SpecConfig {
+  phases: SpecPhase[];
+  skipResearch?: boolean;
+}
+
+export interface SpecResult {
+  requirements: string[];
+  acceptanceCriteria: string[];
+  implementationSteps: string[];
+  risks: string[];
+  estimatedComplexity: "simple" | "standard" | "complex";
+}
+
+// ── QA Validation Loop ──────────────────────────────────────────────
+
+export interface QAConfig {
+  maxIterations: number;
+  recurringIssueThreshold: number;
+}
+
+export interface QAIssue {
+  description: string;
+  severity: "critical" | "major" | "minor";
+  file?: string;
+  suggestion?: string;
+}
+
+export interface QAResult {
+  passed: boolean;
+  iterations: number;
+  issues: QAIssue[];
+  escalated: boolean;
+}
+
+// ── Smart Recovery System ───────────────────────────────────────────
+
+export type FailureType = "broken_build" | "verification_failed" | "circular_fix" | "context_exhausted" | "timeout" | "unknown";
+
+export type RecoveryAction = "retry" | "rollback" | "skip" | "escalate" | "change_approach";
+
+export interface RecoveryAttempt {
+  taskId: string;
+  failureType: FailureType;
+  approach: string;
+  timestamp: string;
+  success: boolean;
+}
+
+export interface RecoveryDecision {
+  action: RecoveryAction;
+  reason: string;
+  rollbackTarget?: string;
+}
+
+// ── AI Complexity Assessment ────────────────────────────────────────
+
+export interface ComplexityResult {
+  level: "simple" | "standard" | "complex";
+  confidence: number;
+  factors: string[];
+  suggestedPhases: string[];
+  estimatedFiles: number;
+  integrations: string[];
+}
+
+// ── Phase-Specific Model Config ─────────────────────────────────────
+
+export type ExecutionPhase = "spec" | "planning" | "coding" | "review" | "qa" | "fix";
+
+export interface PhaseModelConfig {
+  model: ModelTier;
+  thinkingLevel?: "low" | "medium" | "high";
+  maxTokens?: number;
+}
+
+// ── Codebase Map ────────────────────────────────────────────────────
+
+export interface FileEntry {
+  path: string;
+  purpose: string;
+  lastAgent?: string;
+  lastUpdated: string;
+}
+
+// ── Structured Task Logger ──────────────────────────────────────────
+
+export type LogPhase = "spec" | "planning" | "coding" | "review" | "qa" | "fix" | "general";
+
+export interface ToolLogEntry {
+  tool: string;
+  detail?: string;
+  phase: LogPhase;
+  startedAt: string;
+  endedAt?: string;
+  success?: boolean;
+  durationMs?: number;
+}
+
+// ── Session Insight Extraction ──────────────────────────────────────
+
+export interface SessionInsights {
+  subtasksCompleted: string[];
+  discoveries: {
+    filesUnderstood: Record<string, string>;
+    patternsFound: string[];
+    gotchasEncountered: string[];
+  };
+  whatWorked: string[];
+  whatFailed: string[];
+  recommendations: string[];
+}
+
+// ── Dynamic Security Profiles ───────────────────────────────────────
+
+export interface StackProfile {
+  name: string;
+  detectFiles: string[];
+  safeCommands: string[];
+  dangerousPatterns: RegExp[];
+}
+
+// ── Semantic Merge System ───────────────────────────────────────────
+
+export type MergeDecision = "auto_merged" | "ai_merged" | "direct_copy" | "needs_human_review" | "failed";
+
+export interface MergeConflict {
+  file: string;
+  baseContent: string;
+  oursContent: string;
+  theirsContent: string;
+  type: "add_add" | "modify_modify" | "delete_modify";
+}
+
+export interface MergeResult {
+  decision: MergeDecision;
+  mergedFiles: string[];
+  conflicts: MergeConflict[];
+  manualReviewNeeded: string[];
+}
+
+// ── Multi-Account Auto-Switch ───────────────────────────────────────
+
+export interface AccountProfile {
+  name: string;
+  type: "oauth" | "api_key";
+  priority: number;
+  apiKey?: string;
+  usageToday: number;
+  dailyLimit: number;
+  rateLimitedUntil?: string;
+  lastUsed?: string;
+}
+
+export interface ScoredAccount {
+  account: AccountProfile;
+  score: number;
+  reason: string;
+}
+
+// ── Prediction System ───────────────────────────────────────────────
+
+export interface PredictionResult {
+  risks: Array<{ description: string; likelihood: "low" | "medium" | "high"; mitigation: string }>;
+  checklist: string[];
+  estimatedDuration: string;
+  suggestedApproach: string;
+}
+
+// ── Ideation System ─────────────────────────────────────────────────
+
+export type IdeationDimension = "improvements" | "quality" | "performance" | "security" | "documentation" | "ux";
+
+export interface Idea {
+  dimension: IdeationDimension;
+  title: string;
+  description: string;
+  priority: "low" | "medium" | "high";
+  effort: "low" | "medium" | "high";
+  files?: string[];
+}
+
+export interface IdeationResult {
+  ideas: Idea[];
+  summary: string;
+}
+
+// ── Context Builder ─────────────────────────────────────────────────
+
+export interface ContextChunk {
+  source: string;
+  content: string;
+  relevance: number;
+  type: "file" | "memory" | "codebase_map" | "insight";
+}
