@@ -184,8 +184,9 @@ export class Supervisor {
         await this.executeSequential(phaseSubtasks, collector, decomposition);
       }
 
-      // After each phase: run conflict analysis on completed results
+      // After each phase: run conflict analysis on completed results, then clear diffs to avoid re-detection
       this.analyzePhaseConflicts(phaseSubtasks, collector);
+      this.deps.conflictWatcher?.clearDiffs();
     }
 
     // 7. Aggregate and return
