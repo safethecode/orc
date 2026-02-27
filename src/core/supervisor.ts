@@ -3,6 +3,7 @@ import type {
   DecompositionResult,
   AggregatedResult,
   ExecutionPlan,
+  TaskStatus,
   ProviderName,
   ProviderCapability,
   WorkerState,
@@ -221,7 +222,8 @@ export class Supervisor {
     }
 
     // All attempts failed — record failure
-    subtask.status = "failed";
+    const failedStatus: TaskStatus = "failed";
+    subtask.status = failedStatus;
     subtask.result = lastError;
   }
 
