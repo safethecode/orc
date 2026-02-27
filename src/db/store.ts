@@ -10,6 +10,13 @@ import type {
   ToolLogEntry,
   LogPhase,
   RecoveryAttempt,
+  CacheEntry,
+  ArchitecturalDecision,
+  DecisionStatus,
+  LogicalConflict,
+  PortAllocation,
+  CleanupEntry,
+  Checkpoint,
 } from "../config/types.ts";
 
 export class Store {
@@ -501,6 +508,135 @@ export class Store {
     }));
   }
 
+  // ── Prompt Cache ───────────────────────────────────────────────────
+
+  getCacheEntry(hash: string): CacheEntry | null {
+    const row = this.db.prepare(`SELECT * FROM prompt_cache WHERE hash = ?`).get(hash) as Record<string, unknown> | null;
+    if (!row) return null;
+    this.db.prepare(`UPDATE prompt_cache SET hit_count = hit_count + 1, last_hit_at = datetime('now') WHERE hash = ?`).run(hash);
+    return { hash: row.hash as string, prompt: row.prompt as string, response: row.response as string, model: row.model as string as any, tokens: row.tokens as number, hitCount: (row.hit_count as number) + 1, createdAt: row.created_at as string, lastHitAt: new Date().toISOString() };
+  }
+
+  setCacheEntry(entry: { hash: string; prompt: string; response: string; model: string; tokens: number }): void {
+    this.db.prepare(`INSERT OR REPLACE INTO prompt_cache (hash, prompt, response, model, tokens) VALUES (?, ?, ?, ?, ?)`).run(entry.hash, entry.prompt, entry.response, entry.model, entry.tokens);
+  }
+
+  getCacheStats(): { totalEntries: number; totalHits: number; totalTokensSaved: number } {
+    const row = this.db.prepare(`SELECT COUNT(*) as cnt, COALESCE(SUM(hit_count), 0) as hits, COALESCE(SUM(tokens * hit_count), 0) as tokens_saved FROM prompt_cache`).get() as Record<string, unknown>;
+    return { totalEntries: row.cnt as number, totalHits: row.hits as number, totalTokensSaved: row.tokens_saved as number };
+  }
+
+  evictCache(maxEntries: number): number {
+    const result = this.db.prepare(`DELETE FROM prompt_cache WHERE hash IN (SELECT hash FROM prompt_cache ORDER BY last_hit_at ASC LIMIT MAX(0, (SELECT COUNT(*) FROM prompt_cache) - ?))`).run(maxEntries);
+    return result.changes;
+  }
+
+  // ── Decisions ─────────────────────────────────────────────────────
+
+  addDecision(decision: ArchitecturalDecision): void {
+    this.db.prepare(`INSERT INTO decisions (id, title, decision, context, decided_by, status, tags_json) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(decision.id, decision.title, decision.decision, decision.context, decision.decidedBy, decision.status, JSON.stringify(decision.tags));
+  }
+
+  getDecision(id: string): ArchitecturalDecision | null {
+    const row = this.db.prepare(`SELECT * FROM decisions WHERE id = ?`).get(id) as Record<string, unknown> | null;
+    if (!row) return null;
+    return this.mapDecision(row);
+  }
+
+  listDecisions(status: DecisionStatus = "active"): ArchitecturalDecision[] {
+    const rows = this.db.prepare(`SELECT * FROM decisions WHERE status = ? ORDER BY created_at DESC`).all(status) as Record<string, unknown>[];
+    return rows.map((r) => this.mapDecision(r));
+  }
+
+  searchDecisions(query: string): ArchitecturalDecision[] {
+    const pattern = `%${query}%`;
+    const rows = this.db.prepare(`SELECT * FROM decisions WHERE status = 'active' AND (title LIKE ? OR decision LIKE ? OR tags_json LIKE ?) ORDER BY created_at DESC`).all(pattern, pattern, pattern) as Record<string, unknown>[];
+    return rows.map((r) => this.mapDecision(r));
+  }
+
+  supersedeDecision(id: string, newId: string): void {
+    this.db.prepare(`UPDATE decisions SET status = 'superseded', superseded_by = ? WHERE id = ?`).run(newId, id);
+  }
+
+  // ── Logical Conflicts ─────────────────────────────────────────────
+
+  addConflict(conflict: LogicalConflict): void {
+    this.db.prepare(`INSERT INTO logical_conflicts (id, agent_a, agent_b, description, severity, files_json, resolved) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(conflict.id, conflict.agentA, conflict.agentB, conflict.description, conflict.severity, JSON.stringify(conflict.files), conflict.resolved ? 1 : 0);
+  }
+
+  getUnresolvedConflicts(): LogicalConflict[] {
+    const rows = this.db.prepare(`SELECT * FROM logical_conflicts WHERE resolved = 0 ORDER BY detected_at DESC`).all() as Record<string, unknown>[];
+    return rows.map((r) => ({ id: r.id as string, agentA: r.agent_a as string, agentB: r.agent_b as string, description: r.description as string, severity: r.severity as any, files: JSON.parse(r.files_json as string), detectedAt: r.detected_at as string, resolved: false }));
+  }
+
+  resolveConflict(id: string): void {
+    this.db.prepare(`UPDATE logical_conflicts SET resolved = 1 WHERE id = ?`).run(id);
+  }
+
+  // ── Port Allocations ──────────────────────────────────────────────
+
+  allocatePort(port: number, agentName: string, taskId: string, purpose: string): boolean {
+    try {
+      this.db.prepare(`INSERT INTO port_allocations (port, agent_name, task_id, purpose) VALUES (?, ?, ?, ?)`).run(port, agentName, taskId, purpose);
+      return true;
+    } catch { return false; }
+  }
+
+  releasePort(port: number): void {
+    this.db.prepare(`DELETE FROM port_allocations WHERE port = ?`).run(port);
+  }
+
+  releasePortsByAgent(agentName: string): void {
+    this.db.prepare(`DELETE FROM port_allocations WHERE agent_name = ?`).run(agentName);
+  }
+
+  getAllocatedPorts(): PortAllocation[] {
+    const rows = this.db.prepare(`SELECT * FROM port_allocations ORDER BY port`).all() as Record<string, unknown>[];
+    return rows.map((r) => ({ port: r.port as number, agentName: r.agent_name as string, taskId: r.task_id as string, purpose: r.purpose as string, allocatedAt: r.allocated_at as string }));
+  }
+
+  isPortAllocated(port: number): boolean {
+    const row = this.db.prepare(`SELECT 1 FROM port_allocations WHERE port = ?`).get(port);
+    return row != null;
+  }
+
+  // ── Cleanup Queue ─────────────────────────────────────────────────
+
+  registerCleanup(entry: CleanupEntry): void {
+    this.db.prepare(`INSERT OR REPLACE INTO cleanup_queue (id, type, target, agent_name) VALUES (?, ?, ?, ?)`).run(entry.id, entry.type, entry.target, entry.agentName);
+  }
+
+  getCleanupQueue(agentName?: string): CleanupEntry[] {
+    const sql = agentName ? `SELECT * FROM cleanup_queue WHERE agent_name = ?` : `SELECT * FROM cleanup_queue`;
+    const rows = (agentName ? this.db.prepare(sql).all(agentName) : this.db.prepare(sql).all()) as Record<string, unknown>[];
+    return rows.map((r) => ({ id: r.id as string, type: r.type as any, target: r.target as string, agentName: r.agent_name as string, registeredAt: r.registered_at as string }));
+  }
+
+  removeCleanup(id: string): void {
+    this.db.prepare(`DELETE FROM cleanup_queue WHERE id = ?`).run(id);
+  }
+
+  clearCleanupByAgent(agentName: string): void {
+    this.db.prepare(`DELETE FROM cleanup_queue WHERE agent_name = ?`).run(agentName);
+  }
+
+  // ── Checkpoints ───────────────────────────────────────────────────
+
+  saveCheckpoint(cp: Checkpoint): void {
+    this.db.prepare(`INSERT INTO checkpoints (id, task_id, agent_name, sha, label, metadata_json) VALUES (?, ?, ?, ?, ?, ?)`).run(cp.id, cp.taskId, cp.agentName, cp.sha, cp.label, JSON.stringify(cp.metadata));
+  }
+
+  getCheckpoints(taskId: string): Checkpoint[] {
+    const rows = this.db.prepare(`SELECT * FROM checkpoints WHERE task_id = ? ORDER BY created_at DESC`).all(taskId) as Record<string, unknown>[];
+    return rows.map((r) => ({ id: r.id as string, taskId: r.task_id as string, agentName: r.agent_name as string, sha: r.sha as string, label: r.label as string, metadata: JSON.parse(r.metadata_json as string), createdAt: r.created_at as string }));
+  }
+
+  getLatestCheckpoint(taskId: string): Checkpoint | null {
+    const row = this.db.prepare(`SELECT * FROM checkpoints WHERE task_id = ? ORDER BY created_at DESC LIMIT 1`).get(taskId) as Record<string, unknown> | null;
+    if (!row) return null;
+    return { id: row.id as string, taskId: row.task_id as string, agentName: row.agent_name as string, sha: row.sha as string, label: row.label as string, metadata: JSON.parse(row.metadata_json as string), createdAt: row.created_at as string };
+  }
+
   // ── Private Helpers ──────────────────────────────────────────────────
 
   private mapTask(row: Record<string, unknown>): Task {
@@ -517,6 +653,20 @@ export class Store {
       createdAt: row.created_at as string,
       startedAt: (row.started_at as string) ?? null,
       completedAt: (row.completed_at as string) ?? null,
+    };
+  }
+
+  private mapDecision(row: Record<string, unknown>): ArchitecturalDecision {
+    return {
+      id: row.id as string,
+      title: row.title as string,
+      decision: row.decision as string,
+      context: row.context as string,
+      decidedBy: row.decided_by as string,
+      status: row.status as DecisionStatus,
+      tags: JSON.parse(row.tags_json as string),
+      createdAt: row.created_at as string,
+      supersededBy: row.superseded_by as string | undefined,
     };
   }
 
