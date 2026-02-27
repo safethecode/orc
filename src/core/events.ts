@@ -60,7 +60,9 @@ export type OrcEvent =
   | { type: "feedback:abort"; workerId: string; reason: string }
   | { type: "feedback:recovery"; workerId: string; action: string; reason: string }
   | { type: "context:propagate"; subtaskId: string; contextTokens: number; sources: string[] }
-  | { type: "context:sibling_summary"; subtaskId: string; siblingCount: number; filesShared: string[] };
+  | { type: "context:sibling_summary"; subtaskId: string; siblingCount: number; filesShared: string[] }
+  | { type: "worker:signal_done"; workerId: string }
+  | { type: "worker:result_marker"; workerId: string; files: string[]; summary: string };
 
 export class OrcEventBus extends EventEmitter {
   publish(event: OrcEvent): void {

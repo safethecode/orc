@@ -100,6 +100,9 @@ export class FeedbackLoop {
     // Detect bus markers in tmux output
     this.detectBusMessages(workerId, capturedOutput, worker, subtask);
 
+    // Detect ORC result markers (DONE/RESULT/PROGRESS)
+    this.detectResultMarkers(workerId, capturedOutput, worker);
+
     // Parse turn progress
     const progress = this.parseTurnProgress(capturedOutput, worker);
     if (progress.currentTurn !== undefined) {
@@ -382,6 +385,42 @@ export class FeedbackLoop {
       }
     }
     this.stopMonitoring(workerId);
+  }
+
+  private detectResultMarkers(workerId: string, output: string, worker: WorkerState): void {
+    const seen = this.processedMarkers.get(workerId) ?? new Set<string>();
+
+    // [ORC:DONE]
+    if (output.includes("[ORC:DONE]") && !seen.has("ORC:DONE")) {
+      seen.add("ORC:DONE");
+      eventBus.publish({ type: "worker:signal_done", workerId });
+    }
+
+    // [ORC:RESULT files=a.ts,b.ts] summary
+    const resultPattern = /\[ORC:RESULT\s+files=([^\]]+)\]\s+(.+)$/gm;
+    let m;
+    while ((m = resultPattern.exec(output)) !== null) {
+      const fingerprint = `ORC:RESULT:${m[1]}`;
+      if (seen.has(fingerprint)) continue;
+      seen.add(fingerprint);
+
+      const files = m[1].split(",").map((f) => f.trim());
+      const summary = m[2].trim();
+      eventBus.publish({ type: "worker:result_marker", workerId, files, summary });
+    }
+
+    // [ORC:PROGRESS n%] description
+    const progressPattern = /\[ORC:PROGRESS\s+(\d+)%\]/g;
+    let pm;
+    while ((pm = progressPattern.exec(output)) !== null) {
+      const pct = parseInt(pm[1], 10);
+      const fingerprint = `ORC:PROGRESS:${pct}`;
+      if (seen.has(fingerprint)) continue;
+      seen.add(fingerprint);
+      this.pool.updateProgress(workerId, pct);
+    }
+
+    this.processedMarkers.set(workerId, seen);
   }
 
   private detectBusMessages(workerId: string, output: string, worker: WorkerState, subtask: SubTask): void {
