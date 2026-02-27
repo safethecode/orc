@@ -66,7 +66,7 @@ export class AgentStreamer extends EventEmitter {
       stdin: "ignore",
     });
 
-    const reader = this.proc.stdout.getReader();
+    const reader = (this.proc.stdout as ReadableStream<Uint8Array>).getReader();
     const decoder = new TextDecoder();
     let buffer = "";
 
@@ -131,7 +131,7 @@ export class AgentStreamer extends EventEmitter {
     }
 
     // Capture stderr for error reporting (stderr gets 2/3 of budget)
-    const rawStderr = await new Response(this.proc.stderr).text();
+    const rawStderr = await new Response(this.proc.stderr as ReadableStream<Uint8Array>).text();
     const stderrText = truncateOutput(rawStderr, Math.floor(MAX_OUTPUT_BYTES * 0.67));
 
     const exitCode = await this.proc.exited;
