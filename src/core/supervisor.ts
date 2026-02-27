@@ -103,7 +103,8 @@ export class Supervisor {
       { maxContextTokens: cpConfig?.maxContextTokens ?? 4000 },
     );
 
-    // Initialize FeedbackLoop
+    // Initialize FeedbackLoop with worker bus + provider config for LLM quality gate
+    const claudeProvider = deps.config.providers["claude"];
     this.feedbackLoop = new FeedbackLoop(
       deps.config.supervisor?.feedback,
       deps.sessionManager,
@@ -111,6 +112,8 @@ export class Supervisor {
       deps.checkpointManager,
       deps.recoveryManager,
       deps.store,
+      this.workerBus,
+      claudeProvider,
     );
   }
 
