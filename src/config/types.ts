@@ -17,11 +17,22 @@ export type TaskStatus =
   | "failed"
   | "cancelled";
 
+export interface ProviderCapabilityConfig {
+  models: string[];
+  strengths: string[];
+  weaknesses: string[];
+  maxContextTokens: number;
+  supportsStreaming: boolean;
+  supportsToolUse: boolean;
+  costTier: "low" | "medium" | "high";
+}
+
 export interface ProviderConfig {
   command: string;
   subcommand?: string;
   defaultModel: ModelTier | null;
   flags: string[];
+  capabilities?: ProviderCapabilityConfig;
 }
 
 export interface RoutingTier {
@@ -43,6 +54,14 @@ export interface BudgetConfig {
   warningThreshold: number;
 }
 
+export interface SupervisorConfig {
+  enabled: boolean;
+  workerTimeout: number;
+  maxRetries: number;
+  costAware: boolean;
+  preferredProviders: ProviderName[];
+}
+
 export interface OrchestratorConfig {
   orchestrator: {
     sessionPrefix: string;
@@ -54,6 +73,7 @@ export interface OrchestratorConfig {
   budget: BudgetConfig;
   providers: Record<string, ProviderConfig>;
   routing: RoutingConfig;
+  supervisor?: SupervisorConfig;
 }
 
 // ── Agent Profile ─────────────────────────────────────────────────────
@@ -61,7 +81,7 @@ export interface OrchestratorConfig {
 export interface AgentProfile {
   name: string;
   provider: string;
-  model: ModelTier;
+  model: ModelTier | string;
   role: string;
   maxBudgetUsd: number;
   requires: string[];
