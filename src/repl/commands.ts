@@ -6,6 +6,7 @@ export const COMMANDS = [
   "/status", "/stop", "/clear", "/lang",
   "/budget", "/trace", "/agents", "/messages",
   "/ownership", "/spawn", "/task",
+  "/pause", "/resume", "/sessions", "/memory",
   "/help", "/quit",
 ];
 
@@ -193,6 +194,129 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "pause": {
+      if (ctx.conversation.length === 0) {
+        renderer.info("nothing to save");
+        return "continue";
+      }
+      const snapshot = ctx.conversation.toSnapshot();
+      ctx.orchestrator.getStore().saveSnapshot({
+        id: crypto.randomUUID(),
+        turnsJson: JSON.stringify(snapshot.turns),
+        language: snapshot.language,
+        summary: ctx.conversation.generateSummary(),
+        turnCount: ctx.conversation.length,
+      });
+      renderer.info(`\u2713 session saved (${ctx.conversation.length} turns)`);
+      return "continue";
+    }
+
+    case "resume": {
+      const snap = ctx.orchestrator.getStore().getLatestSnapshot();
+      if (!snap) {
+        renderer.info("no saved session found");
+        return "continue";
+      }
+      const turns = JSON.parse(snap.turnsJson);
+      ctx.conversation.restore({ turns, language: snap.language ?? undefined });
+      renderer.info(`\u2713 restored ${snap.turnCount} turns from ${snap.createdAt}`);
+      return "continue";
+    }
+
+    case "sessions": {
+      const snapshots = ctx.orchestrator.getStore().listSnapshots(undefined, 10);
+      if (snapshots.length === 0) {
+        renderer.info("no saved sessions");
+        return "continue";
+      }
+      process.stdout.write("\n");
+      for (const s of snapshots) {
+        const summary = s.summary || "no summary";
+        renderer.info(`\x1b[2m${s.createdAt}\x1b[0m  ${s.turnCount} turns  \x1b[2m${summary}\x1b[0m`);
+      }
+      process.stdout.write("\n");
+      return "continue";
+    }
+
+    case "memory": {
+      const mem = ctx.orchestrator.getMemory();
+      const sub = args[0];
+
+      if (!sub) {
+        const entries = mem.list("global", 20);
+        if (entries.length === 0) {
+          renderer.info("no memories stored");
+        } else {
+          process.stdout.write("\n");
+          for (const e of entries) {
+            renderer.info(`\x1b[1m${e.key}\x1b[0m\x1b[2m = ${e.value}\x1b[0m`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "set") {
+        const key = args[1];
+        const value = args.slice(2).join(" ");
+        if (!key || !value) {
+          renderer.error("usage: /memory set <key> <value>");
+          return "continue";
+        }
+        mem.set("global", key, value, "user");
+        renderer.info(`\u2713 ${key} = ${value}`);
+        return "continue";
+      }
+
+      if (sub === "get") {
+        const key = args[1];
+        if (!key) {
+          renderer.error("usage: /memory get <key>");
+          return "continue";
+        }
+        const entry = mem.get("global", key);
+        if (!entry) {
+          renderer.info(`no memory for "${key}"`);
+        } else {
+          renderer.info(`\x1b[1m${entry.key}\x1b[0m = ${entry.value}`);
+        }
+        return "continue";
+      }
+
+      if (sub === "search") {
+        const query = args.slice(1).join(" ");
+        if (!query) {
+          renderer.error("usage: /memory search <query>");
+          return "continue";
+        }
+        const results = mem.search(query, undefined, 10);
+        if (results.length === 0) {
+          renderer.info("no matches");
+        } else {
+          process.stdout.write("\n");
+          for (const e of results) {
+            renderer.info(`\x1b[1m${e.key}\x1b[0m\x1b[2m = ${e.value}\x1b[0m`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "delete") {
+        const key = args[1];
+        if (!key) {
+          renderer.error("usage: /memory delete <key>");
+          return "continue";
+        }
+        const deleted = mem.delete("global", key);
+        renderer.info(deleted ? `\u2713 deleted "${key}"` : `no memory for "${key}"`);
+        return "continue";
+      }
+
+      renderer.error("usage: /memory [set|get|search|delete] ...");
+      return "continue";
+    }
+
     case "help": {
       process.stdout.write("\n");
       renderer.info("\x1b[1m/status\x1b[0m\x1b[2m              agent statuses");
@@ -204,6 +328,10 @@ export async function handleCommand(
       renderer.info("\x1b[1m/agents\x1b[0m\x1b[2m              agent profiles & health");
       renderer.info("\x1b[1m/messages\x1b[0m \x1b[2m<agent>    message history");
       renderer.info("\x1b[1m/ownership\x1b[0m\x1b[2m           file ownership map");
+      renderer.info("\x1b[1m/pause\x1b[0m\x1b[2m               save session snapshot");
+      renderer.info("\x1b[1m/resume\x1b[0m\x1b[2m              restore last session");
+      renderer.info("\x1b[1m/sessions\x1b[0m\x1b[2m            saved session list");
+      renderer.info("\x1b[1m/memory\x1b[0m\x1b[2m              persistent memory");
       renderer.info("\x1b[1m/clear\x1b[0m\x1b[2m               clear conversation");
       renderer.info("\x1b[1m/lang\x1b[0m \x1b[2m<language>      set response language");
       renderer.info("\x1b[1m/help\x1b[0m\x1b[2m                this help");
