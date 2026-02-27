@@ -15,11 +15,52 @@ providers:
     command: "claude"
     defaultModel: "sonnet"
     flags: ["-p", "--output-format", "stream-json"]
+    capabilities:
+      models: ["haiku", "sonnet", "opus"]
+      strengths: ["architecture", "code-generation", "debugging", "review", "testing", "refactoring", "security"]
+      weaknesses: []
+      maxContextTokens: 200000
+      supportsStreaming: true
+      supportsToolUse: true
+      costTier: "high"
   codex:
     command: "codex"
     subcommand: "exec"
     defaultModel: null
     flags: ["--full-auto"]
+    capabilities:
+      models: ["codex"]
+      strengths: ["code-generation", "refactoring", "implementation", "file-editing"]
+      weaknesses: ["architecture", "documentation"]
+      maxContextTokens: 192000
+      supportsStreaming: false
+      supportsToolUse: true
+      costTier: "medium"
+  gemini:
+    command: "gemini"
+    defaultModel: "gemini-2.5-pro"
+    flags: []
+    capabilities:
+      models: ["gemini-2.5-pro", "gemini-2.5-flash"]
+      strengths: ["large-context", "research", "analysis", "documentation", "review"]
+      weaknesses: ["file-editing", "tool-use"]
+      maxContextTokens: 1000000
+      supportsStreaming: true
+      supportsToolUse: true
+      costTier: "medium"
+  kiro:
+    command: "kiro"
+    subcommand: "cli"
+    defaultModel: null
+    flags: []
+    capabilities:
+      models: ["kiro"]
+      strengths: ["spec-driven", "implementation", "testing", "code-generation"]
+      weaknesses: ["architecture", "review", "debugging"]
+      maxContextTokens: 128000
+      supportsStreaming: false
+      supportsToolUse: false
+      costTier: "low"
 
 routing:
   tiers:
@@ -32,3 +73,10 @@ routing:
     complex:
       model: "opus"
       keywords: ["architect", "design", "security", "optimize", "migrate"]
+
+supervisor:
+  enabled: true
+  workerTimeout: 300000
+  maxRetries: 2
+  costAware: true
+  preferredProviders: ["claude", "codex", "gemini", "kiro"]
