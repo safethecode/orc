@@ -240,21 +240,49 @@ export class FeedbackLoop {
   }
 
   async runQualityGate(subtask: SubTask, result: string): Promise<CritiqueResult> {
-    // Heuristic-based quality gate
+    // Try LLM-based critique first
+    if (this.providerConfig) {
+      try {
+        const llmResult = await this.runLLMQualityGate(subtask, result);
+        eventBus.publish({
+          type: "feedback:quality_gate",
+          subtaskId: subtask.id,
+          passed: llmResult.passes,
+          issues: llmResult.issues,
+        });
+        return llmResult;
+      } catch {
+        // Fall through to heuristic
+      }
+    }
+
+    // Heuristic fallback
+    return this.runHeuristicQualityGate(subtask, result);
+  }
+
+  private async runLLMQualityGate(subtask: SubTask, result: string): Promise<CritiqueResult> {
+    const prompt = buildCritiquePrompt({ prompt: subtask.prompt, result });
+    const proc = Bun.spawn(
+      ["claude", "-p", prompt, "--model", "haiku", "--output-format", "text", "--max-turns", "1"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const stdout = await new Response(proc.stdout).text();
+    await proc.exited;
+    return parseCritiqueResponse(stdout);
+  }
+
+  private runHeuristicQualityGate(subtask: SubTask, result: string): CritiqueResult {
     const issues: string[] = [];
     const improvements: string[] = [];
 
-    // Check for error patterns in result
     if (/error|exception|failed/i.test(result) && !/fixed|resolved|handled/i.test(result)) {
       issues.push("Result contains unresolved error patterns");
     }
 
-    // Check for empty or very short results
     if (result.length < 50) {
       issues.push("Result is suspiciously short");
     }
 
-    // Check for incomplete markers
     if (/TODO|FIXME|HACK|XXX/i.test(result)) {
       issues.push("Result contains TODO/FIXME markers");
     }
