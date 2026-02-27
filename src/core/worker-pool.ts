@@ -1,4 +1,4 @@
-import type { WorkerState, SubTask } from "../config/types.ts";
+import type { WorkerState, WorkerStatus, SubTask } from "../config/types.ts";
 import { eventBus } from "./events.ts";
 
 export class WorkerPool {
@@ -135,24 +135,34 @@ export class WorkerPool {
     return undefined;
   }
 
+  getByStatus(...statuses: WorkerStatus[]): WorkerState[] {
+    return [...this.workers.values()].filter(w => statuses.includes(w.status));
+  }
+
   getActive(): WorkerState[] {
-    return [...this.workers.values()].filter(
-      w => w.status === "spawning" || w.status === "running"
-    );
+    return this.getByStatus("spawning", "running");
   }
 
   getCompleted(): WorkerState[] {
-    return [...this.workers.values()].filter(w => w.status === "completed");
+    return this.getByStatus("completed");
   }
 
   getFailed(): WorkerState[] {
-    return [...this.workers.values()].filter(
-      w => w.status === "failed" || w.status === "timeout"
-    );
+    return this.getByStatus("failed", "timeout");
   }
 
   getAll(): WorkerState[] {
     return [...this.workers.values()];
+  }
+
+  countByStatus(): Record<WorkerStatus, number> {
+    const counts: Record<WorkerStatus, number> = {
+      spawning: 0, running: 0, completed: 0, failed: 0, timeout: 0,
+    };
+    for (const w of this.workers.values()) {
+      counts[w.status]++;
+    }
+    return counts;
   }
 
   getTotalUsage(): { tokens: number; cost: number } {
