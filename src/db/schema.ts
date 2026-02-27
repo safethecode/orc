@@ -206,5 +206,32 @@ export function initDb(dbPath: string): Database {
   )`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_checkpoint_task ON checkpoints(task_id)`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS worker_messages (
+    id TEXT PRIMARY KEY,
+    from_agent TEXT NOT NULL,
+    to_agent TEXT NOT NULL,
+    message_type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    task_ref TEXT NOT NULL,
+    subtask_ref TEXT NOT NULL,
+    timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_worker_msg_task ON worker_messages(task_ref)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_worker_msg_to ON worker_messages(to_agent)`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS feedback_checkpoints (
+    id TEXT PRIMARY KEY,
+    worker_id TEXT NOT NULL,
+    subtask_id TEXT NOT NULL,
+    turn INTEGER NOT NULL,
+    captured_output TEXT,
+    files_json TEXT NOT NULL DEFAULT '[]',
+    assessment TEXT NOT NULL,
+    correction TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_feedback_worker ON feedback_checkpoints(worker_id)`);
+
   return db;
 }
