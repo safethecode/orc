@@ -36,6 +36,13 @@ import { ContextBuilder } from "../memory/context-builder.ts";
 import { DynamicSecurityProfile } from "../sandbox/dynamic-profile.ts";
 import { AccountManager } from "../agents/account-manager.ts";
 import { TaskPredictor } from "./predictor.ts";
+import { PromptCache } from "./prompt-cache.ts";
+import { DecisionRegistry } from "./decision-registry.ts";
+import { ConflictWatcher } from "./watcher.ts";
+import { PortManager } from "./port-manager.ts";
+import { CrashRecovery } from "./crash-recovery.ts";
+import { CostEstimator } from "./cost-estimator.ts";
+import { CheckpointManager } from "./checkpoint.ts";
 import type { Database } from "bun:sqlite";
 
 const MAX_AGENT_DEPTH = 5;
@@ -65,6 +72,13 @@ export class Orchestrator {
   private dynamicSecurity: DynamicSecurityProfile;
   private accountManager: AccountManager;
   private predictor!: TaskPredictor;
+  private promptCache!: PromptCache;
+  private decisions!: DecisionRegistry;
+  private conflictWatcher!: ConflictWatcher;
+  private portManager!: PortManager;
+  private crashRecovery!: CrashRecovery;
+  private costEstimator!: CostEstimator;
+  private checkpointManager!: CheckpointManager;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -107,6 +121,19 @@ export class Orchestrator {
     this.codemap = new CodebaseMap(db);
     this.contextBuilder = new ContextBuilder(this.memory, this.codemap, db);
     this.predictor = new TaskPredictor(this.memory, this.store);
+    this.promptCache = new PromptCache(db);
+    this.decisions = new DecisionRegistry(this.store);
+    this.conflictWatcher = new ConflictWatcher(this.store);
+    this.portManager = new PortManager(this.store);
+    this.crashRecovery = new CrashRecovery(this.store);
+    this.costEstimator = new CostEstimator(this.store);
+    this.checkpointManager = new CheckpointManager(this.store, process.cwd());
+
+    // Recover from any previous crash
+    await this.crashRecovery.recoverFromCrash();
+
+    // Bind signal handlers for graceful shutdown
+    this.crashRecovery.bindSignalHandlers(() => this.shutdown());
 
     this.inbox.on("message", async ({ to, message }: { to: string; message: { from: string; content: string } }) => {
       const session = this.sessionManager.getSession(to);
@@ -448,6 +475,34 @@ export class Orchestrator {
     return this.predictor;
   }
 
+  getPromptCache(): PromptCache {
+    return this.promptCache;
+  }
+
+  getDecisions(): DecisionRegistry {
+    return this.decisions;
+  }
+
+  getConflictWatcher(): ConflictWatcher {
+    return this.conflictWatcher;
+  }
+
+  getPortManager(): PortManager {
+    return this.portManager;
+  }
+
+  getCrashRecovery(): CrashRecovery {
+    return this.crashRecovery;
+  }
+
+  getCostEstimator(): CostEstimator {
+    return this.costEstimator;
+  }
+
+  getCheckpointManager(): CheckpointManager {
+    return this.checkpointManager;
+  }
+
   private async decomposeTask(prompt: string, parentTaskId: string): Promise<string[]> {
     const parts = prompt
       .split(/\b(?:and then|after that|then have|followed by|once done)\b/i)
@@ -465,6 +520,7 @@ export class Orchestrator {
   }
 
   async shutdown(): Promise<void> {
+    this.checkpointManager.stopAll();
     this.health.stop();
     this.sleepInhibitor.release();
     this.prewarmer.cancel();
