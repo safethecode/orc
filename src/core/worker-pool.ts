@@ -1,4 +1,4 @@
-import type { WorkerState, WorkerStatus, SubTask } from "../config/types.ts";
+import type { WorkerState, WorkerStatus, SubTask, WorkerTurnProgress } from "../config/types.ts";
 import { eventBus } from "./events.ts";
 
 export class WorkerPool {
@@ -13,7 +13,7 @@ export class WorkerPool {
     this.maxRetries = options?.maxRetries ?? 2;
   }
 
-  spawn(subtask: SubTask, agentName: string): WorkerState {
+  spawn(subtask: SubTask, agentName: string, maxTurns?: number): WorkerState {
     const worker: WorkerState = {
       id: `w-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       agentName,
@@ -28,6 +28,11 @@ export class WorkerPool {
       error: null,
       tokenUsage: 0,
       costUsd: 0,
+      currentTurn: 0,
+      maxTurns: maxTurns ?? 1,
+      turnHistory: [],
+      corrections: [],
+      intermediateResults: [],
     };
 
     this.workers.set(worker.id, worker);
@@ -187,6 +192,38 @@ export class WorkerPool {
     this.timeoutTimers.clear();
     this.workers.clear();
     this.retryCounts.clear();
+  }
+
+  updateTurnProgress(workerId: string, progress: WorkerTurnProgress): void {
+    const worker = this.workers.get(workerId);
+    if (!worker) return;
+    worker.currentTurn = progress.currentTurn;
+    worker.turnHistory.push(progress);
+    worker.lastActivityAt = new Date().toISOString();
+
+    this.resetTimeoutTimer(workerId);
+
+    eventBus.publish({
+      type: "worker:turn",
+      workerId,
+      turn: progress.currentTurn,
+      maxTurns: worker.maxTurns,
+      toolUsed: progress.lastToolUse ?? undefined,
+    });
+  }
+
+  addIntermediateResult(workerId: string, output: string): void {
+    const worker = this.workers.get(workerId);
+    if (!worker) return;
+    worker.intermediateResults.push(output);
+    worker.lastActivityAt = new Date().toISOString();
+  }
+
+  addCorrection(workerId: string, correction: string): void {
+    const worker = this.workers.get(workerId);
+    if (!worker) return;
+    worker.corrections.push(correction);
+    worker.lastActivityAt = new Date().toISOString();
   }
 
   private startTimeoutTimer(workerId: string): void {
