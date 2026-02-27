@@ -136,7 +136,10 @@ export class Supervisor {
     // 4. Initialize worker bus for this task
     this.workerBus.clearTask(taskId);
 
-    // 5. Execute phase by phase
+    // 5. Subscribe to turn events for progress + stuck detection
+    const unsubscribeTurnEvents = this.subscribeTurnEvents(taskId);
+
+    // 6. Execute phase by phase
     const collector = new ResultCollector(taskId);
 
     for (const phase of plan.phases) {
@@ -151,10 +154,11 @@ export class Supervisor {
       }
     }
 
-    // 6. Aggregate and return
+    // 7. Aggregate and return
     const result = collector.aggregate();
 
-    // 7. Cleanup
+    // 8. Cleanup
+    unsubscribeTurnEvents();
     this.feedbackLoop.stopAll();
     this.workerBus.clearTask(taskId);
     this.pool.clear();
@@ -352,6 +356,48 @@ export class Supervisor {
     const failedStatus: TaskStatus = "failed";
     subtask.status = failedStatus;
     subtask.result = lastError;
+  }
+
+  private subscribeTurnEvents(taskId: string): () => void {
+    const idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const turnCounts = new Map<string, number>();
+
+    const onTurn = (e: { workerId: string; turn: number; maxTurns: number; toolUsed?: string }) => {
+      const { workerId, turn, maxTurns } = e;
+
+      // Update progress percentage
+      const progress = Math.round((turn / maxTurns) * 100);
+      this.pool.updateProgress(workerId, progress);
+
+      // Track turns for auto-checkpoint
+      turnCounts.set(workerId, turn);
+      if (turn > 0 && turn % this.multiTurnConfig.checkpointIntervalTurns === 0) {
+        this.deps.checkpointManager.create(taskId, workerId, `auto-turn-${turn}`).catch(() => {});
+      }
+
+      // Reset idle timer
+      const existing = idleTimers.get(workerId);
+      if (existing) clearTimeout(existing);
+
+      const timer = setTimeout(() => {
+        eventBus.publish({
+          type: "worker:idle_timeout",
+          workerId,
+          idleMs: this.multiTurnConfig.idleTimeoutMs,
+        });
+      }, this.multiTurnConfig.idleTimeoutMs);
+      idleTimers.set(workerId, timer);
+    };
+
+    eventBus.on("worker:turn", onTurn as (e: unknown) => void);
+
+    // Return cleanup function
+    return () => {
+      eventBus.removeListener("worker:turn", onTurn as (e: unknown) => void);
+      for (const timer of idleTimers.values()) clearTimeout(timer);
+      idleTimers.clear();
+      turnCounts.clear();
+    };
   }
 
   private waitForWorkerCompletion(
