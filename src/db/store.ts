@@ -215,42 +215,6 @@ export class Store {
     };
   }
 
-  // ── Token Usage ──────────────────────────────────────────────────────
-
-  recordTokenUsage(
-    agentName: string,
-    taskId: string | null,
-    tokens: number,
-    costUsd: number
-  ): void {
-    const stmt = this.db.prepare(
-      `INSERT INTO token_usage (agent_name, task_id, tokens, cost_usd) VALUES (?, ?, ?, ?)`
-    );
-    stmt.run(agentName, taskId, tokens, costUsd);
-  }
-
-  getAgentUsage(agentName: string): { totalTokens: number; totalCost: number } {
-    const stmt = this.db.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) as total_tokens, COALESCE(SUM(cost_usd), 0) as total_cost FROM token_usage WHERE agent_name = ?`
-    );
-    const row = stmt.get(agentName) as Record<string, unknown>;
-    return {
-      totalTokens: row.total_tokens as number,
-      totalCost: row.total_cost as number,
-    };
-  }
-
-  getDailyUsage(): { totalTokens: number; totalCost: number } {
-    const stmt = this.db.prepare(
-      `SELECT COALESCE(SUM(tokens), 0) as total_tokens, COALESCE(SUM(cost_usd), 0) as total_cost FROM token_usage WHERE date(timestamp) = date('now')`
-    );
-    const row = stmt.get() as Record<string, unknown>;
-    return {
-      totalTokens: row.total_tokens as number,
-      totalCost: row.total_cost as number,
-    };
-  }
-
   // ── Messages ─────────────────────────────────────────────────────────
 
   addMessage(msg: {
