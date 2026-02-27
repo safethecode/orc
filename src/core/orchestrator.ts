@@ -10,7 +10,6 @@ import type {
 import { SessionManager } from "../session/manager.ts";
 import { Store } from "../db/store.ts";
 import { initDb } from "../db/schema.ts";
-import { BudgetController } from "./budget.ts";
 import { routeTask, suggestAgent } from "./router.ts";
 import { Scheduler } from "./scheduler.ts";
 import { AgentRegistry } from "../agents/registry.ts";
@@ -54,7 +53,6 @@ export class Orchestrator {
   private sessionManager: SessionManager;
   private store!: Store;
   private db!: Database;
-  private budget!: BudgetController;
   private ownership!: OwnershipManager;
   private worktree: WorktreeManager;
   private inbox!: Inbox;
@@ -117,7 +115,6 @@ export class Orchestrator {
     const db = initDb(this.config.orchestrator.db);
     this.db = db;
     this.store = new Store(db);
-    this.budget = new BudgetController(this.store, this.config.budget);
     this.ownership = new OwnershipManager(this.store);
     this.memory = new MemoryStore(db);
     this.consolidator = new MemoryConsolidator(this.store, this.memory);
@@ -187,7 +184,6 @@ export class Orchestrator {
         inbox: this.inbox,
         compressor: this.compressor,
         store: this.store,
-        budget: this.budget,
         conflictWatcher: this.conflictWatcher,
         ownership: this.ownership,
       },
@@ -320,16 +316,6 @@ export class Orchestrator {
 
     const route = routeTask(prompt, this.config.routing, { costEstimate });
 
-    const profile = this.registry.get(agentName);
-    const agentLimit = profile?.maxBudgetUsd ?? this.config.budget.defaultMaxPerTask;
-    const budgetCheck = this.budget.canProceed(agentName, agentLimit);
-    if (!budgetCheck.allowed) {
-      throw new Error(`Budget exceeded: ${budgetCheck.reason}`);
-    }
-    if (budgetCheck.reason) {
-      this.logger.budgetWarning(agentName, "", agentLimit, agentLimit);
-    }
-
     const taskId = crypto.randomUUID();
     this.store.createTask({
       id: taskId,
@@ -386,9 +372,6 @@ export class Orchestrator {
             current &&
             (current.status === "completed" || current.status === "failed")
           ) {
-            if (current.tokenUsage > 0 || current.costUsd > 0) {
-              this.budget.recordUsage(agentName, taskId, current.tokenUsage, current.costUsd);
-            }
             this.tracer.endSpan(
               span.spanId,
               current.status === "completed" ? "completed" : "error",
@@ -486,10 +469,6 @@ export class Orchestrator {
 
   getInbox(): Inbox {
     return this.inbox;
-  }
-
-  getBudget(): BudgetController {
-    return this.budget;
   }
 
   getTracer(): Tracer {
