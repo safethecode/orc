@@ -1,0 +1,11 @@
+# ── Codex CLI Project Config ──────────────────────────────────────
+
+# Context preservation: use custom compact prompt from file
+experimental_compact_prompt_file = ".codex/compact-prompt.md"
+
+# Notify hook: save context snapshot on every turn completion
+notify = ["bash", ".codex/hooks/on-turn-complete.sh"]
+
+# History persistence
+[history]
+persistence = "save-all"
