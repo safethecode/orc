@@ -11,7 +11,17 @@ export type OrcEvent =
   | { type: "memory:inject"; count: number }
   | { type: "model:switch"; from: string; to: string }
   | { type: "context:compact"; before: number; after: number }
-  | { type: "command:safety"; command: string; level: string };
+  | { type: "command:safety"; command: string; level: string }
+  | { type: "critique:run"; taskId: string; passed: boolean }
+  | { type: "spec:phase"; phase: string; status: "start" | "complete" }
+  | { type: "qa:iteration"; iteration: number; issues: number }
+  | { type: "qa:escalate"; taskId: string; reason: string }
+  | { type: "recovery:attempt"; taskId: string; action: string }
+  | { type: "merge:progress"; stage: string; status: string }
+  | { type: "account:switch"; from: string; to: string }
+  | { type: "prediction:generated"; taskId: string; riskCount: number }
+  | { type: "codebase:update"; path: string }
+  | { type: "insight:extracted"; count: number };
 
 export class OrcEventBus extends EventEmitter {
   publish(event: OrcEvent): void {
