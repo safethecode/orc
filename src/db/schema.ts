@@ -102,5 +102,45 @@ export function initDb(dbPath: string): Database {
     UNIQUE(namespace, key)
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS codebase_map (
+    file_path TEXT PRIMARY KEY,
+    purpose TEXT NOT NULL,
+    last_agent TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS task_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL,
+    tool TEXT NOT NULL,
+    detail TEXT,
+    phase TEXT NOT NULL DEFAULT 'general',
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    success INTEGER,
+    duration_ms INTEGER
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_task_log_task ON task_log(task_id)`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS recovery_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL,
+    failure_type TEXT NOT NULL,
+    approach TEXT NOT NULL,
+    action_taken TEXT NOT NULL,
+    success INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_recovery_task ON recovery_history(task_id)`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS predictions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_prompt TEXT NOT NULL,
+    risks_json TEXT,
+    checklist_json TEXT,
+    outcome TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+
   return db;
 }
