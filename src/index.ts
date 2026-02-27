@@ -2,13 +2,77 @@
 
 import { loadConfig } from "./config/loader.ts";
 import { Orchestrator } from "./core/orchestrator.ts";
-import { resolvePath } from "./config/loader.ts";
 
 const args = process.argv.slice(2);
-const command = args[0];
+
+// ── Parse global flags ──────────────────────────────────────────────
+
+let configPath: string | undefined;
+let verbose = false;
+
+// Strip global flags from args, leaving positional command + rest
+const positional: string[] = [];
+
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i];
+
+  if (arg === "--version" || arg === "-v") {
+    const { version } = await import("../package.json");
+    console.log(version);
+    process.exit(0);
+  }
+
+  if (arg === "--verbose") {
+    verbose = true;
+    continue;
+  }
+
+  if (arg === "--config") {
+    configPath = args[++i];
+    if (!configPath) {
+      console.error("Error: --config requires a path argument");
+      process.exit(1);
+    }
+    continue;
+  }
+
+  positional.push(arg);
+}
+
+if (!verbose && process.env.ORC_DEBUG === "1") {
+  verbose = true;
+}
+
+const command = positional[0];
+
+// ── Commands that don't need orchestrator ───────────────────────────
+
+if (command === "help") {
+  console.log(`
+orc - Terminal AI Agent Orchestrator
+
+Commands:
+  (no args)           Start interactive REPL
+  spawn <agent>       Spawn an agent in a tmux session
+  task <prompt>       Route and assign a task to an agent
+  status              Show all agent statuses
+  stop <agent>        Stop a running agent
+  agents              List available agent profiles
+  dashboard           Open the TUI dashboard
+  help                Show this help message
+
+Flags:
+  -v, --version       Print version and exit
+  --config <path>     Override config file path
+  --verbose           Show stack traces on error
+`);
+  process.exit(0);
+}
+
+// ── Boot orchestrator ───────────────────────────────────────────────
 
 async function main() {
-  const config = loadConfig();
+  const config = loadConfig(configPath);
 
   // Ensure data directory exists
   const { mkdirSync } = await import("fs");
@@ -26,9 +90,17 @@ async function main() {
     // local profiles directory may not exist
   }
 
+  // ── Graceful shutdown on signals ────────────────────────────────
+  const shutdown = async () => {
+    await orchestrator.shutdown();
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+
   switch (command) {
     case "spawn": {
-      const agentName = args[1];
+      const agentName = positional[1];
       if (!agentName) {
         console.error("Usage: orc spawn <agent-name>");
         process.exit(1);
@@ -39,13 +111,13 @@ async function main() {
     }
 
     case "task": {
-      const prompt = args.slice(1).join(" ");
+      const prompt = positional.slice(1).join(" ");
       if (!prompt) {
         console.error("Usage: orc task <prompt>");
         process.exit(1);
       }
-      const agentName = args[1] === "--agent" ? args[2] : undefined;
-      const actualPrompt = agentName ? args.slice(3).join(" ") : prompt;
+      const agentName = positional[1] === "--agent" ? positional[2] : undefined;
+      const actualPrompt = agentName ? positional.slice(3).join(" ") : prompt;
 
       // Use router to determine best agent if not specified
       const { routeTask, suggestAgent } = await import("./core/router.ts");
@@ -76,7 +148,7 @@ async function main() {
     }
 
     case "stop": {
-      const agentName = args[1];
+      const agentName = positional[1];
       if (!agentName) {
         console.error("Usage: orc stop <agent-name>");
         process.exit(1);
@@ -92,39 +164,19 @@ async function main() {
       break;
     }
 
+    case "agents":
     case "list": {
-      // List available agent profiles
-      const { AgentRegistry } = await import("./agents/registry.ts");
-      const registry = new AgentRegistry();
-      const profileDir = new URL("../profiles", import.meta.url).pathname;
-      try {
-        await registry.loadProfiles(profileDir);
-        const profiles = registry.list();
+      // List available agent profiles from orchestrator's registry
+      const profiles = orchestrator.getRegistry().list();
+      if (profiles.length === 0) {
+        console.log("No profiles found.");
+      } else {
         console.log("\nAvailable Profiles:");
         console.log("─".repeat(50));
         for (const p of profiles) {
           console.log(`  ${p.name} (${p.provider}/${p.model}) - ${p.role}`);
         }
-      } catch {
-        console.log("No profiles found.");
       }
-      break;
-    }
-
-    case "help": {
-      console.log(`
-orc - Terminal AI Agent Orchestrator
-
-Commands:
-  (no args)           Start interactive REPL
-  spawn <agent>       Spawn an agent in a tmux session
-  task <prompt>       Route and assign a task to an agent
-  status              Show all agent statuses
-  stop <agent>        Stop a running agent
-  list                List available agent profiles
-  dashboard           Open the TUI dashboard
-  help                Show this help message
-`);
       break;
     }
 
@@ -145,5 +197,8 @@ Commands:
 
 main().catch((err) => {
   console.error("Error:", err.message);
+  if (verbose) {
+    console.error(err.stack);
+  }
   process.exit(1);
 });
