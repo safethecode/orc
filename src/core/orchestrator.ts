@@ -14,6 +14,7 @@ import { routeTask, suggestAgent } from "./router.ts";
 import { Scheduler } from "./scheduler.ts";
 import { AgentRegistry } from "../agents/registry.ts";
 import { buildCommand } from "../agents/provider.ts";
+import { buildHarness } from "../agents/harness.ts";
 import { Logger } from "../logging/logger.ts";
 import { Tracer } from "../logging/tracer.ts";
 import { HealthChecker } from "../logging/health.ts";
@@ -139,6 +140,14 @@ export class Orchestrator {
           const providerConfig = this.config.providers[subtask.provider];
           if (!providerConfig) throw new Error(`Unknown provider: ${subtask.provider}`);
 
+          const harness = buildHarness({
+            agentName,
+            role: subtask.agentRole,
+            provider: subtask.provider,
+            parentTaskId: subtask.parentTaskId,
+            isWorker: true,
+          });
+
           const profile: import("../config/types.ts").AgentProfile = {
             name: agentName,
             provider: subtask.provider,
@@ -147,7 +156,7 @@ export class Orchestrator {
             maxBudgetUsd: this.config.budget.defaultMaxPerTask,
             requires: [],
             worktree: false,
-            systemPrompt: "",
+            systemPrompt: harness.systemPrompt,
             maxTurns,
           };
 
