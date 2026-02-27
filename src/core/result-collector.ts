@@ -3,6 +3,8 @@ import type {
   AggregatedResult,
   WorkerState,
   ProviderName,
+  AgentRole,
+  SiblingResult,
 } from "../config/types.ts";
 import { eventBus } from "./events.ts";
 
@@ -14,7 +16,7 @@ export class ResultCollector {
     this.taskId = taskId;
   }
 
-  collect(worker: WorkerState): CollectedResult | null {
+  collect(worker: WorkerState, role?: AgentRole, domain?: string): CollectedResult | null {
     if (worker.status !== "completed" || !worker.result) return null;
 
     const durationMs = worker.lastActivityAt && worker.startedAt
@@ -30,6 +32,8 @@ export class ResultCollector {
       tokenUsage: worker.tokenUsage,
       costUsd: worker.costUsd,
       durationMs,
+      role: role ?? "coder",
+      domain: domain ?? "general",
     };
 
     this.results.set(worker.subtaskId, result);
@@ -100,6 +104,57 @@ export class ResultCollector {
       map.set(r.provider, existing);
     }
     return map;
+  }
+
+  collectIntermediate(workerId: string, subtaskId: string, output: string): void {
+    const existing = this.results.get(subtaskId);
+    if (existing) {
+      existing.result += "\n---\n" + output;
+    }
+  }
+
+  getSummaryForPropagation(): SiblingResult[] {
+    return [...this.results.values()].map(r => ({
+      agentName: r.agentName,
+      subtaskId: r.subtaskId,
+      role: r.role ?? "coder" as AgentRole,
+      domain: r.domain ?? "general",
+      summary: r.result.slice(0, 500),
+      filesChanged: r.files,
+      apisCreated: this.extractApis(r.result),
+      schemasCreated: this.extractSchemas(r.result),
+    }));
+  }
+
+  extractApis(result: string): string[] {
+    const apis: string[] = [];
+    const patterns = [
+      /(?:GET|POST|PUT|DELETE|PATCH)\s+\/[a-zA-Z0-9_/:.{}-]+/gi,
+      /(?:app|router)\.\s*(?:get|post|put|delete|patch)\s*\(\s*['"`]([^'"`]+)['"`]/gi,
+    ];
+    for (const pattern of patterns) {
+      let match;
+      while ((match = pattern.exec(result)) !== null) {
+        const api = match[1] ?? match[0].trim();
+        if (!apis.includes(api)) apis.push(api);
+      }
+    }
+    return apis;
+  }
+
+  extractSchemas(result: string): string[] {
+    const schemas: string[] = [];
+    const patterns = [
+      /(?:interface|type|class|enum)\s+([A-Z][a-zA-Z0-9_]*)/g,
+      /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi,
+    ];
+    for (const pattern of patterns) {
+      let match;
+      while ((match = pattern.exec(result)) !== null) {
+        if (match[1] && !schemas.includes(match[1])) schemas.push(match[1]);
+      }
+    }
+    return schemas;
   }
 
   clear(): void {
