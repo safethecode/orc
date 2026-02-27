@@ -24,7 +24,14 @@ import { WorktreeManager } from "../session/worktree.ts";
 import { Inbox } from "../messaging/inbox.ts";
 import { ContextCompressor } from "../messaging/context-compressor.ts";
 import { MemoryStore } from "../memory/memory-store.ts";
+import { MemoryConsolidator } from "../memory/consolidator.ts";
+import { eventBus } from "./events.ts";
+import { SleepInhibitor } from "../utils/sleep-inhibitor.ts";
+import { createGhostCommit } from "../utils/ghost-commit.ts";
+import { ConnectionPrewarmer } from "../session/prewarmer.ts";
 import type { Database } from "bun:sqlite";
+
+const MAX_AGENT_DEPTH = 5;
 
 export class Orchestrator {
   private sessionManager: SessionManager;
@@ -41,6 +48,11 @@ export class Orchestrator {
   private tracer: Tracer;
   private health: HealthChecker;
   private memory!: MemoryStore;
+  private consolidator!: MemoryConsolidator;
+  private sleepInhibitor: SleepInhibitor;
+  private prewarmer: ConnectionPrewarmer;
+  private ghostSha: string | null = null;
+  private agentDepth = 0;
   private config: OrchestratorConfig;
 
   constructor(config: OrchestratorConfig) {
@@ -52,6 +64,8 @@ export class Orchestrator {
     this.tracer = new Tracer();
     this.worktree = new WorktreeManager(process.cwd());
     this.compressor = new ContextCompressor();
+    this.sleepInhibitor = new SleepInhibitor();
+    this.prewarmer = new ConnectionPrewarmer();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
       if (status.consecutiveFailures >= 3) {
@@ -70,6 +84,7 @@ export class Orchestrator {
     this.budget = new BudgetController(this.store, this.config.budget);
     this.ownership = new OwnershipManager(this.store);
     this.memory = new MemoryStore(db);
+    this.consolidator = new MemoryConsolidator(this.store, this.memory);
     this.inbox = new Inbox(this.store, db);
 
     this.inbox.on("message", async ({ to, message }: { to: string; message: { from: string; content: string } }) => {
@@ -87,11 +102,26 @@ export class Orchestrator {
     }
 
     this.health.start();
+
+    // Ghost commit: snapshot working tree at session start
+    this.ghostSha = await createGhostCommit("orc session start");
+
+    // Background memory consolidation
+    if (this.consolidator.shouldConsolidate()) {
+      this.consolidator.consolidate().catch(() => {});
+    }
   }
 
   async spawnAgent(profileName: string): Promise<SessionInfo> {
+    // Agent depth limit to prevent infinite recursion
+    if (this.agentDepth >= MAX_AGENT_DEPTH) {
+      throw new Error(`Agent nesting depth exceeded (max ${MAX_AGENT_DEPTH})`);
+    }
+    this.agentDepth++;
+
     const profile = this.registry.get(profileName);
     if (!profile) {
+      this.agentDepth--;
       throw new Error(`Unknown agent profile: "${profileName}"`);
     }
 
@@ -139,6 +169,7 @@ export class Orchestrator {
   }
 
   async stopAgent(agentName: string): Promise<void> {
+    this.agentDepth = Math.max(0, this.agentDepth - 1);
     await this.sessionManager.destroySession(agentName);
     this.store.unlockByAgent(agentName);
     this.ownership.release(agentName);
@@ -348,6 +379,26 @@ export class Orchestrator {
     return this.memory;
   }
 
+  getConsolidator(): MemoryConsolidator {
+    return this.consolidator;
+  }
+
+  getSleepInhibitor(): SleepInhibitor {
+    return this.sleepInhibitor;
+  }
+
+  getPrewarmer(): ConnectionPrewarmer {
+    return this.prewarmer;
+  }
+
+  getEventBus() {
+    return eventBus;
+  }
+
+  getGhostSha(): string | null {
+    return this.ghostSha;
+  }
+
   private async decomposeTask(prompt: string, parentTaskId: string): Promise<string[]> {
     const parts = prompt
       .split(/\b(?:and then|after that|then have|followed by|once done)\b/i)
@@ -366,6 +417,8 @@ export class Orchestrator {
 
   async shutdown(): Promise<void> {
     this.health.stop();
+    this.sleepInhibitor.release();
+    this.prewarmer.cancel();
     await this.sessionManager.destroyAll();
     await this.worktree.cleanup();
     this.compressor.clear();
