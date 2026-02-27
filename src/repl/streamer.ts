@@ -1,4 +1,6 @@
 import { EventEmitter } from "node:events";
+import { truncateOutput } from "../sandbox/output-limiter.ts";
+import { killProcessGroup } from "../sandbox/output-limiter.ts";
 
 export interface StreamResult {
   text: string;
@@ -31,16 +33,25 @@ interface StreamJsonMessage {
   usage?: { input_tokens?: number; output_tokens?: number };
 }
 
+const MAX_OUTPUT_BYTES = 1_048_576; // 1 MiB
+
 export class AgentStreamer extends EventEmitter {
   private proc: ReturnType<typeof Bun.spawn> | null = null;
   private aborted = false;
   private textBuffer = "";
   private currentBlockType: string | null = null;
+  private totalOutputBytes = 0;
 
-  async run(command: string[]): Promise<StreamResult> {
+  async run(command: string[], signal?: AbortSignal): Promise<StreamResult> {
     this.aborted = false;
     this.textBuffer = "";
     this.currentBlockType = null;
+    this.totalOutputBytes = 0;
+
+    // Listen for external abort signal
+    if (signal) {
+      signal.addEventListener("abort", () => this.abort(), { once: true });
+    }
 
     const result: StreamResult = {
       text: "",
@@ -66,7 +77,17 @@ export class AgentStreamer extends EventEmitter {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
+        const chunk = decoder.decode(value, { stream: true });
+        this.totalOutputBytes += chunk.length;
+
+        // Output cap: abort if exceeding max bytes
+        if (this.totalOutputBytes > MAX_OUTPUT_BYTES) {
+          this.emit("error", `Output exceeded ${MAX_OUTPUT_BYTES} bytes limit, aborting`);
+          this.abort();
+          break;
+        }
+
+        buffer += chunk;
 
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
@@ -109,8 +130,9 @@ export class AgentStreamer extends EventEmitter {
       reader.releaseLock();
     }
 
-    // Capture stderr for error reporting
-    const stderrText = await new Response(this.proc.stderr).text();
+    // Capture stderr for error reporting (stderr gets 2/3 of budget)
+    const rawStderr = await new Response(this.proc.stderr).text();
+    const stderrText = truncateOutput(rawStderr, Math.floor(MAX_OUTPUT_BYTES * 0.67));
 
     const exitCode = await this.proc.exited;
     this.proc = null;
@@ -201,7 +223,9 @@ export class AgentStreamer extends EventEmitter {
   abort(): void {
     this.aborted = true;
     if (this.proc) {
-      this.proc.kill();
+      // Kill entire process group to prevent orphaned children
+      if (this.proc.pid) killProcessGroup(this.proc.pid);
+      else this.proc.kill();
       this.proc = null;
     }
     this.emit("abort");
