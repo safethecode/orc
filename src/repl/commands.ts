@@ -1,5 +1,7 @@
 import type { Orchestrator } from "../core/orchestrator.ts";
 import type { Conversation } from "./conversation.ts";
+import { diffFromGhost } from "../utils/ghost-commit.ts";
+import { loadExecPolicy, trustProject, isProjectTrusted } from "../sandbox/rules.ts";
 import * as renderer from "./renderer.ts";
 
 export const COMMANDS = [
@@ -7,6 +9,7 @@ export const COMMANDS = [
   "/budget", "/trace", "/agents", "/messages",
   "/ownership", "/spawn", "/task",
   "/pause", "/resume", "/sessions", "/memory",
+  "/diff", "/compact", "/trust", "/consolidate",
   "/help", "/quit",
 ];
 
@@ -317,6 +320,60 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "diff": {
+      const ghostSha = ctx.orchestrator.getGhostSha();
+      if (!ghostSha) {
+        renderer.info("no session snapshot available (not in a git repo?)");
+        return "continue";
+      }
+      const diff = await diffFromGhost(ghostSha);
+      if (!diff) {
+        renderer.info("no changes since session start");
+      } else {
+        process.stdout.write("\n");
+        for (const line of diff.split("\n").slice(0, 30)) {
+          const color = line.startsWith("+") ? "\x1b[32m" : line.startsWith("-") ? "\x1b[31m" : "\x1b[2m";
+          renderer.info(`${color}${line}\x1b[0m`);
+        }
+        if (diff.split("\n").length > 30) renderer.info("\x1b[2m... truncated\x1b[0m");
+        process.stdout.write("\n");
+      }
+      return "continue";
+    }
+
+    case "compact": {
+      const before = ctx.conversation.length;
+      const summary = ctx.conversation.generateSummary();
+      ctx.conversation.clear();
+      ctx.conversation.add({
+        role: "assistant",
+        content: `[Compacted ${before} turns. Summary: ${summary}]`,
+        timestamp: new Date().toISOString(),
+      });
+      renderer.info(`\u2713 compacted ${before} turns`);
+      return "continue";
+    }
+
+    case "trust": {
+      const dir = args[0] || process.cwd();
+      const trusted = await isProjectTrusted(dir);
+      if (trusted) {
+        renderer.info(`${dir} is already trusted`);
+      } else {
+        await trustProject(dir);
+        renderer.info(`\u2713 trusted ${dir}`);
+      }
+      return "continue";
+    }
+
+    case "consolidate": {
+      const consolidator = ctx.orchestrator.getConsolidator();
+      renderer.info("consolidating memories from past sessions...");
+      const result = await consolidator.consolidate();
+      renderer.info(`\u2713 extracted ${result.extracted}, consolidated ${result.consolidated}`);
+      return "continue";
+    }
+
     case "help": {
       process.stdout.write("\n");
       renderer.info("\x1b[1m/status\x1b[0m\x1b[2m              agent statuses");
@@ -332,6 +389,10 @@ export async function handleCommand(
       renderer.info("\x1b[1m/resume\x1b[0m\x1b[2m              restore last session");
       renderer.info("\x1b[1m/sessions\x1b[0m\x1b[2m            saved session list");
       renderer.info("\x1b[1m/memory\x1b[0m\x1b[2m              persistent memory");
+      renderer.info("\x1b[1m/diff\x1b[0m\x1b[2m                show changes since session start");
+      renderer.info("\x1b[1m/compact\x1b[0m\x1b[2m             compress conversation history");
+      renderer.info("\x1b[1m/trust\x1b[0m\x1b[2m               trust project config dir");
+      renderer.info("\x1b[1m/consolidate\x1b[0m\x1b[2m         consolidate memories from sessions");
       renderer.info("\x1b[1m/clear\x1b[0m\x1b[2m               clear conversation");
       renderer.info("\x1b[1m/lang\x1b[0m \x1b[2m<language>      set response language");
       renderer.info("\x1b[1m/help\x1b[0m\x1b[2m                this help");
