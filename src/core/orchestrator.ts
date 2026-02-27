@@ -15,6 +15,7 @@ import { initDb } from "../db/schema.ts";
 import { routeTask, suggestAgent } from "./router.ts";
 import { Scheduler } from "./scheduler.ts";
 import { AgentRegistry } from "../agents/registry.ts";
+import { SkillIndex } from "../agents/skill-index.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
 import { Logger } from "../logging/logger.ts";
@@ -84,6 +85,7 @@ export class Orchestrator {
   private costEstimator!: CostEstimator;
   private checkpointManager!: CheckpointManager;
   private supervisor!: Supervisor;
+  private skillIndex: SkillIndex;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -102,6 +104,7 @@ export class Orchestrator {
     this.recovery = new RecoveryManager();
     this.taskLogger = new TaskLogger();
     this.dynamicSecurity = new DynamicSecurityProfile();
+    this.skillIndex = new SkillIndex();
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -219,13 +222,15 @@ export class Orchestrator {
       }
     });
 
-    const profileDir = `${this.config.orchestrator.dataDir}/profiles`;
-    const skillSearchDirs = [
+    // Scan skills index for dynamic task-based matching
+    await this.skillIndex.scan([
       join(process.cwd(), ".claude", "skills"),
       join(homedir(), ".claude", "skills"),
-    ];
+    ]);
+
+    const profileDir = `${this.config.orchestrator.dataDir}/profiles`;
     try {
-      await this.registry.loadProfiles(profileDir, skillSearchDirs);
+      await this.registry.loadProfiles(profileDir);
     } catch {
       // profiles directory may not exist yet
     }
@@ -468,6 +473,10 @@ export class Orchestrator {
 
   getRegistry(): AgentRegistry {
     return this.registry;
+  }
+
+  getSkillIndex(): SkillIndex {
+    return this.skillIndex;
   }
 
   getConfig(): OrchestratorConfig {

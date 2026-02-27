@@ -1,7 +1,5 @@
 #!/usr/bin/env bun
 
-import { join } from "node:path";
-import { homedir } from "node:os";
 import { loadConfig } from "./config/loader.ts";
 import { Orchestrator } from "./core/orchestrator.ts";
 
@@ -86,12 +84,8 @@ async function main() {
 
   // Also load profiles from project-local profiles/ directory
   const localProfileDir = new URL("../profiles", import.meta.url).pathname;
-  const skillSearchDirs = [
-    join(process.cwd(), ".claude", "skills"),
-    join(homedir(), ".claude", "skills"),
-  ];
   try {
-    await orchestrator.getRegistry().loadProfiles(localProfileDir, skillSearchDirs);
+    await orchestrator.getRegistry().loadProfiles(localProfileDir);
   } catch {
     // local profiles directory may not exist
   }

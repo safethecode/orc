@@ -228,6 +228,10 @@ export function info(message: string): void {
   process.stdout.write(`  ${DIM}${message}${RESET}\n`);
 }
 
+export function dim(message: string): void {
+  process.stdout.write(`${DIM}${message}${RESET}\n`);
+}
+
 // ── Handoff ──────────────────────────────────────────────────────────
 
 export function handoff(from: string, to: string): void {

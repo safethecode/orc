@@ -3,57 +3,6 @@ import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { AgentProfile } from "../config/types.ts";
 
-// ── Role → Skill auto-mapping ──────────────────────────────────────────
-// Keys match profile `name` or fall back to keyword matching on `role`.
-// Explicit `skills:` in frontmatter merges on top (deduped).
-
-const ROLE_SKILL_MAP: Record<string, string[]> = {
-  coder: [
-    "frontend-design",
-    "webapp-testing",
-    "vercel-react-best-practices",
-    "vercel-composition-patterns",
-    "mcp-builder",
-  ],
-  architect: [
-    "mcp-builder",
-    "vercel-composition-patterns",
-    "web-design-guidelines",
-    "doc-coauthoring",
-  ],
-  reviewer: [
-    "web-design-guidelines",
-    "vercel-react-best-practices",
-    "webapp-testing",
-  ],
-  researcher: [
-    "doc-coauthoring",
-    "web-design-guidelines",
-  ],
-  rapid: [],
-};
-
-// Fallback keyword → key mapping for custom profiles
-const ROLE_KEYWORDS: [RegExp, string][] = [
-  [/engineer|coder|developer/i, "coder"],
-  [/architect/i, "architect"],
-  [/review/i, "reviewer"],
-  [/research|analyst/i, "researcher"],
-  [/quick|rapid|fast/i, "rapid"],
-];
-
-export function skillsForRole(name: string, role: string): string[] {
-  // Direct name match first
-  if (name in ROLE_SKILL_MAP) return ROLE_SKILL_MAP[name];
-
-  // Keyword match on role string
-  for (const [pattern, key] of ROLE_KEYWORDS) {
-    if (pattern.test(role)) return ROLE_SKILL_MAP[key];
-  }
-
-  return [];
-}
-
 // ── Registry ────────────────────────────────────────────────────────────
 
 export class AgentRegistry {
@@ -61,29 +10,13 @@ export class AgentRegistry {
 
   constructor() {}
 
-  async loadProfiles(profileDir: string, skillSearchDirs?: string[]): Promise<void> {
+  async loadProfiles(profileDir: string): Promise<void> {
     const entries = await readdir(profileDir);
     const mdFiles = entries.filter((f) => f.endsWith(".md"));
 
     for (const file of mdFiles) {
       const content = await readFile(join(profileDir, file), "utf-8");
       const profile = parseProfile(content);
-
-      if (skillSearchDirs) {
-        // Merge: role-based auto-skills + explicit frontmatter skills (deduped)
-        const autoSkills = skillsForRole(profile.name, profile.role);
-        const explicit = profile.skills ?? [];
-        const merged = [...new Set([...autoSkills, ...explicit])];
-
-        if (merged.length > 0) {
-          const skillBodies = await resolveSkills(merged, skillSearchDirs);
-          if (skillBodies.length > 0) {
-            profile.systemPrompt += "\n\n" + skillBodies.join("\n\n");
-          }
-        }
-        profile.skills = merged;
-      }
-
       this.register(profile);
     }
   }
