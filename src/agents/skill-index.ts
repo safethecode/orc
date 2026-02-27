@@ -80,6 +80,10 @@ export class SkillIndex {
     return bodies;
   }
 
+  getByName(name: string): SkillEntry | undefined {
+    return this.entries.find(e => e.name === name);
+  }
+
   list(): SkillEntry[] { return [...this.entries]; }
 
   private parseFrontmatter(content: string): Record<string, string> {

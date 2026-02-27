@@ -272,12 +272,32 @@ async function handleNaturalInput(
   renderer.agentHeader(agentName, route.model, route.reason);
 
   // Dynamic skill matching (before spinner — dim output must not overlap spinner)
+  // Build match context from conversation history + current input
+  const recentTurns = conversation.getTurns().slice(-6);
+  const matchContext = recentTurns.map(t => t.content).join(" ") + " " + input;
+
   const skillIndex = orchestrator.getSkillIndex();
-  const matched = skillIndex.match(input, 3);
+  const dynamicMatched = skillIndex.match(matchContext, 3);
+
+  // Profile explicit skills as guaranteed baseline
+  const baselineEntries = (profile.skills ?? [])
+    .map(name => skillIndex.getByName(name))
+    .filter((e): e is NonNullable<typeof e> => e != null);
+
+  // Merge: baseline first, then dynamic (deduped)
+  const seen = new Set<string>();
+  const allMatched: typeof baselineEntries = [];
+  for (const entry of [...baselineEntries, ...dynamicMatched]) {
+    if (!seen.has(entry.name)) {
+      seen.add(entry.name);
+      allMatched.push(entry);
+    }
+  }
+
   let skillBodies: string[] = [];
-  if (matched.length > 0) {
-    skillBodies = await skillIndex.resolve(matched);
-    renderer.dim(`  skills: ${matched.map(s => s.name).join(", ")}`);
+  if (allMatched.length > 0) {
+    skillBodies = await skillIndex.resolve(allMatched);
+    renderer.dim(`  skills: ${allMatched.map(s => s.name).join(", ")}`);
   }
 
   // Start spinner while waiting for response
