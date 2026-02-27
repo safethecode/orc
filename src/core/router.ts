@@ -1,10 +1,14 @@
-import type { RoutingConfig, ModelTier } from "../config/types.ts";
+import type { RoutingConfig, ModelTier, CostEstimate } from "../config/types.ts";
 
 export interface RouteResult {
   tier: "simple" | "medium" | "complex";
   model: ModelTier;
   multiAgent: boolean;
   reason: string;
+}
+
+export interface RouteOptions {
+  costEstimate?: CostEstimate;
 }
 
 const MULTI_AGENT_KEYWORDS = [
@@ -19,6 +23,7 @@ const MULTI_AGENT_KEYWORDS = [
 export function routeTask(
   prompt: string,
   config: RoutingConfig,
+  options?: RouteOptions,
 ): RouteResult {
   const lower = prompt.toLowerCase();
 
@@ -59,14 +64,34 @@ export function routeTask(
   ).size;
 
   const multiAgentByDomains = domainCount >= 3;
-  const multiAgent = multiAgentByKeyword || multiAgentByDomains;
+  const heuristicMulti = multiAgentByKeyword || multiAgentByDomains;
 
-  const model = config.tiers[bestTier].model;
-  const reason =
-    bestScore > 0
+  // Cost-aware override: CostEstimator recommendation takes precedence over heuristic
+  let multiAgent: boolean;
+  let reason: string;
+
+  if (options?.costEstimate) {
+    const est = options.costEstimate;
+    if (est.recommendation === "single" && heuristicMulti) {
+      multiAgent = false;
+      reason = `Cost override: ${est.reason}`;
+    } else if (est.recommendation === "multi" && !heuristicMulti) {
+      multiAgent = true;
+      reason = `Cost recommends multi-agent: ${est.reason}`;
+    } else {
+      multiAgent = heuristicMulti;
+      reason = heuristicMulti
+        ? `Heuristic + cost aligned: multi-agent`
+        : bestScore > 0 ? `Matched ${bestScore} keyword(s) for tier "${bestTier}"` : "";
+    }
+  } else {
+    multiAgent = heuristicMulti;
+    reason = bestScore > 0
       ? `Matched ${bestScore} keyword(s) for tier "${bestTier}"`
       : "";
+  }
 
+  const model = config.tiers[bestTier].model;
   return { tier: bestTier, model, multiAgent, reason };
 }
 
