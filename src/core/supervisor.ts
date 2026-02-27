@@ -229,8 +229,8 @@ export class Supervisor {
     const capabilities: ProviderCapability[] = [];
 
     for (const [name, provider] of Object.entries(config.providers)) {
-      const caps = (provider as any).capabilities;
-      if (caps) {
+      if (provider.capabilities) {
+        const caps = provider.capabilities;
         capabilities.push({
           name: name as ProviderName,
           models: caps.models ?? [],
