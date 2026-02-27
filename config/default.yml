@@ -7,8 +7,6 @@ orchestrator:
 
 budget:
   defaultMaxPerTask: 0.50
-  globalDailyLimit: 10.00
-  warningThreshold: 0.80
 
 providers:
   claude:
