@@ -51,7 +51,10 @@ export function buildCommand(
       cmd.push("--system-prompt", options.systemPrompt);
     }
   } else if (provider.command === "codex") {
-    cmd = ["codex", "exec", options.prompt, "--full-auto"];
+    const codexPrompt = options.systemPrompt
+      ? `${options.systemPrompt}\n\n---\n\n${options.prompt}`
+      : options.prompt;
+    cmd = ["codex", "exec", codexPrompt, "--full-auto"];
   } else if (provider.command === "gemini") {
     cmd = ["gemini", "-p", options.prompt];
     if (options.model) {
