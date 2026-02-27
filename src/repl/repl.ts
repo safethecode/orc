@@ -6,6 +6,7 @@ import { buildCommand } from "../agents/provider.ts";
 import { AgentStreamer, type ToolUseEvent } from "./streamer.ts";
 import { Conversation } from "./conversation.ts";
 import { isCommand, handleCommand, COMMANDS, LANGUAGES } from "./commands.ts";
+import { TIER_BUDGETS } from "../memory/token-optimizer.ts";
 import * as renderer from "./renderer.ts";
 
 export async function startRepl(
@@ -102,6 +103,16 @@ export async function startRepl(
   const profiles = orchestrator.getRegistry().list().map((p) => p.name);
   renderer.welcome(profiles);
 
+  // Show last session hint if available
+  const lastSnapshot = orchestrator.getStore().getLatestSnapshot();
+  if (lastSnapshot) {
+    const summary = lastSnapshot.summary || "no summary";
+    renderer.info(
+      `\x1b[2mPrevious session: ${lastSnapshot.turnCount} turns, ${lastSnapshot.createdAt} \u2014 "${summary}"\x1b[0m`,
+    );
+    renderer.info("\x1b[2mType /resume to continue or start fresh\x1b[0m");
+  }
+
   try {
     while (true) {
       let input: string;
@@ -137,6 +148,18 @@ export async function startRepl(
       process.stdout.write("\n");
     }
   } finally {
+    // Auto-save snapshot on exit
+    if (conversation.length > 0) {
+      const snapshot = conversation.toSnapshot();
+      orchestrator.getStore().saveSnapshot({
+        id: crypto.randomUUID(),
+        turnsJson: JSON.stringify(snapshot.turns),
+        language: snapshot.language,
+        summary: conversation.generateSummary(),
+        turnCount: conversation.length,
+      });
+    }
+
     rl.close();
     renderer.info("Goodbye.");
   }
@@ -169,6 +192,8 @@ async function handleNaturalInput(
   // Start spinner while waiting for response
   renderer.startSpinner(agentName, route.model);
 
+  // Set tier-specific token budget before building prompt
+  conversation.setTokenBudget(TIER_BUDGETS[route.model] ?? TIER_BUDGETS.sonnet);
   const fullPrompt = conversation.buildPrompt(input);
 
   conversation.add({
@@ -183,6 +208,20 @@ async function handleNaturalInput(
     systemPrompt = systemPrompt
       ? `${systemPrompt}\n\nAlways respond in ${lang}.`
       : `Always respond in ${lang}.`;
+  }
+
+  // Inject relevant memories into system prompt
+  const memories = orchestrator.getMemory().getRelevantMemories(input, agentName, 5);
+  const memoryCtx = orchestrator.getMemory().formatForPrompt(memories);
+  if (memoryCtx) {
+    systemPrompt = systemPrompt ? `${systemPrompt}\n${memoryCtx}` : memoryCtx;
+  }
+
+  // Tier-specific response length hint
+  if (route.model === "haiku") {
+    systemPrompt = systemPrompt
+      ? `${systemPrompt}\nKeep responses concise and under 200 words.`
+      : "Keep responses concise and under 200 words.";
   }
 
   const cmd = buildCommand(providerConfig, profile, {
