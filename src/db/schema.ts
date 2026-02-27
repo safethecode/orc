@@ -78,5 +78,29 @@ export function initDb(dbPath: string): Database {
   db.run(`CREATE INDEX IF NOT EXISTS idx_ownership_agent ON file_ownership(agent_name)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_ownership_pattern ON file_ownership(pattern)`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS session_snapshots (
+    id TEXT PRIMARY KEY,
+    session_name TEXT NOT NULL DEFAULT 'repl',
+    turns_json TEXT NOT NULL,
+    language TEXT,
+    summary TEXT,
+    turn_count INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_snapshot_session ON session_snapshots(session_name)`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS memory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    namespace TEXT NOT NULL DEFAULT 'global',
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    source TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    accessed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    access_count INTEGER DEFAULT 0,
+    UNIQUE(namespace, key)
+  )`);
+
   return db;
 }
