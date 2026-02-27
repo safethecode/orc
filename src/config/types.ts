@@ -50,8 +50,6 @@ export interface RoutingConfig {
 
 export interface BudgetConfig {
   defaultMaxPerTask: number;
-  globalDailyLimit: number;
-  warningThreshold: number;
 }
 
 export interface SupervisorConfig {
