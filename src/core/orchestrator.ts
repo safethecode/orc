@@ -23,6 +23,7 @@ import { OwnershipManager } from "./ownership.ts";
 import { WorktreeManager } from "../session/worktree.ts";
 import { Inbox } from "../messaging/inbox.ts";
 import { ContextCompressor } from "../messaging/context-compressor.ts";
+import { MemoryStore } from "../memory/memory-store.ts";
 import type { Database } from "bun:sqlite";
 
 export class Orchestrator {
@@ -39,6 +40,7 @@ export class Orchestrator {
   private logger: Logger;
   private tracer: Tracer;
   private health: HealthChecker;
+  private memory!: MemoryStore;
   private config: OrchestratorConfig;
 
   constructor(config: OrchestratorConfig) {
@@ -67,6 +69,7 @@ export class Orchestrator {
     this.store = new Store(db);
     this.budget = new BudgetController(this.store, this.config.budget);
     this.ownership = new OwnershipManager(this.store);
+    this.memory = new MemoryStore(db);
     this.inbox = new Inbox(this.store, db);
 
     this.inbox.on("message", async ({ to, message }: { to: string; message: { from: string; content: string } }) => {
@@ -335,6 +338,14 @@ export class Orchestrator {
 
   getHealth(): HealthChecker {
     return this.health;
+  }
+
+  getStore(): Store {
+    return this.store;
+  }
+
+  getMemory(): MemoryStore {
+    return this.memory;
   }
 
   private async decomposeTask(prompt: string, parentTaskId: string): Promise<string[]> {
