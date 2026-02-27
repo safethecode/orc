@@ -62,13 +62,4 @@ export class Logger {
     });
   }
 
-  budgetWarning(agent: string, taskId: string, usage: number, limit: number): void {
-    this.log({
-      ts: new Date().toISOString(),
-      agent,
-      task: taskId,
-      event: "budget_warning",
-      data: { usage, limit },
-    });
-  }
 }
