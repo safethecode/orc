@@ -198,6 +198,19 @@ export interface ConflictCheckResult {
   }>;
 }
 
+// ── Sandbox & Security Types ────────────────────────────────────────
+
+export type SafetyLevel = "safe" | "prompt" | "forbidden";
+
+export type RuleDecision = "allow" | "prompt" | "forbidden";
+
+export interface SandboxConfig {
+  environmentPolicy: "all" | "core" | "none";
+  excludeEnvPatterns: string[];
+  outputMaxBytes: number;
+  agentMaxDepth: number;
+}
+
 // ── REPL Conversation Types ──────────────────────────────────────────
 
 export interface ConversationTurn {
