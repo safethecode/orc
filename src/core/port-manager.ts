@@ -76,7 +76,7 @@ export class PortManager {
   }
 
   private isPortAvailable(port: number): Promise<boolean> {
-    return new Promise((resolve) => {
+    return new Promise<boolean>((resolve) => {
       const server = Bun.listen({
         hostname: "127.0.0.1",
         port,
@@ -93,7 +93,7 @@ export class PortManager {
       } catch {
         resolve(false);
       }
-    }).catch(() => {
+    }).catch((): Promise<boolean> => {
       // Fallback: try TCP connect
       return new Promise<boolean>((resolve) => {
         const socket = createConnection({ port, host: "127.0.0.1" });
