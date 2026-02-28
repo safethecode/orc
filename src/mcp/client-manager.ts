@@ -150,6 +150,17 @@ export class McpClientManager {
     return tmpPath;
   }
 
+  async disconnectServer(name: string): Promise<boolean> {
+    const client = this.clients.get(name);
+    if (!client) return false;
+    try { await client.close(); } catch { /* already dead */ }
+    this.clients.delete(name);
+    this.transports.delete(name);
+    this.toolCache = this.toolCache.filter(t => t.serverName !== name);
+    if (this.config) delete this.config.servers[name];
+    return true;
+  }
+
   async disconnect(): Promise<void> {
     for (const [name, client] of this.clients) {
       try {

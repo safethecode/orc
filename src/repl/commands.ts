@@ -2,12 +2,13 @@ import type { Orchestrator } from "../core/orchestrator.ts";
 import type { Conversation } from "./conversation.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
 import { loadExecPolicy, trustProject, isProjectTrusted } from "../sandbox/rules.ts";
+import { getCatalogEntry } from "../mcp/catalog.ts";
 import * as renderer from "./renderer.ts";
 
 export const COMMANDS = [
   "/status", "/stop", "/clear", "/lang",
   "/budget", "/trace", "/agents", "/messages",
-  "/ownership", "/spawn", "/task",
+  "/ownership", "/spawn", "/task", "/mcp",
   "/pause", "/resume", "/sessions", "/memory",
   "/diff", "/compact", "/trust", "/consolidate",
   "/help", "/quit",
@@ -381,6 +382,68 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "mcp": {
+      const mcpMgr = ctx.orchestrator.getMcpManager();
+      const sub = args[0];
+
+      if (sub === "tools") {
+        const tools = mcpMgr.getTools();
+        if (tools.length === 0) {
+          renderer.info("no MCP tools available");
+        } else {
+          process.stdout.write("\n");
+          let currentServer = "";
+          for (const t of tools) {
+            if (t.serverName !== currentServer) {
+              currentServer = t.serverName;
+              renderer.info(`\x1b[1m${currentServer}\x1b[0m`);
+            }
+            renderer.info(`  \x1b[2m${t.name}: ${t.description}\x1b[0m`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "connect") {
+        const name = args[1];
+        if (!name) { renderer.error("usage: /mcp connect <server-name>"); return "continue"; }
+        const entry = getCatalogEntry(name);
+        if (!entry) { renderer.error(`unknown server: "${name}"`); return "continue"; }
+        const connected = await mcpMgr.connectOnDemand([entry]);
+        if (connected.length > 0) {
+          renderer.info(`\u2713 connected ${name} (${mcpMgr.getTools([name]).length} tools)`);
+        } else {
+          renderer.error(`failed to connect ${name}`);
+        }
+        return "continue";
+      }
+
+      if (sub === "disconnect") {
+        const name = args[1];
+        if (!name) { renderer.error("usage: /mcp disconnect <server-name>"); return "continue"; }
+        const ok = await mcpMgr.disconnectServer(name);
+        renderer.info(ok ? `\u2713 disconnected ${name}` : `"${name}" not connected`);
+        return "continue";
+      }
+
+      // Default: show connected servers
+      const servers = mcpMgr.getConnectedServers();
+      if (servers.length === 0) {
+        renderer.info("no MCP servers connected");
+        renderer.info("\x1b[2musage: /mcp connect <name> | /mcp tools\x1b[0m");
+      } else {
+        process.stdout.write("\n");
+        for (const name of servers) {
+          const toolCount = mcpMgr.getTools([name]).length;
+          renderer.info(`\x1b[32m●\x1b[0m ${name} \x1b[2m(${toolCount} tools)\x1b[0m`);
+        }
+        renderer.info(`\x1b[2m${mcpMgr.getToolCount()} tools total\x1b[0m`);
+        process.stdout.write("\n");
+      }
+      return "continue";
+    }
+
     case "help": {
       process.stdout.write("\n");
       renderer.info("\x1b[1m/status\x1b[0m\x1b[2m              agent statuses");
@@ -394,6 +457,10 @@ export async function handleCommand(
       renderer.info("\x1b[1m/agents auto\x1b[0m\x1b[2m         restore auto routing");
       renderer.info("\x1b[1m/messages\x1b[0m \x1b[2m<agent>    message history");
       renderer.info("\x1b[1m/ownership\x1b[0m\x1b[2m           file ownership map");
+      renderer.info("\x1b[1m/mcp\x1b[0m\x1b[2m                 MCP server status");
+      renderer.info("\x1b[1m/mcp tools\x1b[0m\x1b[2m           list MCP tools");
+      renderer.info("\x1b[1m/mcp connect\x1b[0m \x1b[2m<name>   connect catalog server");
+      renderer.info("\x1b[1m/mcp disconnect\x1b[0m \x1b[2m<n>  disconnect server");
       renderer.info("\x1b[1m/pause\x1b[0m\x1b[2m               save session snapshot");
       renderer.info("\x1b[1m/resume\x1b[0m\x1b[2m              restore last session");
       renderer.info("\x1b[1m/sessions\x1b[0m\x1b[2m            saved session list");
