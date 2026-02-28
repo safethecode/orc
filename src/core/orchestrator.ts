@@ -610,6 +610,10 @@ export class Orchestrator {
     return this.supervisor.getWorkerBus();
   }
 
+  getCompressor(): ContextCompressor {
+    return this.compressor;
+  }
+
   async shutdown(): Promise<void> {
     this.checkpointManager.stopAll();
     this.health.stop();
