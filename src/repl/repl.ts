@@ -324,6 +324,7 @@ async function handleNaturalInput(
     isWorker: false,
   });
   let systemPrompt = harness.systemPrompt;
+  systemPrompt += `\n\nYou are working in the project at: ${process.cwd()}`;
   if (profile.systemPrompt) systemPrompt += "\n\n" + profile.systemPrompt;
 
   // Append pre-resolved skill bodies
