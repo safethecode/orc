@@ -136,6 +136,7 @@ function flushLineBuffer(): void {
 
 function isWideChar(code: number): boolean {
   return (
+    // CJK
     (code >= 0x1100 && code <= 0x115F) ||   // Hangul Jamo
     (code >= 0x2E80 && code <= 0x303E) ||   // CJK Radicals, Kangxi
     (code >= 0x3040 && code <= 0x33BF) ||   // Hiragana, Katakana, CJK Compat
@@ -147,7 +148,11 @@ function isWideChar(code: number): boolean {
     (code >= 0xFF01 && code <= 0xFF60) ||   // Fullwidth Forms
     (code >= 0xFFE0 && code <= 0xFFE6) ||   // Fullwidth Signs
     (code >= 0x20000 && code <= 0x2FFFD) || // CJK Extension B+
-    (code >= 0x30000 && code <= 0x3FFFD)    // CJK Extension G+
+    (code >= 0x30000 && code <= 0x3FFFD) || // CJK Extension G+
+    // Emoji
+    (code >= 0x2600 && code <= 0x27BF) ||   // Misc Symbols, Dingbats (✅ ☀ ✏ ❤)
+    (code >= 0x2B50 && code <= 0x2B55) ||   // Star, Circle
+    (code >= 0x1F000 && code <= 0x1FBFF)    // Emoticons, Symbols, Flags (👍 🎉 🚀)
   );
 }
 
