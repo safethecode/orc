@@ -333,10 +333,14 @@ async function handleNaturalInput(
   const cachedSkill = skillScoutCache.get<ScoutResult>(input);
   const cachedMcp = mcpScoutCache.get<McpScoutResult>(input);
 
-  const [skillScoutResult, mcpScoutResult] = await Promise.all([
+  const emptySkill: ScoutResult = { needed: false, skills: [], durationMs: 0 };
+  const emptyMcp: McpScoutResult = { needed: false, servers: [], durationMs: 0 };
+  const [skillSettled, mcpSettled] = await Promise.allSettled([
     cachedSkill ? Promise.resolve(cachedSkill) : scoutSkills(pseudoSubtask, skillIndex, cancellation.signal).then(r => { skillScoutCache.set(input, r); return r; }),
     cachedMcp ? Promise.resolve(cachedMcp) : scoutMcp(input, cancellation.signal).then(r => { mcpScoutCache.set(input, r); return r; }),
   ]);
+  const skillScoutResult = skillSettled.status === "fulfilled" ? skillSettled.value : emptySkill;
+  const mcpScoutResult = mcpSettled.status === "fulfilled" ? mcpSettled.value : emptyMcp;
 
   // Merge Haiku-scouted skills with profile baseline skills
   const baselineEntries = (profile.skills ?? [])
@@ -623,23 +627,28 @@ async function handleMultiAgent(
 
     const streamer = new AgentStreamer();
     onStreamer(streamer);
+    let boxOpen = false;
 
-    type BufferedEvent =
-      | { kind: "tool"; name: string; detail?: string }
-      | { kind: "text"; content: string };
-    const buffer: BufferedEvent[] = [];
-
+    streamer.on("text_delta", (delta: string) => {
+      if (!boxOpen) {
+        renderer.stopSpinner();
+        renderer.startBox(route.model);
+        boxOpen = true;
+      }
+      renderer.text(delta);
+    });
     streamer.on("tool_use", (tool: ToolUseEvent) => {
       const inp = tool.input ?? {};
       const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
-      buffer.push({ kind: "tool", name: tool.name, detail });
-      renderer.updateSpinner(`${tool.name} ${detail ? detail.split("/").pop() : ""}`.trim());
-    });
-    streamer.on("text_complete", (fullText: string) => {
-      buffer.push({ kind: "text", content: fullText });
+      if (boxOpen) {
+        renderer.toolUse(tool.name, detail, true);
+      } else {
+        renderer.updateSpinner(`${tool.name} ${detail ? detail.split("/").pop() : ""}`.trim());
+      }
     });
     streamer.on("error", (msg: string) => {
       renderer.stopSpinner();
+      if (boxOpen) renderer.endBox();
       renderer.error(msg);
     });
 
@@ -648,19 +657,13 @@ async function handleMultiAgent(
       const result = await streamer.run(cmd, cancellation.signal);
       renderer.stopSpinner();
       const durationMs = Date.now() - startTime;
-      if (buffer.length > 0) {
-        renderer.startBox(route.model);
-        for (const evt of buffer) {
-          if (evt.kind === "tool") renderer.toolUse(evt.name, evt.detail, true);
-          else renderer.text(evt.content.endsWith("\n") ? evt.content : evt.content + "\n");
-        }
-        renderer.endBox();
-      }
+      if (boxOpen) renderer.endBox();
       renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
       conversation.add({ role: "assistant", content: result.text, agentName, tier: route.model, timestamp: new Date().toISOString() });
       rollout.append({ type: "turn", timestamp: new Date().toISOString(), data: { role: "assistant", content: result.text } });
     } catch (e) {
       renderer.stopSpinner();
+      if (boxOpen) renderer.endBox();
       renderer.error(`Agent execution failed: ${(e as Error).message}`);
     }
     return;
@@ -817,10 +820,14 @@ async function executeSubtask(
   const cacheKey = subtask.prompt;
   const cachedSkill = skillScoutCache.get<ScoutResult>(cacheKey);
   const cachedMcp = mcpScoutCache.get<McpScoutResult>(cacheKey);
-  const [skillScoutResult, mcpScoutResult] = await Promise.all([
+  const emptySkillResult: ScoutResult = { needed: false, skills: [], durationMs: 0 };
+  const emptyMcpResult: McpScoutResult = { needed: false, servers: [], durationMs: 0 };
+  const [skillSettled, mcpSettled] = await Promise.allSettled([
     cachedSkill ? Promise.resolve(cachedSkill) : scoutSkills(subtask, orchestrator.getSkillIndex(), cancellation.signal).then(r => { skillScoutCache.set(cacheKey, r); return r; }),
     cachedMcp ? Promise.resolve(cachedMcp) : scoutMcp(subtask.prompt, cancellation.signal).then(r => { mcpScoutCache.set(cacheKey, r); return r; }),
   ]);
+  const skillScoutResult = skillSettled.status === "fulfilled" ? skillSettled.value : emptySkillResult;
+  const mcpScoutResult = mcpSettled.status === "fulfilled" ? mcpSettled.value : emptyMcpResult;
 
   // Render scout results (pause spinner for clean output)
   let skillBodies: string[] = [];
