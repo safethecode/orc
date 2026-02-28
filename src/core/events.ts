@@ -62,7 +62,8 @@ export type OrcEvent =
   | { type: "context:propagate"; subtaskId: string; contextTokens: number; sources: string[] }
   | { type: "context:sibling_summary"; subtaskId: string; siblingCount: number; filesShared: string[] }
   | { type: "worker:signal_done"; workerId: string }
-  | { type: "worker:result_marker"; workerId: string; files: string[]; summary: string };
+  | { type: "worker:result_marker"; workerId: string; files: string[]; summary: string }
+  | { type: "file:change"; file: string; changeType: string };
 
 export class OrcEventBus extends EventEmitter {
   publish(event: OrcEvent): void {
