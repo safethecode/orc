@@ -20,6 +20,9 @@ import { scoutSkills, type ScoutResult } from "./skill-scout.ts";
 import { scoutMcp, type McpScoutResult } from "../mcp/mcp-scout.ts";
 import { ScoutCache } from "./scout-cache.ts";
 import { runQualityGate } from "./quality-gate.ts";
+import { getPhaseModel } from "../core/phase-config.ts";
+import { detectRecurringIssues, DEFAULT_QA_CONFIG } from "../core/qa-loop.ts";
+import type { QAIssue, ExecutionPhase } from "../config/types.ts";
 import * as renderer from "./renderer.ts";
 
 export async function startRepl(
@@ -657,14 +660,23 @@ async function handleMultiAgent(
     return;
   }
 
-  // 2. Assign provider/model per subtask
+  // 2. Assign provider/model per subtask using phase-aware model selection
   const selector = orchestrator.getSupervisor().getProviderSelector();
   for (const subtask of decomposition.subtasks) {
+    // Map agent role to execution phase for model selection
+    const roleToPhase: Record<string, ExecutionPhase> = {
+      architect: "planning", planner: "planning", designer: "spec",
+      coder: "coding", tester: "qa", reviewer: "review", fixer: "fix",
+    };
+    const phase = roleToPhase[subtask.agentRole] ?? "coding";
+    const phaseModel = getPhaseModel(phase);
+
     const selection = selector.selectWithFallback(subtask, {
       requireToolUse: subtask.agentRole === "coder" || subtask.agentRole === "tester",
     });
     subtask.provider = selection.provider;
-    subtask.model = selection.model;
+    // Prefer phase-config model tier, fall back to selector's pick
+    subtask.model = phaseModel.model ?? selection.model;
   }
 
   // 3. Risk prediction
@@ -687,7 +699,7 @@ async function handleMultiAgent(
   conversation.add(userTurn);
   rollout.append({ type: "turn", timestamp: userTurn.timestamp, data: userTurn });
 
-  // 5. Create ResultCollector + ContextPropagator
+  // 5. Create ResultCollector + ContextPropagator + QA tracking
   const collector = new ResultCollector(taskId);
   const propagator = new ContextPropagator(
     orchestrator.getContextBuilder(),
@@ -696,6 +708,7 @@ async function handleMultiAgent(
   );
   const watcher = orchestrator.getConflictWatcher();
   watcher.clearDiffs();
+  const qaHistory: QAIssue[][] = [];
 
   // 6. Execute phases
   for (const phase of decomposition.executionPlan.phases) {
@@ -708,18 +721,24 @@ async function handleMultiAgent(
 
     if (phase.parallelizable && phaseSubtasks.length > 1) {
       const promises = phaseSubtasks.map(st =>
-        executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector),
+        executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory),
       );
       await Promise.all(promises);
     } else {
       for (const st of phaseSubtasks) {
         if (cancellation.cancelled) break;
-        await executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector);
+        await executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory);
       }
     }
   }
 
-  // 7. Conflict detection
+  // 7. QA recurring issue detection
+  const recurring = detectRecurringIssues(qaHistory, DEFAULT_QA_CONFIG.recurringIssueThreshold);
+  if (recurring.length > 0) {
+    renderer.riskAssessment(recurring.map(r => `recurring: [${r.severity}] ${r.description}`));
+  }
+
+  // 8. Conflict detection
   const conflicts = watcher.analyze();
   if (conflicts.length > 0) {
     renderer.conflictWarning(conflicts.map(c => `${c.severity}: ${c.description}`));
@@ -737,12 +756,18 @@ async function handleMultiAgent(
     }
   }
 
-  // 9. Record in conversation
+  // 9. Record in conversation — use the dominant tier from subtask results
+  const tierCounts = new Map<string, number>();
+  for (const sr of aggregated.subtaskResults) {
+    const t = decomposition.subtasks.find(s => s.id === sr.subtaskId)?.model ?? "sonnet";
+    tierCounts.set(t, (tierCounts.get(t) ?? 0) + 1);
+  }
+  const dominantTier = ([...tierCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "sonnet") as ModelTier;
   conversation.add({
     role: "assistant" as const,
     content: aggregated.mergedOutput,
     agentName: "multi-agent",
-    tier: "opus" as ModelTier,
+    tier: dominantTier,
     timestamp: new Date().toISOString(),
   });
   rollout.append({
@@ -762,6 +787,7 @@ async function executeSubtask(
   skillScoutCache: ScoutCache,
   decomposition: DecompositionResult,
   collector: ResultCollector,
+  qaHistory: QAIssue[][],
 ): Promise<void> {
   const agentName = `${subtask.agentRole}-${subtask.id.slice(-4)}`;
   const modelTier = subtask.model as ModelTier;
@@ -812,7 +838,8 @@ async function executeSubtask(
   let enrichedPrompt: string;
   try {
     enrichedPrompt = await propagator.buildWorkerPrompt(subtask, decomposition, collector);
-  } catch {
+  } catch (e) {
+    renderer.info(`context propagation failed: ${(e as Error).message} — using raw prompt`);
     enrichedPrompt = subtask.prompt;
   }
 
@@ -830,6 +857,17 @@ async function executeSubtask(
   // Inject skill bodies
   if (skillBodies.length > 0) {
     systemPrompt += "\n\n" + skillBodies.join("\n\n");
+  }
+
+  // Inject relevant memories into worker prompt
+  const memories = orchestrator.getMemory().getRelevantMemories(subtask.prompt, agentName, 3);
+  const memoryCtx = orchestrator.getMemory().formatForPrompt(memories);
+  if (memoryCtx) systemPrompt += "\n" + memoryCtx;
+
+  // Inject architectural decisions into worker prompt
+  const decisions = orchestrator.getDecisions().getRelevantDecisions(subtask.prompt);
+  if (decisions.length > 0) {
+    systemPrompt += "\n\n" + orchestrator.getDecisions().formatForPrompt(decisions);
   }
 
   // MCP integration: CLI passthrough for Claude, prompt injection for others
@@ -932,10 +970,16 @@ async function executeSubtask(
 
       if (boxOpen) renderer.endBox();
 
-      // Quality gate
+      // Quality gate + QA history tracking
       if (result.text) {
         const critique = runQualityGate({ agentRole: subtask.agentRole, prompt: subtask.prompt }, result.text);
         renderer.qualityGate(critique.passes, critique.issues);
+        // Track issues for recurring issue detection
+        if (critique.issues.length > 0) {
+          qaHistory.push(critique.issues.map(desc => ({
+            description: desc, severity: "major" as const, file: undefined, suggestion: undefined,
+          })));
+        }
       }
 
       renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
@@ -945,22 +989,28 @@ async function executeSubtask(
         outputTokens: result.outputTokens, durationMs,
       });
 
-      // Collect result for aggregation
-      collector.collectIntermediate(agentName, subtask.id, result.text);
-      // Manual collect since we don't have WorkerState format
-      const fakeWorker = {
+      // Collect result for aggregation (full WorkerState shape)
+      const workerState: import("../config/types.ts").WorkerState = {
         id: agentName,
         subtaskId: subtask.id,
         agentName,
-        provider: currentProvider,
-        status: "completed" as const,
-        result: result.text,
-        tokenUsage: result.inputTokens + result.outputTokens,
-        costUsd: result.costUsd,
+        provider: currentProvider as ProviderName,
+        model: currentModel,
+        status: "completed",
+        progress: 100,
         startedAt: new Date(startTime).toISOString(),
         lastActivityAt: new Date().toISOString(),
+        result: result.text,
+        error: null,
+        tokenUsage: result.inputTokens + result.outputTokens,
+        costUsd: result.costUsd,
+        currentTurn: 1,
+        maxTurns: 1,
+        turnHistory: [],
+        corrections: [],
+        intermediateResults: [],
       };
-      collector.collect(fakeWorker as import("../config/types.ts").WorkerState, subtask.agentRole as import("../config/types.ts").AgentRole, subtask.agentRole);
+      collector.collect(workerState, subtask.agentRole as import("../config/types.ts").AgentRole, subtask.agentRole);
 
       // Record conflict diff
       const collected = collector.getResult(subtask.id);
