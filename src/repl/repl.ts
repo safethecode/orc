@@ -358,6 +358,7 @@ async function handleNaturalInput(
     model: route.model,
     maxBudgetUsd: profile.maxBudgetUsd,
     systemPrompt,
+    maxTurns: profile.maxTurns ?? 10,
   });
 
   const streamer = new AgentStreamer();
