@@ -81,6 +81,7 @@ export interface OrchestratorConfig {
     dataDir: string;
     db: string;
     logDir: string;
+    budgetEnabled?: boolean;
   };
   budget: BudgetConfig;
   providers: Record<string, ProviderConfig>;
