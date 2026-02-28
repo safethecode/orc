@@ -11,7 +11,7 @@ export const COMMANDS = [
   "/ownership", "/spawn", "/task", "/mcp",
   "/pause", "/resume", "/sessions", "/memory",
   "/diff", "/compact", "/trust", "/consolidate",
-  "/help", "/quit",
+  "/checkpoint", "/help", "/quit",
 ];
 
 export const LANGUAGES = [
@@ -382,6 +382,45 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "checkpoint": {
+      const cpMgr = ctx.orchestrator.getCheckpointManager();
+      const sub = args[0];
+
+      if (sub === "list") {
+        const cps = cpMgr.list("repl");
+        if (cps.length === 0) {
+          renderer.info("no checkpoints");
+        } else {
+          process.stdout.write("\n");
+          for (const cp of cps) {
+            renderer.info(`\x1b[2m${cp.createdAt}\x1b[0m  ${cp.label}  \x1b[2m${cp.sha.slice(0, 8)}\x1b[0m`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "rollback") {
+        const ok = await cpMgr.rollbackToLatest("repl");
+        if (ok) {
+          renderer.info("\u2713 rolled back to latest checkpoint");
+        } else {
+          renderer.error("no checkpoint to rollback to");
+        }
+        return "continue";
+      }
+
+      // Default: create checkpoint with optional label
+      const label = args.join(" ") || `manual-${Date.now().toString(36)}`;
+      try {
+        const cp = await cpMgr.create("repl", "user", label);
+        renderer.info(`\u2713 checkpoint ${cp.id.slice(0, 12)} (${cp.label})`);
+      } catch (e) {
+        renderer.error((e as Error).message);
+      }
+      return "continue";
+    }
+
     case "mcp": {
       const mcpMgr = ctx.orchestrator.getMcpManager();
       const sub = args[0];
@@ -469,6 +508,9 @@ export async function handleCommand(
       renderer.info("\x1b[1m/compact\x1b[0m\x1b[2m             compress conversation history");
       renderer.info("\x1b[1m/trust\x1b[0m\x1b[2m               trust project config dir");
       renderer.info("\x1b[1m/consolidate\x1b[0m\x1b[2m         consolidate memories from sessions");
+      renderer.info("\x1b[1m/checkpoint\x1b[0m\x1b[2m          create a git checkpoint");
+      renderer.info("\x1b[1m/checkpoint list\x1b[0m\x1b[2m     list checkpoints");
+      renderer.info("\x1b[1m/checkpoint rollback\x1b[0m\x1b[2m rollback to latest");
       renderer.info("\x1b[1m/clear\x1b[0m\x1b[2m               clear conversation");
       renderer.info("\x1b[1m/lang\x1b[0m \x1b[2m<language>      set response language");
       renderer.info("\x1b[1m/help\x1b[0m\x1b[2m                this help");
