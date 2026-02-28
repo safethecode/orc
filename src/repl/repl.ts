@@ -363,23 +363,22 @@ async function handleNaturalInput(
   const streamer = new AgentStreamer();
   onStreamer(streamer);
 
-  let boxOpen = false;
+  // Buffer all events, render once after completion
+  type BufferedEvent =
+    | { kind: "tool"; name: string; detail?: string }
+    | { kind: "text"; content: string };
+  const buffer: BufferedEvent[] = [];
 
   streamer.on("tool_use", (tool: ToolUseEvent) => {
-    renderer.stopSpinner();
     const input = tool.input ?? {};
     const detail = (input.file_path as string) ?? (input.command as string) ?? (input.pattern as string) ?? undefined;
-    renderer.toolUse(tool.name, detail);
+    buffer.push({ kind: "tool", name: tool.name, detail });
+    renderer.updateSpinner(`${tool.name} ${detail ? detail.split("/").pop() : ""}`.trim());
     eventBus.publish({ type: "agent:tool", agent: agentName, tool: tool.name, detail });
   });
 
   streamer.on("text_complete", (fullText: string) => {
-    if (!boxOpen) {
-      renderer.stopSpinner();
-      renderer.startBox(route.model);
-      boxOpen = true;
-    }
-    renderer.text(fullText);
+    buffer.push({ kind: "text", content: fullText });
   });
 
   streamer.on("error", (msg: string) => {
@@ -395,7 +394,16 @@ async function handleNaturalInput(
     renderer.stopSpinner();
     const durationMs = Date.now() - startTime;
 
-    if (boxOpen) {
+    // Render buffered events at once
+    if (buffer.length > 0) {
+      renderer.startBox(route.model);
+      for (const evt of buffer) {
+        if (evt.kind === "tool") {
+          renderer.toolUse(evt.name, evt.detail);
+        } else {
+          renderer.text(evt.content);
+        }
+      }
       renderer.endBox();
     }
 

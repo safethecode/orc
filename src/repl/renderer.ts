@@ -261,6 +261,12 @@ export function startSpinner(agentName: string, tier: ModelTier): void {
   }).start();
 }
 
+export function updateSpinner(text: string): void {
+  if (spinner) {
+    spinner.text = `${DIM}${text}${RESET}`;
+  }
+}
+
 export function stopSpinner(): void {
   if (spinner) {
     spinner.stop();
