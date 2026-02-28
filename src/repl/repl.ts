@@ -123,6 +123,13 @@ export async function startRepl(
   const profiles = orchestrator.getRegistry().list().map((p) => p.name);
   renderer.welcome(profiles);
 
+  // Show connected MCP servers
+  const mcpManager = orchestrator.getMcpManager();
+  const mcpServers = mcpManager.getConnectedServers();
+  if (mcpServers.length > 0) {
+    renderer.mcpStatus(mcpServers, mcpManager.getToolCount());
+  }
+
   // Show last session hint if available
   const lastSnapshot = orchestrator.getStore().getLatestSnapshot();
   if (lastSnapshot) {
@@ -361,11 +368,26 @@ async function handleNaturalInput(
       : "Keep responses concise and under 200 words.";
   }
 
+  // MCP integration: CLI passthrough for Claude, prompt injection for others
+  const mcpMgr = orchestrator.getMcpManager();
+  const mcpServerNames = profile.mcpServers ?? (mcpMgr.getConnectedServers().length > 0 ? undefined : []);
+  let mcpConfigPath: string | undefined;
+
+  if (mcpMgr.getToolCount() > 0 && !(mcpServerNames && mcpServerNames.length === 0)) {
+    if (profile.provider === "claude") {
+      mcpConfigPath = mcpMgr.generateMcpConfigJson(mcpServerNames) ?? undefined;
+    } else {
+      const toolCtx = mcpMgr.formatToolsForPrompt(mcpServerNames);
+      if (toolCtx) systemPrompt += "\n\n" + toolCtx;
+    }
+  }
+
   const cmd = buildCommand(providerConfig, profile, {
     prompt: fullPrompt,
     model: route.model,
     systemPrompt,
     maxTurns: profile.maxTurns,
+    mcpConfig: mcpConfigPath,
   });
 
   const streamer = new AgentStreamer();
@@ -661,6 +683,19 @@ async function executeSubtask(
     systemPrompt += `\n\n${ctx}`;
   }
 
+  // MCP integration for subtasks
+  const mcpMgr = orchestrator.getMcpManager();
+  let mcpConfigPath: string | undefined;
+
+  if (mcpMgr.getToolCount() > 0) {
+    if (subtask.provider === "claude") {
+      mcpConfigPath = mcpMgr.generateMcpConfigJson() ?? undefined;
+    } else {
+      const toolCtx = mcpMgr.formatToolsForPrompt();
+      if (toolCtx) systemPrompt += "\n\n" + toolCtx;
+    }
+  }
+
   renderer.startSpinner(agentName, modelTier);
 
   const adHocProfile: AgentProfile = {
@@ -678,6 +713,7 @@ async function executeSubtask(
     prompt: subtask.prompt,
     model: subtask.model,
     systemPrompt,
+    mcpConfig: mcpConfigPath,
   });
 
   const streamer = new AgentStreamer();

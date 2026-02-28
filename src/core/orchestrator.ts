@@ -47,6 +47,7 @@ import { CrashRecovery } from "./crash-recovery.ts";
 import { CostEstimator } from "./cost-estimator.ts";
 import { CheckpointManager } from "./checkpoint.ts";
 import { Supervisor } from "./supervisor.ts";
+import { McpClientManager } from "../mcp/client-manager.ts";
 import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
@@ -86,6 +87,7 @@ export class Orchestrator {
   private checkpointManager!: CheckpointManager;
   private supervisor!: Supervisor;
   private skillIndex: SkillIndex;
+  private mcpManager: McpClientManager;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -105,6 +107,7 @@ export class Orchestrator {
     this.taskLogger = new TaskLogger();
     this.dynamicSecurity = new DynamicSecurityProfile();
     this.skillIndex = new SkillIndex();
+    this.mcpManager = new McpClientManager();
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -227,6 +230,11 @@ export class Orchestrator {
       join(process.cwd(), ".claude", "skills"),
       join(homedir(), ".claude", "skills"),
     ]);
+
+    // Connect to configured MCP servers
+    if (this.config.mcp?.servers && Object.keys(this.config.mcp.servers).length > 0) {
+      await this.mcpManager.connect(this.config.mcp);
+    }
 
     const profileDir = `${this.config.orchestrator.dataDir}/profiles`;
     try {
@@ -478,6 +486,10 @@ export class Orchestrator {
     return this.skillIndex;
   }
 
+  getMcpManager(): McpClientManager {
+    return this.mcpManager;
+  }
+
   getConfig(): OrchestratorConfig {
     return this.config;
   }
@@ -615,5 +627,6 @@ export class Orchestrator {
     }
 
     this.scheduler.clear();
+    await this.mcpManager.disconnect();
   }
 }

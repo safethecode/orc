@@ -319,6 +319,12 @@ export function phaseHeader(name: string, count: number, parallel: boolean): voi
   );
 }
 
+export function mcpStatus(serverNames: string[], toolCount: number): void {
+  process.stdout.write(
+    `  ${GRAY}mcp: ${serverNames.join(", ")}  (${toolCount} tools)${RESET}\n`,
+  );
+}
+
 export function skillScout(names: string[], durationMs: number): void {
   const time = `${(durationMs / 1000).toFixed(1)}s`;
   process.stdout.write(
