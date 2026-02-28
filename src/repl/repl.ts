@@ -20,6 +20,7 @@ import { scoutSkills, type ScoutResult } from "./skill-scout.ts";
 import { scoutMcp, type McpScoutResult } from "../mcp/mcp-scout.ts";
 import { ScoutCache } from "./scout-cache.ts";
 import { runQualityGate } from "./quality-gate.ts";
+import { HashlineEditor } from "../core/hashline.ts";
 import { getPhaseModel } from "../core/phase-config.ts";
 import { detectRecurringIssues, DEFAULT_QA_CONFIG } from "../core/qa-loop.ts";
 import type { QAIssue, ExecutionPhase } from "../config/types.ts";
@@ -429,6 +430,12 @@ async function handleNaturalInput(
   const decisions = orchestrator.getDecisions().getRelevantDecisions(input);
   if (decisions.length > 0) {
     systemPrompt += "\n\n" + orchestrator.getDecisions().formatForPrompt(decisions);
+  }
+
+  // Inject hashline editing instructions for code-editing agents
+  const editRoles = ["coder", "tester", "fixer", "reviewer"];
+  if (editRoles.includes(profile.role ?? "coder")) {
+    systemPrompt += "\n\nHashline editing is available. When reading files, lines are annotated as LINE#HASH (e.g. 15#VK). Use hash anchors for precise edits to avoid stale-line issues.";
   }
 
   // Inject permission rules context
@@ -903,6 +910,12 @@ async function executeSubtask(
   // Inject skill bodies
   if (skillBodies.length > 0) {
     systemPrompt += "\n\n" + skillBodies.join("\n\n");
+  }
+
+  // Inject hashline editing instructions for code-editing workers
+  const workerEditRoles = ["coder", "tester", "fixer", "reviewer"];
+  if (workerEditRoles.includes(subtask.agentRole)) {
+    systemPrompt += "\n\nHashline editing is available. When reading files, lines are annotated as LINE#HASH (e.g. 15#VK). Use hash anchors for precise edits to avoid stale-line issues.";
   }
 
   // Inject relevant memories into worker prompt

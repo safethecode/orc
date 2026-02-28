@@ -51,6 +51,7 @@ import { McpClientManager } from "../mcp/client-manager.ts";
 import { LspManager } from "../lsp/index.ts";
 import { GitSnapshotManager } from "./git-snapshot.ts";
 import { PermissionManager } from "./permissions.ts";
+import { HashlineEditor } from "./hashline.ts";
 import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
