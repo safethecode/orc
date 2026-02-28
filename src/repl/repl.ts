@@ -22,6 +22,7 @@ import { ScoutCache } from "./scout-cache.ts";
 import { runQualityGate } from "./quality-gate.ts";
 import { HashlineEditor } from "../core/hashline.ts";
 import { PlanMode } from "./plan-mode.ts";
+import { FileRefResolver } from "./file-ref.ts";
 import { getPhaseModel } from "../core/phase-config.ts";
 import { detectRecurringIssues, DEFAULT_QA_CONFIG } from "../core/qa-loop.ts";
 import type { QAIssue, ExecutionPhase } from "../config/types.ts";
@@ -33,6 +34,7 @@ export async function startRepl(
 ): Promise<void> {
   const conversation = new Conversation();
   const planMode = new PlanMode();
+  const fileRef = new FileRefResolver(process.cwd());
   let currentStreamer: AgentStreamer | null = null;
   let currentCancellation: CancellationToken | null = null;
   let hasInteraction = false;
@@ -197,6 +199,16 @@ export async function startRepl(
         continue;
       }
 
+      // Resolve @file references before processing
+      let resolvedInput = trimmed;
+      if (trimmed.includes("@")) {
+        const refResult = await fileRef.resolve(trimmed);
+        if (refResult.filesIncluded.length > 0) {
+          resolvedInput = refResult.resolvedInput;
+          renderer.info(`\x1b[2m@files: ${refResult.filesIncluded.join(", ")}\x1b[0m`);
+        }
+      }
+
       // Acquire sleep inhibitor during agent work
       orchestrator.getSleepInhibitor().acquire();
 
@@ -204,7 +216,7 @@ export async function startRepl(
       currentCancellation = cancellation;
 
       await handleNaturalInput(
-        trimmed,
+        resolvedInput,
         orchestrator,
         config,
         conversation,
