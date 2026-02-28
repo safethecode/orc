@@ -89,6 +89,7 @@ export interface OrchestratorConfig {
   supervisor?: SupervisorConfig;
   mcp?: McpConfig;
   permissions?: import("../core/permissions.ts").PermissionConfig;
+  theme?: string;
 }
 
 // ── Agent Profile ─────────────────────────────────────────────────────
