@@ -55,6 +55,7 @@ import { HashlineEditor } from "./hashline.ts";
 import { AutoFormatter } from "./formatter.ts";
 import { CustomToolLoader } from "./custom-tools.ts";
 import { FileWatcher } from "./file-watcher.ts";
+import { DoomLoopDetector } from "./doom-loop.ts";
 import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
@@ -101,6 +102,7 @@ export class Orchestrator {
   private formatter: AutoFormatter;
   private customTools: CustomToolLoader;
   private fileWatcher: FileWatcher;
+  private doomLoop: DoomLoopDetector;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -127,6 +129,7 @@ export class Orchestrator {
     this.formatter = new AutoFormatter();
     this.customTools = new CustomToolLoader(process.cwd());
     this.fileWatcher = new FileWatcher(process.cwd());
+    this.doomLoop = new DoomLoopDetector();
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -667,6 +670,10 @@ export class Orchestrator {
 
   getFileWatcher(): FileWatcher {
     return this.fileWatcher;
+  }
+
+  getDoomLoop(): DoomLoopDetector {
+    return this.doomLoop;
   }
 
   async shutdown(): Promise<void> {

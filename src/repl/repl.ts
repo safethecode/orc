@@ -208,6 +208,9 @@ export async function startRepl(
         continue;
       }
 
+      // Reset doom loop detector for new message
+      orchestrator.getDoomLoop().reset();
+
       // Resolve @file references before processing
       let resolvedInput = trimmed;
       if (trimmed.includes("@")) {
@@ -581,6 +584,12 @@ async function handleNaturalInput(
       const permAction = orchestrator.getPermissions().check(tool.name, detail ?? "", agentName);
       if (permAction === "deny") {
         renderer.error(`permission denied: ${tool.name} ${detail ?? ""}`);
+      }
+
+      // Doom loop detection
+      const doomResult = orchestrator.getDoomLoop().record(tool.name, detail ?? "");
+      if (doomResult.triggered) {
+        renderer.error(`doom loop detected: ${tool.name} called ${doomResult.count}x — agent may be stuck`);
       }
 
       // Auto-format after write/edit tool use
