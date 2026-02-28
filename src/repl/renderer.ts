@@ -1,4 +1,5 @@
 import ora, { type Ora } from "ora";
+import stringWidth from "string-width";
 import type { ModelTier } from "../config/types.ts";
 
 // ── ANSI Escape Codes ────────────────────────────────────────────────
@@ -42,9 +43,6 @@ const BOX_PAD = "  ";
 const boxBorder = () => `${boxColor}│${RESET} `;
 const boxBorderR = () => ` ${boxColor}│${RESET}`;
 
-function stripAnsi(str: string): string {
-  return str.replace(/\x1b\[[0-9;]*m/g, "");
-}
 
 // ── Markdown State ──────────────────────────────────────────────────
 
@@ -124,7 +122,7 @@ function flushLineBuffer(): void {
   const wrapped = wrapText(lineBuffer, boxTextW);
   for (const wline of wrapped) {
     const rendered = renderMarkdownLine(wline);
-    const visW = displayWidth(stripAnsi(rendered));
+    const visW = stringWidth(rendered);
     const pad = Math.max(0, boxTextW - visW);
     process.stdout.write(`${BOX_PAD}${boxBorder()}${rendered}${" ".repeat(pad)}${boxBorderR()}\n`);
   }
@@ -132,42 +130,10 @@ function flushLineBuffer(): void {
   atLineStart = true;
 }
 
-// ── Display Width (CJK double-width support) ───────────────────────
-
-function isWideChar(code: number): boolean {
-  return (
-    // CJK
-    (code >= 0x1100 && code <= 0x115F) ||   // Hangul Jamo
-    (code >= 0x2E80 && code <= 0x303E) ||   // CJK Radicals, Kangxi
-    (code >= 0x3040 && code <= 0x33BF) ||   // Hiragana, Katakana, CJK Compat
-    (code >= 0x3400 && code <= 0x4DBF) ||   // CJK Extension A
-    (code >= 0x4E00 && code <= 0xA4CF) ||   // CJK Unified, Yi
-    (code >= 0xAC00 && code <= 0xD7AF) ||   // Hangul Syllables
-    (code >= 0xF900 && code <= 0xFAFF) ||   // CJK Compatibility Ideographs
-    (code >= 0xFE30 && code <= 0xFE4F) ||   // CJK Compatibility Forms
-    (code >= 0xFF01 && code <= 0xFF60) ||   // Fullwidth Forms
-    (code >= 0xFFE0 && code <= 0xFFE6) ||   // Fullwidth Signs
-    (code >= 0x20000 && code <= 0x2FFFD) || // CJK Extension B+
-    (code >= 0x30000 && code <= 0x3FFFD) || // CJK Extension G+
-    // Emoji
-    (code >= 0x2600 && code <= 0x27BF) ||   // Misc Symbols, Dingbats (✅ ☀ ✏ ❤)
-    (code >= 0x2B50 && code <= 0x2B55) ||   // Star, Circle
-    (code >= 0x1F000 && code <= 0x1FBFF)    // Emoticons, Symbols, Flags (👍 🎉 🚀)
-  );
-}
-
-function displayWidth(str: string): number {
-  let w = 0;
-  for (const ch of str) {
-    w += isWideChar(ch.codePointAt(0) ?? 0) ? 2 : 1;
-  }
-  return w;
-}
-
 // ── Word Wrap ───────────────────────────────────────────────────────
 
 function wrapText(text: string, maxWidth: number): string[] {
-  if (displayWidth(text) <= maxWidth) return [text];
+  if (stringWidth(text) <= maxWidth) return [text];
 
   const words = text.split(" ");
   const lines: string[] = [];
@@ -175,7 +141,7 @@ function wrapText(text: string, maxWidth: number): string[] {
   let currentWidth = 0;
 
   for (const word of words) {
-    const wordWidth = displayWidth(word);
+    const wordWidth = stringWidth(word);
     if (!current) {
       current = word;
       currentWidth = wordWidth;
@@ -250,7 +216,7 @@ function renderMarkdownLine(line: string): string {
 export function toolUse(name: string, detail?: string, insideBox = false): void {
   const label = detail ? `${name} ${detail}` : name;
   if (insideBox) {
-    const visW = displayWidth(label) + 2; // ▸ + space
+    const visW = stringWidth(label) + 2; // ▸ + space
     const pad = Math.max(0, boxTextW - visW);
     process.stdout.write(
       `${BOX_PAD}${boxBorder()}${DIM}${YELLOW}▸${RESET} ${DIM}${label}${RESET}${" ".repeat(pad)}${boxBorderR()}\n`,
