@@ -71,6 +71,7 @@ import { RalphLoop } from "./ralph-loop.ts";
 import { RuntimeFallbackManager } from "./runtime-fallback.ts";
 import { TmuxVisualizer } from "./tmux-viz.ts";
 import { IntentGate } from "./intent-gate.ts";
+import { CategoryRouter } from "./category-router.ts";
 import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
@@ -133,6 +134,7 @@ export class Orchestrator {
   private runtimeFallback: RuntimeFallbackManager;
   private tmuxViz: TmuxVisualizer;
   private intentGate: IntentGate;
+  private categoryRouter: CategoryRouter;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -175,6 +177,7 @@ export class Orchestrator {
     this.runtimeFallback = new RuntimeFallbackManager();
     this.tmuxViz = new TmuxVisualizer();
     this.intentGate = new IntentGate();
+    this.categoryRouter = new CategoryRouter(config.categories);
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -788,6 +791,10 @@ export class Orchestrator {
 
   getIntentGate(): IntentGate {
     return this.intentGate;
+  }
+
+  getCategoryRouter(): CategoryRouter {
+    return this.categoryRouter;
   }
 
   async shutdown(): Promise<void> {
