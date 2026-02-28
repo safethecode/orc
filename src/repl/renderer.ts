@@ -121,23 +121,55 @@ function flushLineBuffer(): void {
   atLineStart = true;
 }
 
+// ── Display Width (CJK double-width support) ───────────────────────
+
+function isWideChar(code: number): boolean {
+  return (
+    (code >= 0x1100 && code <= 0x115F) ||   // Hangul Jamo
+    (code >= 0x2E80 && code <= 0x303E) ||   // CJK Radicals, Kangxi
+    (code >= 0x3040 && code <= 0x33BF) ||   // Hiragana, Katakana, CJK Compat
+    (code >= 0x3400 && code <= 0x4DBF) ||   // CJK Extension A
+    (code >= 0x4E00 && code <= 0xA4CF) ||   // CJK Unified, Yi
+    (code >= 0xAC00 && code <= 0xD7AF) ||   // Hangul Syllables
+    (code >= 0xF900 && code <= 0xFAFF) ||   // CJK Compatibility Ideographs
+    (code >= 0xFE30 && code <= 0xFE4F) ||   // CJK Compatibility Forms
+    (code >= 0xFF01 && code <= 0xFF60) ||   // Fullwidth Forms
+    (code >= 0xFFE0 && code <= 0xFFE6) ||   // Fullwidth Signs
+    (code >= 0x20000 && code <= 0x2FFFD) || // CJK Extension B+
+    (code >= 0x30000 && code <= 0x3FFFD)    // CJK Extension G+
+  );
+}
+
+function displayWidth(str: string): number {
+  let w = 0;
+  for (const ch of str) {
+    w += isWideChar(ch.codePointAt(0) ?? 0) ? 2 : 1;
+  }
+  return w;
+}
+
 // ── Word Wrap ───────────────────────────────────────────────────────
 
 function wrapText(text: string, maxWidth: number): string[] {
-  if (text.length <= maxWidth) return [text];
+  if (displayWidth(text) <= maxWidth) return [text];
 
   const words = text.split(" ");
   const lines: string[] = [];
   let current = "";
+  let currentWidth = 0;
 
   for (const word of words) {
+    const wordWidth = displayWidth(word);
     if (!current) {
       current = word;
-    } else if (current.length + 1 + word.length > maxWidth) {
+      currentWidth = wordWidth;
+    } else if (currentWidth + 1 + wordWidth > maxWidth) {
       lines.push(current);
       current = word;
+      currentWidth = wordWidth;
     } else {
       current += " " + word;
+      currentWidth += 1 + wordWidth;
     }
   }
   if (current) lines.push(current);
