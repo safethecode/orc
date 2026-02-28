@@ -487,6 +487,12 @@ async function handleNaturalInput(
     systemPrompt += `\n\nLSP servers active: ${lspActive.join(", ")}. You can use go-to-definition, find-references, and diagnostics for structural code navigation.`;
   }
 
+  // Inject custom tools context
+  const customToolsCtx = orchestrator.getCustomTools().formatForPrompt();
+  if (customToolsCtx) {
+    systemPrompt += "\n\n" + customToolsCtx;
+  }
+
   // Tier-specific response length hint
   if (route.model === "haiku") {
     systemPrompt = systemPrompt
