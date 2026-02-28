@@ -318,3 +318,10 @@ export function phaseHeader(name: string, count: number, parallel: boolean): voi
     `  ${YELLOW}${BOLD}\u25B6${RESET} ${WHITE}${name}${RESET}  ${DIM}${count} task${count > 1 ? "s" : ""}, ${mode}${RESET}\n`,
   );
 }
+
+export function skillScout(names: string[], durationMs: number): void {
+  const time = `${(durationMs / 1000).toFixed(1)}s`;
+  process.stdout.write(
+    `  ${DIM}skills: ${names.join(", ")}  ${GRAY}(scout ${time})${RESET}\n`,
+  );
+}

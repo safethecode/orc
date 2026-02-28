@@ -14,6 +14,7 @@ import { RolloutRecorder } from "../session/rollout.ts";
 import { eventBus } from "../core/events.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
 import { decompose } from "../core/decomposer.ts";
+import { scoutSkills } from "./skill-scout.ts";
 import * as renderer from "./renderer.ts";
 
 export async function startRepl(
@@ -628,6 +629,14 @@ async function executeSubtask(
 
   renderer.agentHeader(agentName, modelTier, subtask.agentRole);
 
+  // Haiku-powered skill discovery
+  const scout = await scoutSkills(subtask, orchestrator.getSkillIndex(), cancellation.signal);
+  let skillBodies: string[] = [];
+  if (scout.needed && scout.skills.length > 0) {
+    skillBodies = await orchestrator.getSkillIndex().resolve(scout.skills);
+    renderer.skillScout(scout.skills.map(s => s.name), scout.durationMs);
+  }
+
   // System prompt from harness
   const harness = buildHarness({
     agentName,
@@ -638,6 +647,11 @@ async function executeSubtask(
   });
   let systemPrompt = harness.systemPrompt;
   systemPrompt += `\n\nYou are working in the project at: ${process.cwd()}`;
+
+  // Inject skill bodies
+  if (skillBodies.length > 0) {
+    systemPrompt += "\n\n" + skillBodies.join("\n\n");
+  }
 
   // Context propagation: inject previous phase results
   if (previousResults.length > 0) {
