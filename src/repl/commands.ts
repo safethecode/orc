@@ -7,13 +7,14 @@ import { selectPhases, buildPhasePrompt, parseSpecResult } from "../core/spec-pi
 import { buildIdeationPrompt, parseIdeationResponse, prioritizeIdeas, DIMENSION_PROMPTS } from "../core/ideation.ts";
 import type { SpecPhase, IdeationDimension } from "../config/types.ts";
 import type { PlanMode } from "./plan-mode.ts";
+import { SessionForkManager } from "../core/session-fork.ts";
 import * as renderer from "./renderer.ts";
 
 export const COMMANDS = [
   "/status", "/stop", "/clear", "/lang",
   "/budget", "/trace", "/agents", "/messages",
   "/ownership", "/spawn", "/task", "/mcp",
-  "/plan", "/lsp", "/pause", "/resume", "/sessions", "/memory",
+  "/plan", "/fork", "/lsp", "/pause", "/resume", "/sessions", "/memory",
   "/permissions", "/undo", "/redo",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
@@ -29,6 +30,7 @@ export interface CommandContext {
   orchestrator: Orchestrator;
   conversation: Conversation;
   planMode?: PlanMode;
+  forkManager?: SessionForkManager;
   getPinnedAgent: () => string | null;
   setPinnedAgent: (name: string | null) => void;
 }
@@ -628,6 +630,47 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "fork": {
+      if (!ctx.forkManager) {
+        renderer.error("session forking not available");
+        return "continue";
+      }
+      const sub = args[0];
+
+      if (sub === "list") {
+        const branches = ctx.forkManager.listBranches();
+        process.stdout.write("\n");
+        for (const b of branches) {
+          const active = b.active ? " \x1b[33m<- active\x1b[0m" : "";
+          renderer.info(`  ${b.label} \x1b[2m(${b.turnCount} turns, fork@${b.forkPoint})\x1b[0m${active}`);
+        }
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      if (sub === "tree") {
+        process.stdout.write("\n" + ctx.forkManager.formatTree() + "\n\n");
+        return "continue";
+      }
+
+      if (sub === "switch") {
+        const branchId = args[1];
+        if (!branchId) { renderer.error("usage: /fork switch <branch-id>"); return "continue"; }
+        const branches = ctx.forkManager.listBranches();
+        const target = branches.find(b => b.label === branchId || b.id.startsWith(branchId));
+        if (!target) { renderer.error(`branch not found: ${branchId}`); return "continue"; }
+        ctx.forkManager.switchTo(target.id);
+        renderer.info(`\u2713 switched to ${target.label}`);
+        return "continue";
+      }
+
+      // Default: create fork at current position
+      const label = args.join(" ") || undefined;
+      const branch = ctx.forkManager.fork(ctx.conversation.length, label);
+      renderer.info(`\u2713 forked at turn ${ctx.conversation.length} → ${branch.label}`);
+      return "continue";
+    }
+
     case "lsp": {
       const lspMgr = ctx.orchestrator.getLspManager();
       const sub = args[0];
@@ -777,6 +820,10 @@ export async function handleCommand(
       renderer.info("\x1b[1m/plan\x1b[0m\x1b[2m                toggle plan mode (read-only)");
       renderer.info("\x1b[1m/plan list\x1b[0m\x1b[2m           list saved plans");
       renderer.info("\x1b[1m/plan save\x1b[0m \x1b[2m<title>   save current plan");
+      renderer.info("\x1b[1m/fork\x1b[0m\x1b[2m                fork conversation at current point");
+      renderer.info("\x1b[1m/fork list\x1b[0m\x1b[2m           list branches");
+      renderer.info("\x1b[1m/fork tree\x1b[0m\x1b[2m           show branch tree");
+      renderer.info("\x1b[1m/fork switch\x1b[0m \x1b[2m<name>  switch to branch");
       renderer.info("\x1b[1m/lsp\x1b[0m\x1b[2m                 active LSP servers");
       renderer.info("\x1b[1m/lsp diagnostics\x1b[0m \x1b[2m<f> file diagnostics");
       renderer.info("\x1b[1m/lsp symbols\x1b[0m \x1b[2m<file>   document symbols");

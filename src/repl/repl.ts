@@ -23,6 +23,7 @@ import { runQualityGate } from "./quality-gate.ts";
 import { HashlineEditor } from "../core/hashline.ts";
 import { PlanMode } from "./plan-mode.ts";
 import { FileRefResolver } from "./file-ref.ts";
+import { SessionForkManager } from "../core/session-fork.ts";
 import { getPhaseModel } from "../core/phase-config.ts";
 import { detectRecurringIssues, DEFAULT_QA_CONFIG } from "../core/qa-loop.ts";
 import type { QAIssue, ExecutionPhase } from "../config/types.ts";
@@ -35,6 +36,7 @@ export async function startRepl(
   const conversation = new Conversation();
   const planMode = new PlanMode();
   const fileRef = new FileRefResolver(process.cwd());
+  const forkManager = new SessionForkManager();
   let currentStreamer: AgentStreamer | null = null;
   let currentCancellation: CancellationToken | null = null;
   let hasInteraction = false;
@@ -198,6 +200,7 @@ export async function startRepl(
           orchestrator,
           conversation,
           planMode,
+          forkManager,
           getPinnedAgent: () => pinnedAgent,
           setPinnedAgent: (name) => { pinnedAgent = name; },
         });
