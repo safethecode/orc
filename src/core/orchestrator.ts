@@ -54,6 +54,7 @@ import { PermissionManager } from "./permissions.ts";
 import { HashlineEditor } from "./hashline.ts";
 import { AutoFormatter } from "./formatter.ts";
 import { CustomToolLoader } from "./custom-tools.ts";
+import { FileWatcher } from "./file-watcher.ts";
 import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
@@ -99,6 +100,7 @@ export class Orchestrator {
   private permissions: PermissionManager;
   private formatter: AutoFormatter;
   private customTools: CustomToolLoader;
+  private fileWatcher: FileWatcher;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -124,6 +126,7 @@ export class Orchestrator {
     this.permissions = new PermissionManager(config.permissions);
     this.formatter = new AutoFormatter();
     this.customTools = new CustomToolLoader(process.cwd());
+    this.fileWatcher = new FileWatcher(process.cwd());
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -266,6 +269,12 @@ export class Orchestrator {
 
     // Load custom user-defined tools
     await this.customTools.loadAll();
+
+    // Start file watcher for external change detection
+    this.fileWatcher.on("change", (event: import("./file-watcher.ts").FileChangeEvent) => {
+      eventBus.publish({ type: "file:change", file: event.file, changeType: event.type });
+    });
+    this.fileWatcher.start();
 
     // Ghost commit: snapshot working tree at session start
     this.ghostSha = await createGhostCommit("orc session start");
@@ -656,7 +665,12 @@ export class Orchestrator {
     return this.customTools;
   }
 
+  getFileWatcher(): FileWatcher {
+    return this.fileWatcher;
+  }
+
   async shutdown(): Promise<void> {
+    this.fileWatcher.stop();
     await this.lspManager.shutdownAll();
     this.checkpointManager.stopAll();
     this.health.stop();
