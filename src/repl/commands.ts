@@ -9,6 +9,7 @@ import type { SpecPhase, IdeationDimension } from "../config/types.ts";
 import type { PlanMode } from "./plan-mode.ts";
 import { SessionForkManager } from "../core/session-fork.ts";
 import { ContextCompactor } from "../core/compaction.ts";
+import type { SessionSharer } from "../core/session-share.ts";
 import * as renderer from "./renderer.ts";
 
 export const COMMANDS = [
@@ -17,6 +18,7 @@ export const COMMANDS = [
   "/ownership", "/spawn", "/task", "/mcp",
   "/plan", "/fork", "/lsp", "/pause", "/resume", "/sessions", "/memory",
   "/permissions", "/undo", "/redo",
+  "/theme", "/models", "/plugins", "/share", "/ast",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
@@ -439,6 +441,208 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "theme": {
+      const themeMgr = ctx.orchestrator.getThemeManager();
+      const sub = args[0];
+
+      if (sub === "list") {
+        const themes = themeMgr.list();
+        const current = themeMgr.get().name;
+        process.stdout.write("\n");
+        for (const name of themes) {
+          const mark = name === current ? " \x1b[33m← active\x1b[0m" : "";
+          renderer.info(`  ${name}${mark}`);
+        }
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      if (sub === "preview") {
+        process.stdout.write("\n" + themeMgr.formatPreview() + "\n\n");
+        return "continue";
+      }
+
+      if (sub) {
+        const ok = themeMgr.switch(sub);
+        renderer.info(ok ? `\u2713 theme switched to ${sub}` : `unknown theme: ${sub}`);
+      } else {
+        renderer.info(`current theme: \x1b[1m${themeMgr.get().name}\x1b[0m`);
+        renderer.info("\x1b[2musage: /theme <name> | /theme list | /theme preview\x1b[0m");
+      }
+      return "continue";
+    }
+
+    case "models": {
+      const registry = ctx.orchestrator.getModelRegistry();
+      const sub = args[0];
+
+      if (sub) {
+        const model = registry.get(sub);
+        if (model) {
+          process.stdout.write("\n");
+          renderer.info(registry.formatModelLine(model));
+          if (model.cost.cacheReadPerMillion !== undefined) {
+            renderer.info(`  \x1b[2mcache read: $${model.cost.cacheReadPerMillion}/M\x1b[0m`);
+          }
+          process.stdout.write("\n");
+        } else {
+          renderer.error(`model not found: ${sub}`);
+        }
+        return "continue";
+      }
+
+      const models = registry.list();
+      process.stdout.write("\n");
+      let lastProvider = "";
+      for (const m of models) {
+        if (m.provider !== lastProvider) {
+          lastProvider = m.provider;
+          renderer.info(`\x1b[1m${m.provider}\x1b[0m`);
+        }
+        renderer.info(`  \x1b[2m${registry.formatModelLine(m)}\x1b[0m`);
+      }
+      process.stdout.write("\n");
+      return "continue";
+    }
+
+    case "plugins": {
+      const pluginMgr = ctx.orchestrator.getPluginManager();
+      const sub = args[0];
+
+      if (sub === "reload") {
+        const count = await pluginMgr.reload();
+        renderer.info(`\u2713 reloaded ${count} plugins`);
+        return "continue";
+      }
+
+      if (sub === "enable" || sub === "disable") {
+        const name = args[1];
+        if (!name) { renderer.error(`usage: /plugins ${sub} <name>`); return "continue"; }
+        const ok = pluginMgr.setEnabled(name, sub === "enable");
+        renderer.info(ok ? `\u2713 ${name} ${sub}d` : `plugin not found: ${name}`);
+        return "continue";
+      }
+
+      const list = pluginMgr.list();
+      if (list.length === 0) {
+        renderer.info("no plugins loaded");
+        renderer.info("\x1b[2mPlace plugins in .orchestrator/plugins/ or ~/.orchestrator/plugins/\x1b[0m");
+      } else {
+        process.stdout.write("\n");
+        for (const p of list) {
+          const status = p.enabled ? "\x1b[32m●\x1b[0m" : "\x1b[90m○\x1b[0m";
+          renderer.info(`${status} ${p.name} \x1b[2mv${p.version} (${p.hookCount} hooks)\x1b[0m`);
+          renderer.info(`  \x1b[2m${p.description}\x1b[0m`);
+        }
+        process.stdout.write("\n");
+      }
+      return "continue";
+    }
+
+    case "share": {
+      const sharer = ctx.orchestrator.getSessionSharer();
+      const sub = args[0];
+
+      if (sub === "list") {
+        const shared = await sharer.list();
+        if (shared.length === 0) {
+          renderer.info("no shared sessions");
+        } else {
+          process.stdout.write("\n");
+          for (const s of shared) {
+            renderer.info(`\x1b[2m${s.createdAt}\x1b[0m  \x1b[1m${s.title}\x1b[0m  \x1b[2m${s.filePath}\x1b[0m`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "import") {
+        const filePath = args[1];
+        if (!filePath) { renderer.error("usage: /share import <file>"); return "continue"; }
+        const session = await sharer.import(filePath);
+        if (session) {
+          for (const turn of session.turns) {
+            ctx.conversation.add(turn);
+          }
+          renderer.info(`\u2713 imported ${session.turns.length} turns from "${session.title}"`);
+        } else {
+          renderer.error("failed to import session");
+        }
+        return "continue";
+      }
+
+      // Default: export current session
+      if (ctx.conversation.length === 0) {
+        renderer.info("nothing to share");
+        return "continue";
+      }
+      const title = args.join(" ") || `Session ${new Date().toISOString().slice(0, 10)}`;
+      const turns = ctx.conversation.getTurns();
+      const models = [...new Set(turns.filter(t => t.tier).map(t => t.tier!))];
+      const result = await sharer.share({
+        id: crypto.randomUUID(),
+        title,
+        turns,
+        metadata: {
+          createdAt: new Date().toISOString(),
+          turnCount: turns.length,
+          models,
+          totalCost: 0,
+        },
+      });
+      renderer.info(`\u2713 shared: ${result.filePath}`);
+      return "continue";
+    }
+
+    case "ast": {
+      const astGrep = ctx.orchestrator.getAstGrep();
+      const available = await astGrep.isAvailable();
+      if (!available) {
+        renderer.error("ast-grep (sg) is not installed. Install: npm i -g @ast-grep/cli");
+        return "continue";
+      }
+
+      const sub = args[0];
+      if (!sub) {
+        renderer.info("usage: /ast search <pattern> [--lang <lang>] [--path <path>]");
+        renderer.info("       /ast replace <pattern> <replacement> [--lang <lang>]");
+        return "continue";
+      }
+
+      if (sub === "search") {
+        const pattern = args[1];
+        if (!pattern) { renderer.error("usage: /ast search <pattern>"); return "continue"; }
+        const langIdx = args.indexOf("--lang");
+        const pathIdx = args.indexOf("--path");
+        const language = langIdx >= 0 ? args[langIdx + 1] : undefined;
+        const path = pathIdx >= 0 ? args[pathIdx + 1] : undefined;
+        const matches = await astGrep.search(pattern, { language, path, maxResults: 20 });
+        process.stdout.write("\n" + astGrep.formatResults(matches) + "\n\n");
+        return "continue";
+      }
+
+      if (sub === "replace") {
+        const pattern = args[1];
+        const replacement = args[2];
+        if (!pattern || !replacement) { renderer.error("usage: /ast replace <pattern> <replacement>"); return "continue"; }
+        const langIdx = args.indexOf("--lang");
+        const language = langIdx >= 0 ? args[langIdx + 1] : undefined;
+        const results = await astGrep.replace(pattern, replacement, { language, dryRun: args.includes("--dry-run") });
+        for (const r of results) {
+          if (r.success) {
+            renderer.info(`\u2713 ${r.file}: ${r.replacements} replacements`);
+          } else {
+            renderer.error(`${r.file}: ${r.error}`);
+          }
+        }
+        return "continue";
+      }
+
+      renderer.error(`unknown ast subcommand: ${sub}`);
+      return "continue";
+    }
+
     case "diff": {
       const ghostSha = ctx.orchestrator.getGhostSha();
       if (!ghostSha) {
@@ -842,6 +1046,18 @@ export async function handleCommand(
       renderer.info("\x1b[1m/permissions\x1b[0m\x1b[2m         show permission rules");
       renderer.info("\x1b[1m/undo\x1b[0m\x1b[2m                revert to previous snapshot");
       renderer.info("\x1b[1m/redo\x1b[0m\x1b[2m                restore undone snapshot");
+      renderer.info("\x1b[1m/theme\x1b[0m \x1b[2m<name>         switch color theme");
+      renderer.info("\x1b[1m/theme list\x1b[0m\x1b[2m          available themes");
+      renderer.info("\x1b[1m/theme preview\x1b[0m\x1b[2m       preview current theme colors");
+      renderer.info("\x1b[1m/models\x1b[0m\x1b[2m              model registry & pricing");
+      renderer.info("\x1b[1m/models\x1b[0m \x1b[2m<name>        model details");
+      renderer.info("\x1b[1m/plugins\x1b[0m\x1b[2m             loaded plugins");
+      renderer.info("\x1b[1m/plugins reload\x1b[0m\x1b[2m      reload plugins");
+      renderer.info("\x1b[1m/share\x1b[0m \x1b[2m<title>        export session as markdown");
+      renderer.info("\x1b[1m/share list\x1b[0m\x1b[2m          list shared sessions");
+      renderer.info("\x1b[1m/share import\x1b[0m \x1b[2m<file>  import shared session");
+      renderer.info("\x1b[1m/ast search\x1b[0m \x1b[2m<pattern> structural code search");
+      renderer.info("\x1b[1m/ast replace\x1b[0m \x1b[2m<p> <r>  structural code replace");
       renderer.info("\x1b[1m/diff\x1b[0m\x1b[2m                show changes since session start");
       renderer.info("\x1b[1m/compact\x1b[0m\x1b[2m             compress conversation history");
       renderer.info("\x1b[1m/trust\x1b[0m\x1b[2m               trust project config dir");
