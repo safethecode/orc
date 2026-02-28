@@ -103,6 +103,7 @@ export class AgentStreamer extends EventEmitter {
             // Not JSON — emit raw text
             if (trimmed) {
               result.text += trimmed + "\n";
+              this.emit("text_delta", trimmed + "\n");
               this.emit("text_complete", trimmed + "\n");
             }
           }
@@ -116,6 +117,7 @@ export class AgentStreamer extends EventEmitter {
           this.processMessage(msg, result);
         } catch {
           result.text += buffer.trim() + "\n";
+          this.emit("text_delta", buffer.trim() + "\n");
           this.emit("text_complete", buffer.trim() + "\n");
         }
       }
@@ -123,6 +125,7 @@ export class AgentStreamer extends EventEmitter {
       // Flush any remaining text buffer (safety net)
       if (this.textBuffer) {
         result.text += this.textBuffer;
+        this.emit("text_delta", this.textBuffer);
         this.emit("text_complete", this.textBuffer);
         this.textBuffer = "";
       }
@@ -187,6 +190,7 @@ export class AgentStreamer extends EventEmitter {
       for (const block of msg.message.content) {
         if (block.type === "text" && block.text) {
           result.text += block.text;
+          this.emit("text_delta", block.text);
           this.emit("text_complete", block.text);
         } else if (block.type === "tool_use") {
           this.emit("tool_use", {
@@ -207,6 +211,7 @@ export class AgentStreamer extends EventEmitter {
     if (msg.type === "result") {
       if (this.textBuffer) {
         result.text += this.textBuffer;
+        this.emit("text_delta", this.textBuffer);
         this.emit("text_complete", this.textBuffer);
         this.textBuffer = "";
       }
