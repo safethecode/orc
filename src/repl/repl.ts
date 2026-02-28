@@ -157,6 +157,10 @@ export async function startRepl(
     await orchestrator.shutdown();
   });
 
+  // Capture initial git snapshot for undo/redo
+  const gitSnapshots = orchestrator.getGitSnapshots();
+  gitSnapshots.capture(0, "session-start").catch(() => {});
+
   // Prewarm DNS cache while user reads welcome screen
   orchestrator.getPrewarmer().prewarm().catch(() => {});
 
@@ -566,6 +570,10 @@ async function handleNaturalInput(
       };
       conversation.add(assistantTurn);
       rollout.append({ type: "turn", timestamp: assistantTurn.timestamp, data: assistantTurn });
+
+      // Auto-capture git snapshot after each turn
+      orchestrator.getGitSnapshots().capture(conversation.length, `turn-${conversation.length}`).catch(() => {});
+
       return; // Success — exit retry loop
     } catch (e) {
       lastError = (e as Error).message;

@@ -49,6 +49,7 @@ import { CheckpointManager } from "./checkpoint.ts";
 import { Supervisor } from "./supervisor.ts";
 import { McpClientManager } from "../mcp/client-manager.ts";
 import { LspManager } from "../lsp/index.ts";
+import { GitSnapshotManager } from "./git-snapshot.ts";
 import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
@@ -90,6 +91,7 @@ export class Orchestrator {
   private skillIndex: SkillIndex;
   private mcpManager: McpClientManager;
   private lspManager: LspManager;
+  private gitSnapshots: GitSnapshotManager;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -111,6 +113,7 @@ export class Orchestrator {
     this.skillIndex = new SkillIndex();
     this.mcpManager = new McpClientManager();
     this.lspManager = new LspManager(process.cwd());
+    this.gitSnapshots = new GitSnapshotManager(process.cwd());
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -619,6 +622,10 @@ export class Orchestrator {
 
   getLspManager(): LspManager {
     return this.lspManager;
+  }
+
+  getGitSnapshots(): GitSnapshotManager {
+    return this.gitSnapshots;
   }
 
   async shutdown(): Promise<void> {

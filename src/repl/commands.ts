@@ -13,6 +13,7 @@ export const COMMANDS = [
   "/budget", "/trace", "/agents", "/messages",
   "/ownership", "/spawn", "/task", "/mcp",
   "/lsp", "/pause", "/resume", "/sessions", "/memory",
+  "/undo", "/redo",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
@@ -367,6 +368,48 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "undo": {
+      const snapMgr = ctx.orchestrator.getGitSnapshots();
+      if (!snapMgr.canUndo()) {
+        renderer.info("nothing to undo");
+        return "continue";
+      }
+      const undoResult = await snapMgr.undo();
+      if (undoResult.success) {
+        renderer.info(`\u2713 undone (${undoResult.filesReverted.length} files reverted)`);
+        for (const f of undoResult.filesReverted.slice(0, 5)) {
+          renderer.info(`  \x1b[2m${f}\x1b[0m`);
+        }
+        if (undoResult.filesReverted.length > 5) {
+          renderer.info(`  \x1b[2m... and ${undoResult.filesReverted.length - 5} more\x1b[0m`);
+        }
+      } else {
+        renderer.error(undoResult.error ?? "undo failed");
+      }
+      return "continue";
+    }
+
+    case "redo": {
+      const snapMgr = ctx.orchestrator.getGitSnapshots();
+      if (!snapMgr.canRedo()) {
+        renderer.info("nothing to redo");
+        return "continue";
+      }
+      const redoResult = await snapMgr.redo();
+      if (redoResult.success) {
+        renderer.info(`\u2713 redone (${redoResult.filesReverted.length} files restored)`);
+        for (const f of redoResult.filesReverted.slice(0, 5)) {
+          renderer.info(`  \x1b[2m${f}\x1b[0m`);
+        }
+        if (redoResult.filesReverted.length > 5) {
+          renderer.info(`  \x1b[2m... and ${redoResult.filesReverted.length - 5} more\x1b[0m`);
+        }
+      } else {
+        renderer.error(redoResult.error ?? "redo failed");
+      }
+      return "continue";
+    }
+
     case "diff": {
       const ghostSha = ctx.orchestrator.getGhostSha();
       if (!ghostSha) {
@@ -675,6 +718,8 @@ export async function handleCommand(
       renderer.info("\x1b[1m/resume\x1b[0m\x1b[2m              restore last session");
       renderer.info("\x1b[1m/sessions\x1b[0m\x1b[2m            saved session list");
       renderer.info("\x1b[1m/memory\x1b[0m\x1b[2m              persistent memory");
+      renderer.info("\x1b[1m/undo\x1b[0m\x1b[2m                revert to previous snapshot");
+      renderer.info("\x1b[1m/redo\x1b[0m\x1b[2m                restore undone snapshot");
       renderer.info("\x1b[1m/diff\x1b[0m\x1b[2m                show changes since session start");
       renderer.info("\x1b[1m/compact\x1b[0m\x1b[2m             compress conversation history");
       renderer.info("\x1b[1m/trust\x1b[0m\x1b[2m               trust project config dir");
