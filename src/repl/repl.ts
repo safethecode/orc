@@ -21,6 +21,8 @@ import { scoutMcp, type McpScoutResult } from "../mcp/mcp-scout.ts";
 import { ScoutCache } from "./scout-cache.ts";
 import { runQualityGate } from "./quality-gate.ts";
 import { HashlineEditor } from "../core/hashline.ts";
+import { ContextCompactor } from "../core/compaction.ts";
+import { RuntimeFallbackManager } from "../core/runtime-fallback.ts";
 import { PlanMode } from "./plan-mode.ts";
 import { FileRefResolver } from "./file-ref.ts";
 import { SessionForkManager } from "../core/session-fork.ts";
@@ -44,6 +46,18 @@ export async function startRepl(
   let currentCancellation: CancellationToken | null = null;
   let hasInteraction = false;
   let pinnedAgent: string | null = null;
+
+  // File watcher consumer: track recent external file changes
+  const recentFileChanges: string[] = [];
+  eventBus.on("file:change", (e: any) => {
+    const file = (e as { file: string }).file;
+    recentFileChanges.push(file);
+    if (recentFileChanges.length > 20) recentFileChanges.shift();
+    // Show notification only when not mid-generation
+    if (!currentStreamer?.isRunning) {
+      renderer.info(`\x1b[2mfile changed externally: ${file.split("/").pop()}\x1b[0m`);
+    }
+  });
 
   // Deferred rollout: only create file when user actually sends a message
   const rollout = new RolloutRecorder(
@@ -234,6 +248,15 @@ export async function startRepl(
         break;
       }
 
+      // Multi-line input: backslash continuation (\ at end of line)
+      while (input.trimEnd().endsWith("\\")) {
+        input = input.trimEnd().slice(0, -1) + "\n";
+        try {
+          const nextLine = await rl.question("\x1b[2m...\x1b[0m ");
+          input += nextLine;
+        } catch { break; }
+      }
+
       const trimmed = input.trim();
       if (!trimmed) continue;
 
@@ -286,8 +309,25 @@ export async function startRepl(
       if (trimmed.includes("@")) {
         const refResult = await fileRef.resolve(trimmed);
         if (refResult.filesIncluded.length > 0) {
-          resolvedInput = refResult.resolvedInput;
-          renderer.info(`\x1b[2m@files: ${refResult.filesIncluded.join(", ")}\x1b[0m`);
+          // Annotate resolved file content with hashline anchors
+          let annotated = refResult.resolvedInput;
+          for (const filePath of refResult.filesIncluded) {
+            try {
+              const fileObj = Bun.file(filePath);
+              if (await fileObj.exists()) {
+                const content = await fileObj.text();
+                const hashAnnotated = HashlineEditor.formatAnnotated(HashlineEditor.annotate(content));
+                // Replace plain content block with hashline-annotated version
+                const plainBlock = "```\n" + content + "\n```";
+                const hashBlock = "```\n" + hashAnnotated + "\n```";
+                if (annotated.includes(plainBlock)) {
+                  annotated = annotated.replace(plainBlock, hashBlock);
+                }
+              }
+            } catch { /* skip annotation on error */ }
+          }
+          resolvedInput = annotated;
+          renderer.info(`\x1b[2m@files: ${refResult.filesIncluded.join(", ")} (hashline annotated)\x1b[0m`);
         }
       }
 
@@ -309,6 +349,8 @@ export async function startRepl(
         mcpScoutCache,
         skillScoutCache,
         planMode,
+        forkManager,
+        recentFileChanges,
       );
       hasInteraction = true;
       currentStreamer = null;
@@ -384,6 +426,8 @@ async function handleNaturalInput(
   mcpScoutCache: ScoutCache,
   skillScoutCache: ScoutCache,
   planMode?: PlanMode,
+  forkManager?: SessionForkManager,
+  recentFileChanges?: string[],
 ): Promise<void> {
   let route: RouteResult;
   let agentName: string;
@@ -402,6 +446,15 @@ async function handleNaturalInput(
     const costEstimator = orchestrator.getCostEstimator();
     const costEst = costEstimator.estimate(input);
     route = routeTask(input, config.routing, { costEstimate: costEst });
+
+    // Category-based tier refinement: if category router suggests a different tier, apply it
+    const categoryRouter = orchestrator.getCategoryRouter();
+    const category = categoryRouter.classify(input);
+    const categoryConfig = categoryRouter.getCategory(category);
+    if (categoryConfig && categoryConfig.tier !== route.model) {
+      route.model = categoryConfig.tier;
+      route.reason += ` [category: ${category}]`;
+    }
 
     // Budget enforcement (only when user explicitly enables)
     if (config.orchestrator.budgetEnabled && route.multiAgent
@@ -423,7 +476,7 @@ async function handleNaturalInput(
   }
 
   if (route.multiAgent) {
-    await handleMultiAgent(input, orchestrator, config, conversation, rollout, cancellation, onStreamer, mcpScoutCache, skillScoutCache);
+    await handleMultiAgent(input, orchestrator, config, conversation, rollout, cancellation, onStreamer, mcpScoutCache, skillScoutCache, forkManager);
     return;
   }
 
@@ -496,6 +549,16 @@ async function handleNaturalInput(
   // Restart spinner for prompt building + agent execution
   if (hasScoutOutput) renderer.startSpinner(agentName, route.model);
 
+  // Auto-compact if context is getting too large
+  const compactor = new ContextCompactor();
+  if (compactor.needsCompaction(conversation.getTurns())) {
+    const { turns: compactedTurns, result: compactionResult } = compactor.compact(conversation.getTurns());
+    conversation.clear();
+    for (const turn of compactedTurns) conversation.add(turn);
+    renderer.info(`\x1b[2mauto-compacted: ${compactionResult.originalTurns} → ${compactionResult.compactedTurns} turns (~${compactionResult.compactedTokens.toLocaleString()} tokens)\x1b[0m`);
+    eventBus.publish({ type: "context:compact", before: compactionResult.originalTokens, after: compactionResult.compactedTokens });
+  }
+
   // Set tier-specific token budget before building prompt
   conversation.setTokenBudget(TIER_BUDGETS[route.model] ?? TIER_BUDGETS.sonnet);
   const fullPrompt = conversation.buildPrompt(input);
@@ -507,6 +570,7 @@ async function handleNaturalInput(
     timestamp: new Date().toISOString(),
   };
   conversation.add(userTurn);
+  forkManager?.addTurn(userTurn);
   rollout.append({ type: "turn", timestamp: userTurn.timestamp, data: userTurn });
 
   const harness = buildHarness({
@@ -566,10 +630,32 @@ async function handleNaturalInput(
     systemPrompt += "\n\nPermission rules (DENY): " + denyRules.map(r => `${r.tool}: ${r.pattern}`).join(", ");
   }
 
-  // Inject LSP capabilities context
-  const lspActive = orchestrator.getLspManager().listActive();
+  // Inject LSP capabilities + diagnostics for mentioned files
+  const lspMgr = orchestrator.getLspManager();
+  const lspActive = lspMgr.listActive();
   if (lspActive.length > 0) {
-    systemPrompt += `\n\nLSP servers active: ${lspActive.join(", ")}. You can use go-to-definition, find-references, and diagnostics for structural code navigation.`;
+    systemPrompt += `\n\nLSP servers active: ${lspActive.join(", ")}. Use /lsp diagnostics <file> or /lsp symbols <file> for structural code navigation.`;
+    // Auto-inject diagnostics for files mentioned in the input
+    const filePatterns = input.match(/[\w\-./]+\.\w{1,6}/g) ?? [];
+    const diagLines: string[] = [];
+    for (const pattern of filePatterns.slice(0, 5)) {
+      try {
+        const diags = await lspMgr.getDiagnostics(pattern);
+        for (const d of diags.slice(0, 5)) {
+          diagLines.push(`${d.severity} ${d.file}:${d.line + 1}:${d.column + 1} ${d.message}`);
+        }
+      } catch { /* LSP not started for this language */ }
+    }
+    if (diagLines.length > 0) {
+      systemPrompt += `\n\nCurrent LSP diagnostics:\n${diagLines.join("\n")}`;
+    }
+  }
+
+  // Inject recent file changes from external editor/IDE
+  if (recentFileChanges && recentFileChanges.length > 0) {
+    const uniqueChanges = [...new Set(recentFileChanges)].slice(-10);
+    systemPrompt += `\n\nRecently changed files (external): ${uniqueChanges.map(f => f.split("/").pop()).join(", ")}. These files may have been modified outside the agent.`;
+    recentFileChanges.length = 0; // Clear after injecting
   }
 
   // Inject custom tools context
@@ -644,6 +730,7 @@ async function handleNaturalInput(
   let currentProviderConfig = providerConfig;
   let currentCmd = cmd;
   let lastError: string | null = null;
+  let lastSuccessText: string | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (cancellation.cancelled) break;
@@ -692,10 +779,20 @@ async function handleNaturalInput(
       const inp = tool.input ?? {};
       const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
 
-      // Permission check on tool use
+      // Permission enforcement on tool use
       const permAction = orchestrator.getPermissions().check(tool.name, detail ?? "", agentName);
       if (permAction === "deny") {
-        renderer.error(`permission denied: ${tool.name} ${detail ?? ""}`);
+        renderer.error(`\x1b[1m⛔ DENIED:\x1b[0m ${tool.name} ${detail ?? ""} — violates permission rules`);
+      } else if (permAction === "ask") {
+        renderer.info(`\x1b[33m⚠ UNCONFIRMED:\x1b[0m ${tool.name} ${detail ?? ""} — requires approval`);
+      }
+
+      // Plan mode enforcement: warn on disallowed tool use
+      if (planMode?.isActive()) {
+        const allowed = planMode.isToolAllowed(tool.name, tool.input ?? {});
+        if (!allowed) {
+          renderer.error(`\x1b[1m⛔ PLAN MODE:\x1b[0m ${tool.name} blocked — read-only mode active`);
+        }
       }
 
       // Doom loop detection
@@ -720,6 +817,18 @@ async function handleNaturalInput(
             }
           } catch { /* ignore comment check errors */ }
         })();
+      }
+
+      // Custom tool execution: if tool name matches a loaded custom tool, execute it
+      const customTool = orchestrator.getCustomTools().get(tool.name);
+      if (customTool) {
+        orchestrator.getCustomTools().execute(tool.name, inp as Record<string, unknown>, {
+          projectDir: process.cwd(),
+          agentName,
+          sessionId: "repl",
+        }).then(result => {
+          renderer.info(`\x1b[2mcustom tool ${tool.name}: ${result.slice(0, 200)}\x1b[0m`);
+        }).catch(() => {});
       }
 
       if (boxOpen) {
@@ -771,19 +880,109 @@ async function handleNaturalInput(
         timestamp: new Date().toISOString(),
       };
       conversation.add(assistantTurn);
+      forkManager?.addTurn(assistantTurn);
       rollout.append({ type: "turn", timestamp: assistantTurn.timestamp, data: assistantTurn });
 
       // Auto-capture git snapshot after each turn
       orchestrator.getGitSnapshots().capture(conversation.length, `turn-${conversation.length}`).catch(() => {});
 
-      return; // Success — exit retry loop
+      // Reset runtime fallback attempts on success
+      orchestrator.getRuntimeFallback().resetAttempts(agentName);
+
+      lastSuccessText = result.text;
+      break; // Success — exit retry loop
     } catch (e) {
       lastError = (e as Error).message;
       renderer.stopSpinner();
       if (boxOpen) renderer.endBox();
+
+      // Runtime fallback: parse HTTP status and decide action
+      const httpStatus = RuntimeFallbackManager.parseHttpStatus(lastError);
+      if (httpStatus) {
+        const fallbackAction = orchestrator.getRuntimeFallback().handleError(
+          agentName, httpStatus, currentProfile.provider, currentProfile.model as string,
+        );
+        if (fallbackAction) {
+          if (fallbackAction.action === "wait_retry" && fallbackAction.waitMs) {
+            renderer.info(`\x1b[2mHTTP ${httpStatus}: waiting ${fallbackAction.waitMs}ms before retry\x1b[0m`);
+            await new Promise(r => setTimeout(r, fallbackAction.waitMs));
+          } else if (fallbackAction.action === "switch_provider" || fallbackAction.action === "switch_model") {
+            renderer.info(`\x1b[2mHTTP ${httpStatus}: switching to ${fallbackAction.provider}/${fallbackAction.model}\x1b[0m`);
+          }
+        }
+      }
+
       if (attempt === maxAttempts - 1) {
         renderer.error(`All ${maxAttempts} attempts failed: ${lastError}`);
       }
+    }
+  }
+
+  // Ralph Loop: autonomous continuation when task appears incomplete
+  if (lastSuccessText && !cancellation.cancelled) {
+    const ralph = orchestrator.getRalphLoop();
+    const ralphResult = await ralph.run(input, async (iteration, previousOutput) => {
+      if (iteration === 0) return lastSuccessText!;
+
+      // Build continuation prompt and re-run agent
+      const contPrompt = previousOutput ?? `Continue working on: ${input}`;
+      const contTurn = { role: "user" as const, content: contPrompt, timestamp: new Date().toISOString() };
+      conversation.add(contTurn);
+      forkManager?.addTurn(contTurn);
+
+      renderer.info(`\x1b[2mauto-loop iteration ${iteration + 1}: continuing...\x1b[0m`);
+      renderer.startSpinner(agentName, route.model);
+
+      const contCmd = buildCommand(currentProviderConfig, currentProfile, {
+        prompt: contPrompt,
+        model: route.model,
+        systemPrompt,
+        maxTurns: currentProfile.maxTurns,
+        mcpConfig: mcpConfigPath,
+      });
+
+      const contStreamer = new AgentStreamer();
+      onStreamer(contStreamer);
+      let contBoxOpen = false;
+
+      contStreamer.on("text_delta", (delta: string) => {
+        if (!contBoxOpen) {
+          renderer.stopSpinner();
+          renderer.startBox(route.model);
+          contBoxOpen = true;
+        }
+        renderer.text(delta);
+      });
+      contStreamer.on("tool_use", (tool: ToolUseEvent) => {
+        const inp = tool.input ?? {};
+        const detail = (inp.file_path as string) ?? (inp.command as string) ?? undefined;
+        if (contBoxOpen) renderer.toolUse(tool.name, detail, true);
+        else renderer.updateSpinner(`${tool.name} ${detail ? (detail as string).split("/").pop() : ""}`.trim());
+      });
+
+      const contResult = await contStreamer.run(contCmd, cancellation.signal);
+      renderer.stopSpinner();
+      if (contBoxOpen) renderer.endBox();
+
+      if (contResult.inputTokens > 0 || contResult.outputTokens > 0) {
+        renderer.cost(contResult.costUsd, contResult.inputTokens, contResult.outputTokens, 0);
+      }
+
+      const assistantTurn = {
+        role: "assistant" as const,
+        content: contResult.text,
+        agentName,
+        tier: route.model,
+        timestamp: new Date().toISOString(),
+      };
+      conversation.add(assistantTurn);
+      forkManager?.addTurn(assistantTurn);
+
+      return contResult.text;
+    });
+
+    if (ralphResult.totalIterations > 1) {
+      renderer.info(`\x1b[2mauto-loop: ${ralphResult.totalIterations} iterations, ${ralphResult.reason}\x1b[0m`);
     }
   }
 }
@@ -798,6 +997,7 @@ async function handleMultiAgent(
   onStreamer: (s: AgentStreamer) => void,
   mcpScoutCache: ScoutCache,
   skillScoutCache: ScoutCache,
+  forkManager?: SessionForkManager,
 ): Promise<void> {
   const taskId = `repl-${Date.now().toString(36)}`;
 
@@ -922,7 +1122,23 @@ async function handleMultiAgent(
   // Record user turn
   const userTurn = { role: "user" as const, content: input, timestamp: new Date().toISOString() };
   conversation.add(userTurn);
+  forkManager?.addTurn(userTurn);
   rollout.append({ type: "turn", timestamp: userTurn.timestamp, data: userTurn });
+
+  // Tmux visualization: create panes for parallel agents
+  const tmuxViz = orchestrator.getTmuxViz();
+  const tmuxAvailable = await tmuxViz.isAvailable();
+  if (tmuxAvailable) {
+    await tmuxViz.createSession(`orc-${taskId.slice(-6)}`);
+    for (const st of decomposition.subtasks) {
+      const pane = await tmuxViz.createPane(`${st.agentRole}-${st.id.slice(-4)}`);
+      if (pane) {
+        await tmuxViz.sendToPane(pane.paneId, `# ${st.agentRole}: ${st.prompt.slice(0, 60)}...`);
+      }
+    }
+    await tmuxViz.applyLayout();
+    renderer.info(`\x1b[2mtmux: ${decomposition.subtasks.length} panes created\x1b[0m`);
+  }
 
   // 5. Create ResultCollector + ContextPropagator + QA tracking
   const collector = new ResultCollector(taskId);
@@ -988,18 +1204,28 @@ async function handleMultiAgent(
     tierCounts.set(t, (tierCounts.get(t) ?? 0) + 1);
   }
   const dominantTier = ([...tierCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "sonnet") as ModelTier;
-  conversation.add({
+  const multiTurn = {
     role: "assistant" as const,
     content: aggregated.mergedOutput,
     agentName: "multi-agent",
     tier: dominantTier,
     timestamp: new Date().toISOString(),
-  });
+  };
+  conversation.add(multiTurn);
+  forkManager?.addTurn(multiTurn);
   rollout.append({
     type: "turn",
     timestamp: new Date().toISOString(),
     data: { role: "assistant", content: aggregated.mergedOutput },
   });
+
+  // Auto-capture git snapshot after multi-agent completion
+  orchestrator.getGitSnapshots().capture(conversation.length, `multi-turn-${conversation.length}`).catch(() => {});
+
+  // Tmux cleanup after multi-agent completion
+  if (tmuxAvailable) {
+    await tmuxViz.cleanup().catch(() => {});
+  }
 }
 
 async function executeSubtask(
@@ -1269,11 +1495,29 @@ async function executeSubtask(
       }
 
       workerBus.unregisterWorker(agentName);
+      orchestrator.getRuntimeFallback().resetAttempts(agentName);
       return; // Success — exit retry loop
     } catch (e) {
       lastError = (e as Error).message;
       renderer.stopSpinner();
       if (boxOpen) renderer.endBox();
+
+      // Runtime fallback: parse HTTP status and decide action
+      const httpStatus = RuntimeFallbackManager.parseHttpStatus(lastError);
+      if (httpStatus) {
+        const fallbackAction = orchestrator.getRuntimeFallback().handleError(
+          agentName, httpStatus, currentProvider, currentModel,
+        );
+        if (fallbackAction?.action === "wait_retry" && fallbackAction.waitMs) {
+          renderer.info(`\x1b[2mHTTP ${httpStatus}: waiting ${fallbackAction.waitMs}ms before retry\x1b[0m`);
+          await new Promise(r => setTimeout(r, fallbackAction.waitMs));
+        } else if (fallbackAction && (fallbackAction.action === "switch_provider" || fallbackAction.action === "switch_model")) {
+          currentProvider = fallbackAction.provider as ProviderName;
+          currentModel = fallbackAction.model;
+          renderer.info(`\x1b[2mHTTP ${httpStatus}: switching to ${fallbackAction.provider}/${fallbackAction.model}\x1b[0m`);
+        }
+      }
+
       if (attempt === maxAttempts - 1) {
         renderer.error(`All ${maxAttempts} attempts failed: ${lastError}`);
       }
