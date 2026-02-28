@@ -147,6 +147,12 @@ export async function startRepl(
     renderer.mcpStatus(mcpServers, mcpManager.getToolCount());
   }
 
+  // Show detected formatters
+  const detectedFormatters = orchestrator.getFormatter().listDetected();
+  if (detectedFormatters.length > 0) {
+    renderer.info(`\x1b[2mFormatters: ${detectedFormatters.join(", ")}\x1b[0m`);
+  }
+
   // Show last session hint if available
   const lastSnapshot = orchestrator.getStore().getLatestSnapshot();
   if (lastSnapshot) {
@@ -566,6 +572,11 @@ async function handleNaturalInput(
       const permAction = orchestrator.getPermissions().check(tool.name, detail ?? "", agentName);
       if (permAction === "deny") {
         renderer.error(`permission denied: ${tool.name} ${detail ?? ""}`);
+      }
+
+      // Auto-format after write/edit tool use
+      if ((tool.name === "write" || tool.name === "edit") && inp.file_path) {
+        orchestrator.getFormatter().format(inp.file_path as string).catch(() => {});
       }
 
       if (boxOpen) {

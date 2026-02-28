@@ -52,6 +52,7 @@ import { LspManager } from "../lsp/index.ts";
 import { GitSnapshotManager } from "./git-snapshot.ts";
 import { PermissionManager } from "./permissions.ts";
 import { HashlineEditor } from "./hashline.ts";
+import { AutoFormatter } from "./formatter.ts";
 import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
@@ -95,6 +96,7 @@ export class Orchestrator {
   private lspManager: LspManager;
   private gitSnapshots: GitSnapshotManager;
   private permissions: PermissionManager;
+  private formatter: AutoFormatter;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -118,6 +120,7 @@ export class Orchestrator {
     this.lspManager = new LspManager(process.cwd());
     this.gitSnapshots = new GitSnapshotManager(process.cwd());
     this.permissions = new PermissionManager(config.permissions);
+    this.formatter = new AutoFormatter();
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -254,6 +257,9 @@ export class Orchestrator {
     }
 
     this.health.start();
+
+    // Detect available formatters for auto-formatting
+    await this.formatter.detect(process.cwd());
 
     // Ghost commit: snapshot working tree at session start
     this.ghostSha = await createGhostCommit("orc session start");
@@ -634,6 +640,10 @@ export class Orchestrator {
 
   getPermissions(): PermissionManager {
     return this.permissions;
+  }
+
+  getFormatter(): AutoFormatter {
+    return this.formatter;
   }
 
   async shutdown(): Promise<void> {
