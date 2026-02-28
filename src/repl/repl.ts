@@ -286,20 +286,16 @@ async function handleNaturalInput(
   // Show agent header
   renderer.agentHeader(agentName, route.model, route.reason);
 
-  // Dynamic skill matching (before spinner — dim output must not overlap spinner)
-  // Build match context from conversation history + current input
+  // Parallel: MCP scout (Haiku) + skill matching (token-based, sync) + skill resolve (I/O)
+  const skillIndex = orchestrator.getSkillIndex();
   const recentTurns = conversation.getTurns().slice(-6);
   const matchContext = recentTurns.map(t => t.content).join(" ") + " " + input;
 
-  const skillIndex = orchestrator.getSkillIndex();
   const dynamicMatched = skillIndex.match(matchContext, 3);
-
-  // Profile explicit skills as guaranteed baseline
   const baselineEntries = (profile.skills ?? [])
     .map(name => skillIndex.getByName(name))
     .filter((e): e is NonNullable<typeof e> => e != null);
 
-  // Merge: baseline first, then dynamic (deduped)
   const seen = new Set<string>();
   const allMatched: typeof baselineEntries = [];
   for (const entry of [...baselineEntries, ...dynamicMatched]) {
@@ -309,10 +305,23 @@ async function handleNaturalInput(
     }
   }
 
-  let skillBodies: string[] = [];
-  if (allMatched.length > 0) {
-    skillBodies = await skillIndex.resolve(allMatched);
+  // Run MCP scout and skill resolve in parallel
+  const [mcpScoutResult, skillBodies] = await Promise.all([
+    scoutMcp(input, cancellation.signal),
+    allMatched.length > 0 ? skillIndex.resolve(allMatched) : Promise.resolve([]),
+  ]);
+
+  // Render scout results
+  if (allMatched.length > 0 && skillBodies.length > 0) {
     renderer.dim(`  skills: ${allMatched.map(s => s.name).join(", ")}`);
+  }
+
+  const mcpMgr = orchestrator.getMcpManager();
+  if (mcpScoutResult.needed && mcpScoutResult.servers.length > 0) {
+    const connected = await mcpMgr.connectOnDemand(mcpScoutResult.servers);
+    if (connected.length > 0) {
+      renderer.mcpScout(connected, mcpScoutResult.durationMs);
+    }
   }
 
   // Start spinner while waiting for response
@@ -367,16 +376,6 @@ async function handleNaturalInput(
     systemPrompt = systemPrompt
       ? `${systemPrompt}\nKeep responses concise and under 200 words.`
       : "Keep responses concise and under 200 words.";
-  }
-
-  // MCP server discovery (Haiku-powered)
-  const mcpMgr = orchestrator.getMcpManager();
-  const mcpScoutResult = await scoutMcp(input, cancellation.signal);
-  if (mcpScoutResult.needed && mcpScoutResult.servers.length > 0) {
-    const connected = await mcpMgr.connectOnDemand(mcpScoutResult.servers);
-    if (connected.length > 0) {
-      renderer.mcpScout(connected, mcpScoutResult.durationMs);
-    }
   }
 
   // MCP integration: CLI passthrough for Claude, prompt injection for others
@@ -661,12 +660,25 @@ async function executeSubtask(
 
   renderer.agentHeader(agentName, modelTier, subtask.agentRole);
 
-  // Haiku-powered skill discovery
-  const scout = await scoutSkills(subtask, orchestrator.getSkillIndex(), cancellation.signal);
+  // Parallel Haiku scout: skill + MCP discovery at the same time
+  const [skillScoutResult, mcpScoutResult] = await Promise.all([
+    scoutSkills(subtask, orchestrator.getSkillIndex(), cancellation.signal),
+    scoutMcp(subtask.prompt, cancellation.signal),
+  ]);
+
+  // Render scout results (skills first, then MCP)
   let skillBodies: string[] = [];
-  if (scout.needed && scout.skills.length > 0) {
-    skillBodies = await orchestrator.getSkillIndex().resolve(scout.skills);
-    renderer.skillScout(scout.skills.map(s => s.name), scout.durationMs);
+  if (skillScoutResult.needed && skillScoutResult.skills.length > 0) {
+    skillBodies = await orchestrator.getSkillIndex().resolve(skillScoutResult.skills);
+    renderer.skillScout(skillScoutResult.skills.map(s => s.name), skillScoutResult.durationMs);
+  }
+
+  const mcpMgr = orchestrator.getMcpManager();
+  if (mcpScoutResult.needed && mcpScoutResult.servers.length > 0) {
+    const connected = await mcpMgr.connectOnDemand(mcpScoutResult.servers);
+    if (connected.length > 0) {
+      renderer.mcpScout(connected, mcpScoutResult.durationMs);
+    }
   }
 
   // System prompt from harness
@@ -691,16 +703,6 @@ async function executeSubtask(
       .map((r, i) => `[Previous subtask ${i + 1} result]:\n${r.slice(0, 2000)}`)
       .join("\n\n");
     systemPrompt += `\n\n${ctx}`;
-  }
-
-  // MCP server discovery for subtasks
-  const mcpMgr = orchestrator.getMcpManager();
-  const mcpScoutResult = await scoutMcp(subtask.prompt, cancellation.signal);
-  if (mcpScoutResult.needed && mcpScoutResult.servers.length > 0) {
-    const connected = await mcpMgr.connectOnDemand(mcpScoutResult.servers);
-    if (connected.length > 0) {
-      renderer.mcpScout(connected, mcpScoutResult.durationMs);
-    }
   }
 
   // MCP integration: CLI passthrough for Claude, prompt injection for others
