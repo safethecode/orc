@@ -88,6 +88,7 @@ export interface OrchestratorConfig {
   routing: RoutingConfig;
   supervisor?: SupervisorConfig;
   mcp?: McpConfig;
+  permissions?: import("../core/permissions.ts").PermissionConfig;
 }
 
 // ── Agent Profile ─────────────────────────────────────────────────────

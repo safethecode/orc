@@ -431,6 +431,15 @@ async function handleNaturalInput(
     systemPrompt += "\n\n" + orchestrator.getDecisions().formatForPrompt(decisions);
   }
 
+  // Inject permission rules context
+  const permMgr = orchestrator.getPermissions();
+  const bashRules = permMgr.getRulesForTool("bash");
+  const editRules = permMgr.getRulesForTool("edit");
+  const denyRules = [...bashRules, ...editRules].filter(r => r.action === "deny");
+  if (denyRules.length > 0) {
+    systemPrompt += "\n\nPermission rules (DENY): " + denyRules.map(r => `${r.tool}: ${r.pattern}`).join(", ");
+  }
+
   // Inject LSP capabilities context
   const lspActive = orchestrator.getLspManager().listActive();
   if (lspActive.length > 0) {
@@ -520,6 +529,13 @@ async function handleNaturalInput(
     streamer.on("tool_use", (tool: ToolUseEvent) => {
       const inp = tool.input ?? {};
       const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
+
+      // Permission check on tool use
+      const permAction = orchestrator.getPermissions().check(tool.name, detail ?? "", agentName);
+      if (permAction === "deny") {
+        renderer.error(`permission denied: ${tool.name} ${detail ?? ""}`);
+      }
+
       if (boxOpen) {
         renderer.toolUse(tool.name, detail, true);
       } else {

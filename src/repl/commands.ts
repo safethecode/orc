@@ -13,7 +13,7 @@ export const COMMANDS = [
   "/budget", "/trace", "/agents", "/messages",
   "/ownership", "/spawn", "/task", "/mcp",
   "/lsp", "/pause", "/resume", "/sessions", "/memory",
-  "/undo", "/redo",
+  "/permissions", "/undo", "/redo",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
@@ -368,6 +368,30 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "permissions": {
+      const permMgr = ctx.orchestrator.getPermissions();
+      const permConfig = permMgr.getConfig();
+      process.stdout.write("\n");
+      renderer.info("\x1b[1mDefaults:\x1b[0m");
+      for (const [tool, action] of Object.entries(permConfig.defaults)) {
+        const color = action === "allow" ? "\x1b[32m" : action === "deny" ? "\x1b[31m" : "\x1b[33m";
+        renderer.info(`  ${color}${action}\x1b[0m  ${tool}`);
+      }
+      if (permConfig.rules.length > 0) {
+        renderer.info("\x1b[1mRules:\x1b[0m");
+        for (const rule of permConfig.rules) {
+          const color = rule.action === "allow" ? "\x1b[32m" : rule.action === "deny" ? "\x1b[31m" : "\x1b[33m";
+          renderer.info(`  ${color}${rule.action}\x1b[0m  ${rule.tool}: ${rule.pattern}`);
+        }
+      }
+      const overrides = Object.keys(permConfig.agentOverrides);
+      if (overrides.length > 0) {
+        renderer.info("\x1b[1mAgent overrides:\x1b[0m " + overrides.join(", "));
+      }
+      process.stdout.write("\n");
+      return "continue";
+    }
+
     case "undo": {
       const snapMgr = ctx.orchestrator.getGitSnapshots();
       if (!snapMgr.canUndo()) {
@@ -718,6 +742,7 @@ export async function handleCommand(
       renderer.info("\x1b[1m/resume\x1b[0m\x1b[2m              restore last session");
       renderer.info("\x1b[1m/sessions\x1b[0m\x1b[2m            saved session list");
       renderer.info("\x1b[1m/memory\x1b[0m\x1b[2m              persistent memory");
+      renderer.info("\x1b[1m/permissions\x1b[0m\x1b[2m         show permission rules");
       renderer.info("\x1b[1m/undo\x1b[0m\x1b[2m                revert to previous snapshot");
       renderer.info("\x1b[1m/redo\x1b[0m\x1b[2m                restore undone snapshot");
       renderer.info("\x1b[1m/diff\x1b[0m\x1b[2m                show changes since session start");
