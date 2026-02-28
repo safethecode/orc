@@ -20,6 +20,7 @@ export const COMMANDS = [
   "/permissions", "/undo", "/redo",
   "/theme", "/models", "/plugins", "/share", "/ast",
   "/pipeline", "/boulder", "/notepad",
+  "/oauth", "/category",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
@@ -777,6 +778,91 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "oauth": {
+      const oauth = ctx.orchestrator.getOAuthMcp();
+      const sub = args[0];
+
+      if (!sub) {
+        renderer.info("usage: /oauth authorize <server-name> --auth-url <url> --token-url <url>");
+        renderer.info("       /oauth status <server-name>");
+        return "continue";
+      }
+
+      if (sub === "authorize") {
+        const serverName = args[1];
+        if (!serverName) { renderer.error("usage: /oauth authorize <server-name> --auth-url <url> --token-url <url>"); return "continue"; }
+        const authUrlIdx = args.indexOf("--auth-url");
+        const tokenUrlIdx = args.indexOf("--token-url");
+        if (authUrlIdx < 0 || tokenUrlIdx < 0) { renderer.error("must provide --auth-url and --token-url"); return "continue"; }
+        const authUrl = args[authUrlIdx + 1];
+        const tokenUrl = args[tokenUrlIdx + 1];
+        if (!authUrl || !tokenUrl) { renderer.error("invalid urls"); return "continue"; }
+
+        try {
+          const { url, token } = await oauth.authorize(serverName, { authorizationUrl: authUrl, tokenUrl });
+          renderer.info(`\x1b[2mOpen this URL to authorize:\x1b[0m`);
+          renderer.info(`\x1b[1m${url}\x1b[0m`);
+          renderer.info("\x1b[2mwaiting for callback...\x1b[0m");
+          const result = await token;
+          renderer.info(`\u2713 authorized ${serverName} (expires ${new Date(result.expiresAt).toISOString()})`);
+        } catch (e) {
+          renderer.error((e as Error).message);
+        }
+        return "continue";
+      }
+
+      if (sub === "status") {
+        const serverName = args[1];
+        if (!serverName) { renderer.error("usage: /oauth status <server-name>"); return "continue"; }
+        const token = await oauth.getToken(serverName);
+        if (token) {
+          const expired = Date.now() > token.expiresAt;
+          const status = expired ? "\x1b[31mexpired\x1b[0m" : "\x1b[32mactive\x1b[0m";
+          renderer.info(`${serverName}: ${status} (expires ${new Date(token.expiresAt).toISOString()})`);
+        } else {
+          renderer.info(`${serverName}: not authorized`);
+        }
+        return "continue";
+      }
+
+      renderer.error(`unknown oauth subcommand: ${sub}`);
+      return "continue";
+    }
+
+    case "category": {
+      const categoryRouter = ctx.orchestrator.getCategoryRouter();
+      const sub = args[0];
+
+      if (sub === "list") {
+        const categories = categoryRouter.listCategories();
+        process.stdout.write("\n");
+        for (const cat of categories) {
+          renderer.info(`\x1b[1m${cat.name}\x1b[0m \x1b[2m→ ${cat.tier} (${cat.description})\x1b[0m`);
+        }
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      if (sub === "classify") {
+        const prompt = args.slice(1).join(" ");
+        if (!prompt) { renderer.error("usage: /category classify <prompt>"); return "continue"; }
+        const result = categoryRouter.classify(prompt);
+        const config = categoryRouter.getCategory(result);
+        renderer.info(`category: \x1b[1m${result}\x1b[0m → ${config?.tier ?? "unknown"} (${config?.description ?? ""})`);
+        return "continue";
+      }
+
+      // Default: show current categories
+      const categories = categoryRouter.listCategories();
+      process.stdout.write("\n");
+      for (const cat of categories) {
+        renderer.info(`\x1b[1m${cat.name}\x1b[0m \x1b[2m→ ${cat.tier} (${cat.description})\x1b[0m`);
+      }
+      renderer.info("\n\x1b[2musage: /category list | /category classify <prompt>\x1b[0m");
+      process.stdout.write("\n");
+      return "continue";
+    }
+
     case "diff": {
       const ghostSha = ctx.orchestrator.getGhostSha();
       if (!ghostSha) {
@@ -1005,8 +1091,15 @@ export async function handleCommand(
         const branches = ctx.forkManager.listBranches();
         const target = branches.find(b => b.label === branchId || b.id.startsWith(branchId));
         if (!target) { renderer.error(`branch not found: ${branchId}`); return "continue"; }
-        ctx.forkManager.switchTo(target.id);
-        renderer.info(`\u2713 switched to ${target.label}`);
+        const switched = ctx.forkManager.switchTo(target.id);
+        if (switched) {
+          // Sync conversation with branch turns
+          ctx.conversation.clear();
+          for (const turn of switched.turns) {
+            ctx.conversation.add(turn);
+          }
+          renderer.info(`\u2713 switched to ${target.label} (${switched.turns.length} turns)`);
+        }
         return "continue";
       }
 
@@ -1199,6 +1292,10 @@ export async function handleCommand(
       renderer.info("\x1b[1m/notepad\x1b[0m\x1b[2m             list notepads");
       renderer.info("\x1b[1m/notepad add\x1b[0m \x1b[2m<name>    create new notepad");
       renderer.info("\x1b[1m/notepad search\x1b[0m \x1b[2m<q>  search notepad entries");
+      renderer.info("\x1b[1m/oauth authorize\x1b[0m \x1b[2m<s>  OAuth flow for MCP server");
+      renderer.info("\x1b[1m/oauth status\x1b[0m \x1b[2m<s>    check OAuth token status");
+      renderer.info("\x1b[1m/category\x1b[0m\x1b[2m            list task categories");
+      renderer.info("\x1b[1m/category classify\x1b[0m \x1b[2m<p> classify a prompt");
       renderer.info("\x1b[1m/diff\x1b[0m\x1b[2m                show changes since session start");
       renderer.info("\x1b[1m/compact\x1b[0m\x1b[2m             compress conversation history");
       renderer.info("\x1b[1m/trust\x1b[0m\x1b[2m               trust project config dir");
