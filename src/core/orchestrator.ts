@@ -56,6 +56,13 @@ import { AutoFormatter } from "./formatter.ts";
 import { CustomToolLoader } from "./custom-tools.ts";
 import { FileWatcher } from "./file-watcher.ts";
 import { DoomLoopDetector } from "./doom-loop.ts";
+import { ThemeManager } from "../repl/theme.ts";
+import { ModelRegistry } from "./model-registry.ts";
+import { PluginManager } from "./plugin-system.ts";
+import { SessionSharer } from "./session-share.ts";
+import { OAuthMcpAuth } from "./oauth-mcp.ts";
+import { AstGrep } from "./ast-grep.ts";
+import { InputHandler } from "../repl/input-handler.ts";
 import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
@@ -103,6 +110,13 @@ export class Orchestrator {
   private customTools: CustomToolLoader;
   private fileWatcher: FileWatcher;
   private doomLoop: DoomLoopDetector;
+  private themeManager: ThemeManager;
+  private modelRegistry: ModelRegistry;
+  private pluginManager: PluginManager;
+  private sessionSharer: SessionSharer;
+  private oauthMcp: OAuthMcpAuth;
+  private astGrep: AstGrep;
+  private inputHandler: InputHandler;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -130,6 +144,13 @@ export class Orchestrator {
     this.customTools = new CustomToolLoader(process.cwd());
     this.fileWatcher = new FileWatcher(process.cwd());
     this.doomLoop = new DoomLoopDetector();
+    this.themeManager = new ThemeManager(config.theme);
+    this.modelRegistry = new ModelRegistry();
+    this.pluginManager = new PluginManager(process.cwd());
+    this.sessionSharer = new SessionSharer();
+    this.oauthMcp = new OAuthMcpAuth(config.orchestrator.dataDir);
+    this.astGrep = new AstGrep();
+    this.inputHandler = new InputHandler();
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -272,6 +293,12 @@ export class Orchestrator {
 
     // Load custom user-defined tools
     await this.customTools.loadAll();
+
+    // Load custom themes from user dir
+    await this.themeManager.loadFromDir(`${this.config.orchestrator.dataDir}/themes`);
+
+    // Load user plugins
+    await this.pluginManager.loadAll();
 
     // Start file watcher for external change detection
     this.fileWatcher.on("change", (event: import("./file-watcher.ts").FileChangeEvent) => {
@@ -676,8 +703,37 @@ export class Orchestrator {
     return this.doomLoop;
   }
 
+  getThemeManager(): ThemeManager {
+    return this.themeManager;
+  }
+
+  getModelRegistry(): ModelRegistry {
+    return this.modelRegistry;
+  }
+
+  getPluginManager(): PluginManager {
+    return this.pluginManager;
+  }
+
+  getSessionSharer(): SessionSharer {
+    return this.sessionSharer;
+  }
+
+  getOAuthMcp(): OAuthMcpAuth {
+    return this.oauthMcp;
+  }
+
+  getAstGrep(): AstGrep {
+    return this.astGrep;
+  }
+
+  getInputHandler(): InputHandler {
+    return this.inputHandler;
+  }
+
   async shutdown(): Promise<void> {
     this.fileWatcher.stop();
+    await this.pluginManager.emit("session:end", { data: {}, projectDir: process.cwd() }).catch(() => {});
     await this.lspManager.shutdownAll();
     this.checkpointManager.stopAll();
     this.health.stop();
