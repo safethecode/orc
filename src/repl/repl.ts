@@ -1,10 +1,10 @@
 import * as readline from "node:readline/promises";
 import type { Orchestrator } from "../core/orchestrator.ts";
-import type { OrchestratorConfig } from "../config/types.ts";
+import type { OrchestratorConfig, AgentProfile, ModelTier, SubTask } from "../config/types.ts";
 import { routeTask, suggestAgent, type RouteResult } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
-import { AgentStreamer, type ToolUseEvent } from "./streamer.ts";
+import { AgentStreamer, type ToolUseEvent, type StreamResult } from "./streamer.ts";
 import { Conversation } from "./conversation.ts";
 import { isCommand, handleCommand, COMMANDS, LANGUAGES } from "./commands.ts";
 import { TIER_BUDGETS } from "../memory/token-optimizer.ts";
@@ -13,6 +13,7 @@ import { notify } from "../utils/notifications.ts";
 import { RolloutRecorder } from "../session/rollout.ts";
 import { eventBus } from "../core/events.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
+import { decompose } from "../core/decomposer.ts";
 import * as renderer from "./renderer.ts";
 
 export async function startRepl(
@@ -253,6 +254,11 @@ async function handleNaturalInput(
     agentName = suggestAgent(route.tier);
   }
 
+  if (route.multiAgent) {
+    await handleMultiAgent(input, orchestrator, config, conversation, rollout, cancellation, onStreamer);
+    return;
+  }
+
   const profile = orchestrator.getRegistry().get(agentName);
   if (!profile) {
     renderer.error(`No profile found for agent "${agentName}".`);
@@ -430,5 +436,296 @@ async function handleNaturalInput(
     rollout.append({ type: "turn", timestamp: assistantTurn.timestamp, data: assistantTurn });
   } catch (e) {
     renderer.error(`Agent execution failed: ${(e as Error).message}`);
+  }
+}
+
+async function handleMultiAgent(
+  input: string,
+  orchestrator: Orchestrator,
+  config: OrchestratorConfig,
+  conversation: Conversation,
+  rollout: RolloutRecorder,
+  cancellation: CancellationToken,
+  onStreamer: (s: AgentStreamer) => void,
+): Promise<void> {
+  const taskId = `repl-${Date.now().toString(36)}`;
+
+  // 1. Decompose
+  const decomposition = decompose(input, taskId);
+
+  // Single subtask fallback → run as normal single agent
+  if (decomposition.subtasks.length <= 1) {
+    const st = decomposition.subtasks[0];
+    const agentName = suggestAgent(st.agentRole === "architect" ? "complex" : "medium");
+    const profile = orchestrator.getRegistry().get(agentName);
+    if (!profile) {
+      renderer.error(`No profile found for agent "${agentName}".`);
+      return;
+    }
+    const providerConfig = config.providers[profile.provider];
+    if (!providerConfig) {
+      renderer.error(`No provider config for "${profile.provider}".`);
+      return;
+    }
+    const route: RouteResult = {
+      tier: "medium",
+      model: (profile.model as ModelTier) ?? "sonnet",
+      multiAgent: false,
+      reason: "single subtask fallback",
+    };
+    renderer.agentHeader(agentName, route.model, route.reason);
+    renderer.startSpinner(agentName, route.model);
+
+    const harness = buildHarness({
+      agentName,
+      role: (profile.role ?? "coder") as import("../config/types.ts").AgentRole,
+      provider: profile.provider as import("../config/types.ts").ProviderName,
+      parentTaskId: "repl",
+      isWorker: false,
+    });
+    const cmd = buildCommand(providerConfig, profile, {
+      prompt: conversation.buildPrompt(input),
+      model: route.model,
+      systemPrompt: harness.systemPrompt + `\n\nYou are working in the project at: ${process.cwd()}`,
+      maxTurns: profile.maxTurns,
+    });
+
+    const streamer = new AgentStreamer();
+    onStreamer(streamer);
+
+    type BufferedEvent =
+      | { kind: "tool"; name: string; detail?: string }
+      | { kind: "text"; content: string };
+    const buffer: BufferedEvent[] = [];
+
+    streamer.on("tool_use", (tool: ToolUseEvent) => {
+      const inp = tool.input ?? {};
+      const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
+      buffer.push({ kind: "tool", name: tool.name, detail });
+      renderer.updateSpinner(`${tool.name} ${detail ? detail.split("/").pop() : ""}`.trim());
+    });
+    streamer.on("text_complete", (fullText: string) => {
+      buffer.push({ kind: "text", content: fullText });
+    });
+    streamer.on("error", (msg: string) => {
+      renderer.stopSpinner();
+      renderer.error(msg);
+    });
+
+    const startTime = Date.now();
+    try {
+      const result = await streamer.run(cmd, cancellation.signal);
+      renderer.stopSpinner();
+      const durationMs = Date.now() - startTime;
+      if (buffer.length > 0) {
+        renderer.startBox(route.model);
+        for (const evt of buffer) {
+          if (evt.kind === "tool") renderer.toolUse(evt.name, evt.detail, true);
+          else renderer.text(evt.content.endsWith("\n") ? evt.content : evt.content + "\n");
+        }
+        renderer.endBox();
+      }
+      renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
+      conversation.add({ role: "assistant", content: result.text, agentName, tier: route.model, timestamp: new Date().toISOString() });
+      rollout.append({ type: "turn", timestamp: new Date().toISOString(), data: { role: "assistant", content: result.text } });
+    } catch (e) {
+      renderer.stopSpinner();
+      renderer.error(`Agent execution failed: ${(e as Error).message}`);
+    }
+    return;
+  }
+
+  // 2. Assign provider/model per subtask
+  const selector = orchestrator.getSupervisor().getProviderSelector();
+  for (const subtask of decomposition.subtasks) {
+    const selection = selector.selectWithFallback(subtask, {
+      requireToolUse: subtask.agentRole === "coder" || subtask.agentRole === "tester",
+    });
+    subtask.provider = selection.provider;
+    subtask.model = selection.model;
+  }
+
+  // 3. Show plan
+  renderer.planSummary(decomposition.subtasks, decomposition.executionPlan);
+  eventBus.publish({
+    type: "supervisor:plan",
+    taskId,
+    phases: decomposition.executionPlan.phases.length,
+    estimatedCost: 0,
+  });
+
+  // Record user turn
+  const userTurn = { role: "user" as const, content: input, timestamp: new Date().toISOString() };
+  conversation.add(userTurn);
+  rollout.append({ type: "turn", timestamp: userTurn.timestamp, data: userTurn });
+
+  // 4. Execute phases sequentially
+  const allResults: Array<{ subtask: SubTask; result: StreamResult & { durationMs: number } }> = [];
+  let previousResults: string[] = [];
+
+  for (const phase of decomposition.executionPlan.phases) {
+    if (cancellation.cancelled) break;
+
+    const phaseSubtasks = decomposition.subtasks.filter(
+      st => phase.subtaskIds.includes(st.id),
+    );
+    renderer.phaseHeader(phase.name, phaseSubtasks.length, phase.parallelizable);
+
+    for (const st of phaseSubtasks) {
+      if (cancellation.cancelled) break;
+
+      const r = await executeSubtask(st, orchestrator, config, cancellation, onStreamer, previousResults);
+      if (r) {
+        allResults.push(r);
+        previousResults.push(r.result.text);
+      }
+    }
+  }
+
+  // 5. Total summary
+  if (allResults.length > 1) {
+    const totalCost = allResults.reduce((s, r) => s + r.result.costUsd, 0);
+    const totalIn = allResults.reduce((s, r) => s + r.result.inputTokens, 0);
+    const totalOut = allResults.reduce((s, r) => s + r.result.outputTokens, 0);
+    const totalMs = allResults.reduce((s, r) => s + r.result.durationMs, 0);
+    renderer.separator();
+    renderer.info("Multi-agent total:");
+    renderer.cost(totalCost, totalIn, totalOut, totalMs);
+  }
+
+  // 6. Record in conversation
+  const combinedText = allResults.map(r => r.result.text).join("\n\n");
+  conversation.add({
+    role: "assistant" as const,
+    content: combinedText,
+    agentName: "multi-agent",
+    tier: "opus" as ModelTier,
+    timestamp: new Date().toISOString(),
+  });
+  rollout.append({
+    type: "turn",
+    timestamp: new Date().toISOString(),
+    data: { role: "assistant", content: combinedText },
+  });
+}
+
+async function executeSubtask(
+  subtask: SubTask,
+  orchestrator: Orchestrator,
+  config: OrchestratorConfig,
+  cancellation: CancellationToken,
+  onStreamer: (s: AgentStreamer) => void,
+  previousResults: string[],
+): Promise<{ subtask: SubTask; result: StreamResult & { durationMs: number } } | null> {
+  const providerConfig = config.providers[subtask.provider];
+  if (!providerConfig) {
+    renderer.error(`No provider config for "${subtask.provider}"`);
+    return null;
+  }
+
+  const agentName = `${subtask.agentRole}-${subtask.id.slice(-4)}`;
+  const modelTier = subtask.model as ModelTier;
+
+  renderer.agentHeader(agentName, modelTier, subtask.agentRole);
+
+  // System prompt from harness
+  const harness = buildHarness({
+    agentName,
+    role: subtask.agentRole as import("../config/types.ts").AgentRole,
+    provider: subtask.provider as import("../config/types.ts").ProviderName,
+    parentTaskId: subtask.parentTaskId,
+    isWorker: true,
+  });
+  let systemPrompt = harness.systemPrompt;
+  systemPrompt += `\n\nYou are working in the project at: ${process.cwd()}`;
+
+  // Context propagation: inject previous phase results
+  if (previousResults.length > 0) {
+    const ctx = previousResults
+      .map((r, i) => `[Previous subtask ${i + 1} result]:\n${r.slice(0, 2000)}`)
+      .join("\n\n");
+    systemPrompt += `\n\n${ctx}`;
+  }
+
+  renderer.startSpinner(agentName, modelTier);
+
+  const adHocProfile: AgentProfile = {
+    name: agentName,
+    provider: subtask.provider,
+    model: subtask.model,
+    role: subtask.agentRole,
+    maxBudgetUsd: 0,
+    requires: [],
+    worktree: false,
+    systemPrompt,
+  };
+
+  const cmd = buildCommand(providerConfig, adHocProfile, {
+    prompt: subtask.prompt,
+    model: subtask.model,
+    systemPrompt,
+  });
+
+  const streamer = new AgentStreamer();
+  onStreamer(streamer);
+
+  type BufferedEvent =
+    | { kind: "tool"; name: string; detail?: string }
+    | { kind: "text"; content: string };
+  const buffer: BufferedEvent[] = [];
+
+  streamer.on("tool_use", (tool: ToolUseEvent) => {
+    const detail = (tool.input?.file_path as string)
+      ?? (tool.input?.command as string)
+      ?? (tool.input?.pattern as string)
+      ?? undefined;
+    buffer.push({ kind: "tool", name: tool.name, detail });
+    renderer.updateSpinner(`${tool.name} ${detail ? detail.split("/").pop() : ""}`.trim());
+  });
+
+  streamer.on("text_complete", (fullText: string) => {
+    buffer.push({ kind: "text", content: fullText });
+  });
+
+  streamer.on("error", (msg: string) => {
+    renderer.stopSpinner();
+    renderer.error(msg);
+  });
+
+  const startTime = Date.now();
+
+  try {
+    const result = await streamer.run(cmd, cancellation.signal);
+    renderer.stopSpinner();
+    const durationMs = Date.now() - startTime;
+
+    if (buffer.length > 0) {
+      renderer.startBox(modelTier);
+      for (const evt of buffer) {
+        if (evt.kind === "tool") {
+          renderer.toolUse(evt.name, evt.detail, true);
+        } else {
+          const content = evt.content.endsWith("\n") ? evt.content : evt.content + "\n";
+          renderer.text(content);
+        }
+      }
+      renderer.endBox();
+    }
+
+    renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
+    eventBus.publish({
+      type: "agent:done",
+      agent: agentName,
+      cost: result.costUsd,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      durationMs,
+    });
+
+    return { subtask, result: { ...result, durationMs } };
+  } catch (e) {
+    renderer.stopSpinner();
+    renderer.error(`Subtask failed: ${(e as Error).message}`);
+    return null;
   }
 }

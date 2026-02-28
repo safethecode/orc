@@ -1,6 +1,6 @@
 import ora, { type Ora } from "ora";
 import stringWidth from "string-width";
-import type { ModelTier } from "../config/types.ts";
+import type { ModelTier, SubTask, ExecutionPlan } from "../config/types.ts";
 
 // ── ANSI Escape Codes ────────────────────────────────────────────────
 
@@ -295,4 +295,26 @@ export function stopSpinner(): void {
     process.stdout.write("\r\x1b[K");
     spinner = null;
   }
+}
+
+// ── Multi-Agent Plan Display ────────────────────────────────────────
+
+export function planSummary(subtasks: SubTask[], plan: ExecutionPlan): void {
+  process.stdout.write(`\n  ${BOLD}${WHITE}Execution Plan${RESET}  ${DIM}${plan.strategy}${RESET}\n`);
+  for (const subtask of subtasks) {
+    const tier = subtask.model as ModelTier;
+    const bg = TIER_BG[tier] ?? BG_GRAY;
+    const badge = `${bg}${BLACK}${BOLD} ${subtask.model} ${RESET}`;
+    process.stdout.write(
+      `  ${DIM}•${RESET} ${badge} ${DIM}${subtask.agentRole}${RESET}  ${GRAY}${subtask.prompt.slice(0, 60)}${subtask.prompt.length > 60 ? "\u2026" : ""}${RESET}\n`,
+    );
+  }
+  process.stdout.write("\n");
+}
+
+export function phaseHeader(name: string, count: number, parallel: boolean): void {
+  const mode = parallel ? "parallel" : "sequential";
+  process.stdout.write(
+    `  ${YELLOW}${BOLD}\u25B6${RESET} ${WHITE}${name}${RESET}  ${DIM}${count} task${count > 1 ? "s" : ""}, ${mode}${RESET}\n`,
+  );
 }
