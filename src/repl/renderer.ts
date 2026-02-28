@@ -325,6 +325,13 @@ export function mcpStatus(serverNames: string[], toolCount: number): void {
   );
 }
 
+export function mcpScout(names: string[], durationMs: number): void {
+  const time = `${(durationMs / 1000).toFixed(1)}s`;
+  process.stdout.write(
+    `  ${DIM}mcp: ${names.join(", ")}  ${GRAY}(scout ${time})${RESET}\n`,
+  );
+}
+
 export function skillScout(names: string[], durationMs: number): void {
   const time = `${(durationMs / 1000).toFixed(1)}s`;
   process.stdout.write(

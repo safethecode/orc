@@ -15,6 +15,7 @@ import { eventBus } from "../core/events.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
 import { decompose } from "../core/decomposer.ts";
 import { scoutSkills } from "./skill-scout.ts";
+import { scoutMcp } from "../mcp/mcp-scout.ts";
 import * as renderer from "./renderer.ts";
 
 export async function startRepl(
@@ -368,8 +369,17 @@ async function handleNaturalInput(
       : "Keep responses concise and under 200 words.";
   }
 
-  // MCP integration: CLI passthrough for Claude, prompt injection for others
+  // MCP server discovery (Haiku-powered)
   const mcpMgr = orchestrator.getMcpManager();
+  const mcpScoutResult = await scoutMcp(input, cancellation.signal);
+  if (mcpScoutResult.needed && mcpScoutResult.servers.length > 0) {
+    const connected = await mcpMgr.connectOnDemand(mcpScoutResult.servers);
+    if (connected.length > 0) {
+      renderer.mcpScout(connected, mcpScoutResult.durationMs);
+    }
+  }
+
+  // MCP integration: CLI passthrough for Claude, prompt injection for others
   const mcpServerNames = profile.mcpServers ?? (mcpMgr.getConnectedServers().length > 0 ? undefined : []);
   let mcpConfigPath: string | undefined;
 
@@ -683,8 +693,17 @@ async function executeSubtask(
     systemPrompt += `\n\n${ctx}`;
   }
 
-  // MCP integration for subtasks
+  // MCP server discovery for subtasks
   const mcpMgr = orchestrator.getMcpManager();
+  const mcpScoutResult = await scoutMcp(subtask.prompt, cancellation.signal);
+  if (mcpScoutResult.needed && mcpScoutResult.servers.length > 0) {
+    const connected = await mcpMgr.connectOnDemand(mcpScoutResult.servers);
+    if (connected.length > 0) {
+      renderer.mcpScout(connected, mcpScoutResult.durationMs);
+    }
+  }
+
+  // MCP integration: CLI passthrough for Claude, prompt injection for others
   let mcpConfigPath: string | undefined;
 
   if (mcpMgr.getToolCount() > 0) {
