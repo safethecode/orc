@@ -721,13 +721,13 @@ async function handleMultiAgent(
 
     if (phase.parallelizable && phaseSubtasks.length > 1) {
       const promises = phaseSubtasks.map(st =>
-        executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory),
+        executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator),
       );
       await Promise.all(promises);
     } else {
       for (const st of phaseSubtasks) {
         if (cancellation.cancelled) break;
-        await executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory);
+        await executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator);
       }
     }
   }
@@ -788,6 +788,7 @@ async function executeSubtask(
   decomposition: DecompositionResult,
   collector: ResultCollector,
   qaHistory: QAIssue[][],
+  propagator: ContextPropagator,
 ): Promise<void> {
   const agentName = `${subtask.agentRole}-${subtask.id.slice(-4)}`;
   const modelTier = subtask.model as ModelTier;
@@ -829,17 +830,13 @@ async function executeSubtask(
     }
   }
 
-  // Build enriched prompt via ContextPropagator (replaces manual .slice(0, 2000))
-  const propagator = new ContextPropagator(
-    orchestrator.getContextBuilder(),
-    workerBus,
-    orchestrator.getCompressor(),
-  );
+  // Build enriched prompt via shared ContextPropagator (replaces manual .slice(0, 2000))
   let enrichedPrompt: string;
   try {
     enrichedPrompt = await propagator.buildWorkerPrompt(subtask, decomposition, collector);
   } catch (e) {
     renderer.info(`context propagation failed: ${(e as Error).message} — using raw prompt`);
+    eventBus.publish({ type: "agent:error", agent: agentName, message: `context propagation: ${(e as Error).message}` });
     enrichedPrompt = subtask.prompt;
   }
 
