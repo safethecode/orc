@@ -199,9 +199,10 @@ function renderMarkdownLine(line: string): string {
 
 // ── Tool Use ────────────────────────────────────────────────────────
 
-export function toolUse(name: string, detail?: string): void {
+export function toolUse(name: string, detail?: string, insideBox = false): void {
   const label = detail ? `${name} ${detail}` : name;
-  process.stdout.write(`  ${DIM}${YELLOW}▸${RESET} ${DIM}${label}${RESET}\n`);
+  const prefix = insideBox ? `${BOX_PAD}${boxBorder()}` : "  ";
+  process.stdout.write(`${prefix}${DIM}${YELLOW}▸${RESET} ${DIM}${label}${RESET}\n`);
 }
 
 // ── Cost / Stats ─────────────────────────────────────────────────────

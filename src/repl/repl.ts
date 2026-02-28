@@ -399,9 +399,11 @@ async function handleNaturalInput(
       renderer.startBox(route.model);
       for (const evt of buffer) {
         if (evt.kind === "tool") {
-          renderer.toolUse(evt.name, evt.detail);
+          renderer.toolUse(evt.name, evt.detail, true);
         } else {
-          renderer.text(evt.content);
+          // Ensure each text block ends with newline for separation
+          const content = evt.content.endsWith("\n") ? evt.content : evt.content + "\n";
+          renderer.text(content);
         }
       }
       renderer.endBox();
