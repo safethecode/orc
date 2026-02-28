@@ -327,38 +327,39 @@ async function handleNaturalInput(
   renderer.agentHeader(agentName, route.model, route.reason);
   renderer.startSpinner(agentName, route.model);
 
-  // Parallel: MCP scout (Haiku) + skill matching (token-based, sync) + skill resolve (I/O)
+  // Parallel Haiku scout: skill + MCP discovery (with cache)
   const skillIndex = orchestrator.getSkillIndex();
-  const recentTurns = conversation.getTurns().slice(-6);
-  const matchContext = recentTurns.map(t => t.content).join(" ") + " " + input;
+  const pseudoSubtask = { agentRole: profile.role ?? "coder", prompt: input } as SubTask;
+  const cachedSkill = skillScoutCache.get<ScoutResult>(input);
+  const cachedMcp = mcpScoutCache.get<McpScoutResult>(input);
 
-  const dynamicMatched = skillIndex.match(matchContext, 3);
+  const [skillScoutResult, mcpScoutResult] = await Promise.all([
+    cachedSkill ? Promise.resolve(cachedSkill) : scoutSkills(pseudoSubtask, skillIndex, cancellation.signal).then(r => { skillScoutCache.set(input, r); return r; }),
+    cachedMcp ? Promise.resolve(cachedMcp) : scoutMcp(input, cancellation.signal).then(r => { mcpScoutCache.set(input, r); return r; }),
+  ]);
+
+  // Merge Haiku-scouted skills with profile baseline skills
   const baselineEntries = (profile.skills ?? [])
     .map(name => skillIndex.getByName(name))
     .filter((e): e is NonNullable<typeof e> => e != null);
 
   const seen = new Set<string>();
   const allMatched: typeof baselineEntries = [];
-  for (const entry of [...baselineEntries, ...dynamicMatched]) {
+  for (const entry of [...baselineEntries, ...(skillScoutResult.needed ? skillScoutResult.skills : [])]) {
     if (!seen.has(entry.name)) {
       seen.add(entry.name);
       allMatched.push(entry);
     }
   }
 
-  // Run MCP scout and skill resolve in parallel (with cache)
-  const cachedMcp = mcpScoutCache.get<McpScoutResult>(input);
-  const [mcpScoutResult, skillBodies] = await Promise.all([
-    cachedMcp ? Promise.resolve(cachedMcp) : scoutMcp(input, cancellation.signal).then(r => { mcpScoutCache.set(input, r); return r; }),
-    allMatched.length > 0 ? skillIndex.resolve(allMatched) : Promise.resolve([]),
-  ]);
+  const skillBodies = allMatched.length > 0 ? await skillIndex.resolve(allMatched) : [];
 
   // Render scout results (pause spinner for clean output)
   const hasScoutOutput = (allMatched.length > 0 && skillBodies.length > 0) || (mcpScoutResult.needed && mcpScoutResult.servers.length > 0);
   if (hasScoutOutput) renderer.stopSpinner();
 
-  if (allMatched.length > 0 && skillBodies.length > 0) {
-    renderer.dim(`  skills: ${allMatched.map(s => s.name).join(", ")}`);
+  if (skillScoutResult.needed && skillScoutResult.skills.length > 0) {
+    renderer.skillScout(skillScoutResult.skills.map(s => s.name), skillScoutResult.durationMs);
   }
 
   const mcpMgr = orchestrator.getMcpManager();
