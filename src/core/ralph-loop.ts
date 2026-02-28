@@ -135,8 +135,22 @@ export class RalphLoop {
         iterations.push(iteration);
         previousOutput = output;
 
-        // Check if we're done
-        if (completionDetected && todoRemaining === 0) {
+        // Check if we're done:
+        // 1. Explicit completion marker with no TODOs → done
+        // 2. No TODOs and no completion marker → nothing to continue (simple response)
+        // 3. TODOs remain → keep going (unless max iterations)
+        if (todoRemaining === 0) {
+          this.running = false;
+          return {
+            iterations,
+            completed: true,
+            totalIterations: iterations.length,
+            reason: completionDetected ? "completed" : "no_remaining_work",
+          };
+        }
+
+        // TODOs remain but completion marker present on last iteration → treat as done
+        if (completionDetected && todoRemaining > 0 && i === this.config.maxIterations - 1) {
           this.running = false;
           return {
             iterations,
@@ -144,22 +158,6 @@ export class RalphLoop {
             totalIterations: iterations.length,
             reason: "completed",
           };
-        }
-
-        // Even if marker is present, if TODOs remain, keep going
-        // But if marker is present with some TODOs, it may still be logically complete
-        if (completionDetected && todoRemaining > 0) {
-          // Give it one more chance — if it said complete but has TODOs, continue
-          // but if this is the last iteration, treat as complete
-          if (i === this.config.maxIterations - 1) {
-            this.running = false;
-            return {
-              iterations,
-              completed: true,
-              totalIterations: iterations.length,
-              reason: "completed",
-            };
-          }
         }
 
         // Wait before next iteration
