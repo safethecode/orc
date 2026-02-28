@@ -91,6 +91,15 @@ export interface OrchestratorConfig {
   permissions?: import("../core/permissions.ts").PermissionConfig;
   theme?: string;
   categories?: Record<string, { model?: string; tier?: import("./types.ts").ModelTier; temperature?: number; description?: string }>;
+  worktree?: GitWorktreeConfig;
+  backgroundAgent?: BackgroundAgentConfig;
+  ultrawork?: UltraworkConfig;
+  statistics?: StatisticsConfig;
+  recovery?: SessionRecoveryConfig;
+  acp?: AcpConfig;
+  sdkServer?: SdkServerConfig;
+  webInterface?: WebInterfaceConfig;
+  refactor?: RefactorConfig;
 }
 
 // ── Agent Profile ─────────────────────────────────────────────────────
@@ -777,4 +786,72 @@ export interface SiblingResult {
   filesChanged: string[];
   apisCreated: string[];
   schemasCreated: string[];
+}
+
+// ── Git Worktree Isolation ──────────────────────────────────────────
+export interface GitWorktreeConfig {
+  enabled: boolean;
+  baseDir?: string;
+  autoCleanup?: boolean;
+}
+
+// ── Background Agent ────────────────────────────────────────────────
+export interface BackgroundAgentConfig {
+  maxConcurrent?: number;
+  defaultProvider?: ProviderName;
+  defaultModel?: string;
+  timeoutMs?: number;
+}
+
+// ── Ultrawork Mode ──────────────────────────────────────────────────
+export interface UltraworkConfig {
+  enabled?: boolean;
+  defaultModel?: string;
+  maxTurns?: number;
+  forceMultiAgent?: boolean;
+  forcePlanning?: boolean;
+}
+
+// ── Statistics ──────────────────────────────────────────────────────
+export interface StatisticsConfig {
+  enabled?: boolean;
+  persistPath?: string;
+  maxEntries?: number;
+}
+
+// ── Session Recovery ────────────────────────────────────────────────
+export interface SessionRecoveryConfig {
+  enabled?: boolean;
+  maxAttemptsPerStrategy?: number;
+  strategies?: string[];
+}
+
+// ── ACP Server ──────────────────────────────────────────────────────
+export interface AcpConfig {
+  enabled?: boolean;
+  maxSessions?: number;
+  sessionTimeoutMs?: number;
+}
+
+// ── SDK Server ──────────────────────────────────────────────────────
+export interface SdkServerConfig {
+  enabled?: boolean;
+  port?: number;
+  host?: string;
+  authToken?: string;
+}
+
+// ── Web Interface ───────────────────────────────────────────────────
+export interface WebInterfaceConfig {
+  enabled?: boolean;
+  port?: number;
+  host?: string;
+  authEnabled?: boolean;
+}
+
+// ── Refactor Config ─────────────────────────────────────────────────
+export interface RefactorConfig {
+  testCommand?: string;
+  maxExploreAgents?: number;
+  abortOnTestFail?: boolean;
 }

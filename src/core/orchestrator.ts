@@ -75,6 +75,39 @@ import { CategoryRouter } from "./category-router.ts";
 import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
+import { WriteGuard } from "./write-guard.ts";
+import { NonInteractiveGuard } from "./non-interactive-env.ts";
+import { ToolOutputTruncator } from "./tool-truncator.ts";
+import { VcsMonitor } from "./vcs-monitor.ts";
+import { ThinkMode } from "./think-mode.ts";
+import { FrecencyTracker } from "./frecency.ts";
+import { SessionNotifier } from "./session-notification.ts";
+import { PromptStash } from "./prompt-stash.ts";
+import { GitWorktreeManager } from "./git-worktree.ts";
+import { SessionRecoveryManager } from "./session-recovery.ts";
+import { BackgroundAgentManager } from "./background-agent.ts";
+import { TodoContinuationEnforcer } from "./todo-continuation.ts";
+import { UnstableBabysitter } from "./unstable-babysitter.ts";
+import { UltraworkMode } from "./ultrawork.ts";
+import { QuestionManager } from "./question-tool.ts";
+import { CodeSearchEngine } from "./code-search.ts";
+import { StatisticsTracker } from "./statistics.ts";
+import { ContextInjector } from "./context-injector.ts";
+import { SessionToolkit } from "./session-tools.ts";
+import { MultiEditTool } from "./multiedit-tool.ts";
+import { BatchToolExecutor } from "./batch-tool.ts";
+import { RetryWithBackoff } from "./retry-backoff.ts";
+import { AgentFallbackChain } from "./agent-fallback-chain.ts";
+import { ModelVariantManager } from "./model-variants.ts";
+import { InterleavedThinkingParser } from "./interleaved-thinking.ts";
+import { CustomCommandLoader } from "./custom-commands.ts";
+import { PersistentTaskManager } from "./persistent-tasks.ts";
+import { DoctorDiagnostics } from "./doctor.ts";
+import { HandoffGenerator } from "./handoff.ts";
+import { GitHubIntegration } from "./github-integration.ts";
+import { AcpServer } from "./acp.ts";
+import { SdkServer } from "./sdk-server.ts";
+import { CopilotAuth } from "./copilot-auth.ts";
 
 const MAX_AGENT_DEPTH = 5;
 
@@ -135,6 +168,39 @@ export class Orchestrator {
   private tmuxViz: TmuxVisualizer;
   private intentGate: IntentGate;
   private categoryRouter: CategoryRouter;
+  private writeGuard: WriteGuard;
+  private nonInteractiveGuard: NonInteractiveGuard;
+  private toolTruncator: ToolOutputTruncator;
+  private vcsMonitor: VcsMonitor;
+  private thinkMode: ThinkMode;
+  private frecency: FrecencyTracker;
+  private notifier: SessionNotifier;
+  private promptStash: PromptStash;
+  private gitWorktree: GitWorktreeManager;
+  private sessionRecovery: SessionRecoveryManager;
+  private backgroundAgent: BackgroundAgentManager;
+  private todoContinuation: TodoContinuationEnforcer;
+  private babysitter: UnstableBabysitter;
+  private ultrawork: UltraworkMode;
+  private questionTool: QuestionManager;
+  private codeSearch: CodeSearchEngine;
+  private statistics: StatisticsTracker;
+  private contextInjector: ContextInjector;
+  private sessionTools: SessionToolkit;
+  private multiEdit: MultiEditTool;
+  private batchTool: BatchToolExecutor;
+  private retryBackoff: RetryWithBackoff;
+  private fallbackChain: AgentFallbackChain;
+  private modelVariants: ModelVariantManager;
+  private thinkingParser: InterleavedThinkingParser;
+  private customCommands: CustomCommandLoader;
+  private persistentTasks: PersistentTaskManager;
+  private doctor: DoctorDiagnostics;
+  private handoff_: HandoffGenerator;
+  private github: GitHubIntegration;
+  private acpServer: AcpServer;
+  private sdkServer: SdkServer;
+  private copilotAuth: CopilotAuth;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -178,6 +244,39 @@ export class Orchestrator {
     this.tmuxViz = new TmuxVisualizer();
     this.intentGate = new IntentGate();
     this.categoryRouter = new CategoryRouter(config.categories);
+    this.writeGuard = new WriteGuard();
+    this.nonInteractiveGuard = new NonInteractiveGuard();
+    this.toolTruncator = new ToolOutputTruncator();
+    this.vcsMonitor = new VcsMonitor(process.cwd());
+    this.thinkMode = new ThinkMode();
+    this.frecency = new FrecencyTracker();
+    this.notifier = new SessionNotifier();
+    this.promptStash = new PromptStash();
+    this.gitWorktree = new GitWorktreeManager(process.cwd());
+    this.sessionRecovery = new SessionRecoveryManager();
+    this.backgroundAgent = new BackgroundAgentManager();
+    this.todoContinuation = new TodoContinuationEnforcer();
+    this.babysitter = new UnstableBabysitter();
+    this.ultrawork = new UltraworkMode();
+    this.questionTool = new QuestionManager();
+    this.codeSearch = new CodeSearchEngine();
+    this.statistics = new StatisticsTracker();
+    this.contextInjector = new ContextInjector();
+    this.sessionTools = new SessionToolkit();
+    this.multiEdit = new MultiEditTool();
+    this.batchTool = new BatchToolExecutor();
+    this.retryBackoff = new RetryWithBackoff();
+    this.fallbackChain = new AgentFallbackChain();
+    this.modelVariants = new ModelVariantManager();
+    this.thinkingParser = new InterleavedThinkingParser();
+    this.customCommands = new CustomCommandLoader(process.cwd());
+    this.persistentTasks = new PersistentTaskManager();
+    this.doctor = new DoctorDiagnostics();
+    this.handoff_ = new HandoffGenerator();
+    this.github = new GitHubIntegration();
+    this.acpServer = new AcpServer();
+    this.sdkServer = new SdkServer();
+    this.copilotAuth = new CopilotAuth();
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -797,8 +896,143 @@ export class Orchestrator {
     return this.categoryRouter;
   }
 
+  getWriteGuard(): WriteGuard {
+    return this.writeGuard;
+  }
+
+  getNonInteractiveGuard(): NonInteractiveGuard {
+    return this.nonInteractiveGuard;
+  }
+
+  getToolTruncator(): ToolOutputTruncator {
+    return this.toolTruncator;
+  }
+
+  getVcsMonitor(): VcsMonitor {
+    return this.vcsMonitor;
+  }
+
+  getThinkMode(): ThinkMode {
+    return this.thinkMode;
+  }
+
+  getFrecency(): FrecencyTracker {
+    return this.frecency;
+  }
+
+  getNotifier(): SessionNotifier {
+    return this.notifier;
+  }
+
+  getPromptStash(): PromptStash {
+    return this.promptStash;
+  }
+
+  getGitWorktree(): GitWorktreeManager {
+    return this.gitWorktree;
+  }
+
+  getSessionRecovery(): SessionRecoveryManager {
+    return this.sessionRecovery;
+  }
+
+  getBackgroundAgent(): BackgroundAgentManager {
+    return this.backgroundAgent;
+  }
+
+  getTodoContinuation(): TodoContinuationEnforcer {
+    return this.todoContinuation;
+  }
+
+  getBabysitter(): UnstableBabysitter {
+    return this.babysitter;
+  }
+
+  getUltrawork(): UltraworkMode {
+    return this.ultrawork;
+  }
+
+  getQuestionTool(): QuestionManager {
+    return this.questionTool;
+  }
+
+  getCodeSearch(): CodeSearchEngine {
+    return this.codeSearch;
+  }
+
+  getStatistics(): StatisticsTracker {
+    return this.statistics;
+  }
+
+  getContextInjector(): ContextInjector {
+    return this.contextInjector;
+  }
+
+  getSessionTools(): SessionToolkit {
+    return this.sessionTools;
+  }
+
+  getMultiEdit(): MultiEditTool {
+    return this.multiEdit;
+  }
+
+  getBatchTool(): BatchToolExecutor {
+    return this.batchTool;
+  }
+
+  getRetryBackoff(): RetryWithBackoff {
+    return this.retryBackoff;
+  }
+
+  getFallbackChain(): AgentFallbackChain {
+    return this.fallbackChain;
+  }
+
+  getModelVariants(): ModelVariantManager {
+    return this.modelVariants;
+  }
+
+  getThinkingParser(): InterleavedThinkingParser {
+    return this.thinkingParser;
+  }
+
+  getCustomCommands(): CustomCommandLoader {
+    return this.customCommands;
+  }
+
+  getPersistentTasks(): PersistentTaskManager {
+    return this.persistentTasks;
+  }
+
+  getDoctor(): DoctorDiagnostics {
+    return this.doctor;
+  }
+
+  getHandoffGenerator(): HandoffGenerator {
+    return this.handoff_;
+  }
+
+  getGitHub(): GitHubIntegration {
+    return this.github;
+  }
+
+  getAcpServer(): AcpServer {
+    return this.acpServer;
+  }
+
+  getSdkServer(): SdkServer {
+    return this.sdkServer;
+  }
+
+  getCopilotAuth(): CopilotAuth {
+    return this.copilotAuth;
+  }
+
   async shutdown(): Promise<void> {
     this.fileWatcher.stop();
+    this.vcsMonitor.stop();
+    this.gitWorktree.cleanupAll().catch(() => {});
+    await this.statistics.flush().catch(() => {});
     await this.tmuxViz.cleanup().catch(() => {});
     await this.pluginManager.emit("session:end", { data: {}, projectDir: process.cwd() }).catch(() => {});
     await this.lspManager.shutdownAll();

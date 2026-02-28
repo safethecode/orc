@@ -21,6 +21,9 @@ export const COMMANDS = [
   "/theme", "/models", "/plugins", "/share", "/ast",
   "/pipeline", "/boulder", "/notepad",
   "/oauth", "/category",
+  "/doctor", "/stats", "/worktree", "/background", "/stash",
+  "/question", "/search", "/tasks", "/handoff", "/refactor",
+  "/variants", "/ultrawork", "/github",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
@@ -1239,6 +1242,300 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "doctor": {
+      const doctor = ctx.orchestrator.getDoctor();
+      renderer.info("running diagnostics...");
+      const results = await doctor.runAll();
+      process.stdout.write("\n");
+      for (const r of results) {
+        const icon = r.status === "pass" ? "\x1b[32m✓\x1b[0m" : r.status === "warn" ? "\x1b[33m△\x1b[0m" : "\x1b[31m✗\x1b[0m";
+        renderer.info(`${icon} ${r.check}: ${r.detail}`);
+      }
+      process.stdout.write("\n");
+      return "continue";
+    }
+
+    case "stats": {
+      const stats = ctx.orchestrator.getStatistics();
+      const session = stats.getSessionStats();
+      process.stdout.write("\n" + stats.formatStats(session) + "\n\n");
+      return "continue";
+    }
+
+    case "worktree": {
+      const wt = ctx.orchestrator.getGitWorktree();
+      const sub = args[0];
+      if (sub === "list") {
+        const trees = await wt.list();
+        if (trees.length === 0) {
+          renderer.info("no active worktrees");
+        } else {
+          process.stdout.write("\n");
+          for (const t of trees) {
+            renderer.info(`\x1b[1m${t.branch}\x1b[0m \x1b[2m${t.path}\x1b[0m${t.agentId ? ` \x1b[33m(${t.agentId})\x1b[0m` : ""}`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+      if (sub === "create") {
+        const branch = args[1];
+        if (!branch) { renderer.error("usage: /worktree create <branch>"); return "continue"; }
+        try {
+          const info = await wt.create(branch);
+          renderer.info(`✓ worktree created: ${info.path} (${info.branch})`);
+        } catch (e) { renderer.error((e as Error).message); }
+        return "continue";
+      }
+      if (sub === "remove") {
+        const path = args[1];
+        if (!path) { renderer.error("usage: /worktree remove <path>"); return "continue"; }
+        try {
+          await wt.remove(path);
+          renderer.info(`✓ worktree removed: ${path}`);
+        } catch (e) { renderer.error((e as Error).message); }
+        return "continue";
+      }
+      if (sub === "cleanup") {
+        await wt.cleanupAll();
+        renderer.info("✓ all worktrees cleaned up");
+        return "continue";
+      }
+      renderer.info("usage: /worktree [list|create|remove|cleanup]");
+      return "continue";
+    }
+
+    case "background": {
+      const bg = ctx.orchestrator.getBackgroundAgent();
+      const sub = args[0];
+      if (sub === "list") {
+        const active = bg.listActive();
+        if (active.length === 0) {
+          renderer.info("no background tasks");
+        } else {
+          process.stdout.write("\n");
+          for (const t of active) {
+            const status = t.status === "running" ? "\x1b[33m●\x1b[0m" : t.status === "completed" ? "\x1b[32m●\x1b[0m" : "\x1b[31m●\x1b[0m";
+            renderer.info(`${status} ${t.id.slice(0, 8)} \x1b[2m${t.prompt.slice(0, 60)}\x1b[0m`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+      if (sub === "cancel") {
+        const taskId = args[1];
+        if (!taskId) { renderer.error("usage: /background cancel <task-id>"); return "continue"; }
+        bg.cancel(taskId);
+        renderer.info(`✓ cancelled ${taskId}`);
+        return "continue";
+      }
+      if (sub === "result") {
+        const taskId = args[1];
+        if (!taskId) { renderer.error("usage: /background result <task-id>"); return "continue"; }
+        const result = await bg.getResult(taskId);
+        if (result) {
+          process.stdout.write("\n" + result.slice(0, 2000) + "\n\n");
+        } else {
+          renderer.info("no result yet or task not found");
+        }
+        return "continue";
+      }
+      renderer.info("usage: /background [list|cancel|result] ...");
+      return "continue";
+    }
+
+    case "stash": {
+      const stash = ctx.orchestrator.getPromptStash();
+      const sub = args[0];
+      if (sub === "push") {
+        const text = args.slice(1).join(" ");
+        if (!text) { renderer.error("usage: /stash push <text>"); return "continue"; }
+        await stash.push(text);
+        renderer.info(`✓ stashed: ${text.slice(0, 60)}`);
+        return "continue";
+      }
+      if (sub === "pop") {
+        const text = await stash.pop();
+        if (text) {
+          renderer.info(`popped: ${text}`);
+        } else {
+          renderer.info("stash is empty");
+        }
+        return "continue";
+      }
+      if (sub === "list") {
+        const entries = await stash.list();
+        if (entries.length === 0) {
+          renderer.info("stash is empty");
+        } else {
+          process.stdout.write("\n");
+          for (let i = 0; i < entries.length; i++) {
+            renderer.info(`\x1b[2m${i}:\x1b[0m ${entries[i].text.slice(0, 80)} \x1b[2m(${entries[i].timestamp})\x1b[0m`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+      renderer.info("usage: /stash [push|pop|list] ...");
+      return "continue";
+    }
+
+    case "question": {
+      renderer.info("usage: questions are asked by agents via the question tool");
+      renderer.info("\x1b[2mpending questions will appear in the REPL for you to answer\x1b[0m");
+      return "continue";
+    }
+
+    case "search": {
+      const engine = ctx.orchestrator.getCodeSearch();
+      const query = args.join(" ");
+      if (!query) { renderer.error("usage: /search <query>"); return "continue"; }
+      try {
+        const results = await engine.search(query);
+        if (results.length === 0) {
+          renderer.info("no results");
+        } else {
+          process.stdout.write("\n");
+          for (const r of results) {
+            renderer.info(`\x1b[1m${r.title}\x1b[0m \x1b[2m(${r.score.toFixed(2)})\x1b[0m`);
+            renderer.info(`  \x1b[2m${r.url}\x1b[0m`);
+            if (r.content) renderer.info(`  ${r.content.slice(0, 120)}`);
+          }
+          process.stdout.write("\n");
+        }
+      } catch (e) { renderer.error((e as Error).message); }
+      return "continue";
+    }
+
+    case "tasks": {
+      const taskMgr = ctx.orchestrator.getPersistentTasks();
+      const sub = args[0];
+      if (sub === "create") {
+        const subject = args.slice(1).join(" ");
+        if (!subject) { renderer.error("usage: /tasks create <subject>"); return "continue"; }
+        const task = await taskMgr.create({ subject, description: "", status: "pending" });
+        renderer.info(`✓ task ${task.id.slice(0, 8)}: ${subject}`);
+        return "continue";
+      }
+      if (sub === "done") {
+        const id = args[1];
+        if (!id) { renderer.error("usage: /tasks done <id>"); return "continue"; }
+        await taskMgr.update(id, { status: "completed" });
+        renderer.info(`✓ completed ${id}`);
+        return "continue";
+      }
+      // Default: list
+      const tasks = await taskMgr.list();
+      if (tasks.length === 0) {
+        renderer.info("no tasks");
+      } else {
+        process.stdout.write("\n");
+        for (const t of tasks) {
+          const icon = t.status === "completed" ? "\x1b[32m✓\x1b[0m" : t.status === "in_progress" ? "\x1b[33m●\x1b[0m" : "\x1b[90m○\x1b[0m";
+          renderer.info(`${icon} ${t.id.slice(0, 8)} ${t.subject}`);
+        }
+        process.stdout.write("\n");
+      }
+      return "continue";
+    }
+
+    case "handoff": {
+      const gen = ctx.orchestrator.getHandoffGenerator();
+      const turns = ctx.conversation.getTurns();
+      const output = gen.generate(turns, {
+        sessionSummary: ctx.conversation.generateSummary(),
+        gitStatus: true,
+        todoState: true,
+      });
+      process.stdout.write("\n" + output + "\n\n");
+      return "continue";
+    }
+
+    case "refactor": {
+      const engine = ctx.orchestrator.getRefactorEngine();
+      const goal = args.join(" ");
+      if (!goal) { renderer.error("usage: /refactor <goal>"); return "continue"; }
+      renderer.info("starting refactor...");
+      try {
+        const result = await engine.execute(process.cwd(), goal);
+        process.stdout.write("\n");
+        for (const phase of result.phases) {
+          const icon = phase.status === "success" ? "\x1b[32m✓\x1b[0m" : phase.status === "failed" ? "\x1b[31m✗\x1b[0m" : "\x1b[90m-\x1b[0m";
+          renderer.info(`${icon} ${phase.name} \x1b[2m(${phase.durationMs}ms)\x1b[0m`);
+        }
+        renderer.info(`\n${result.summary}`);
+        process.stdout.write("\n");
+      } catch (e) { renderer.error((e as Error).message); }
+      return "continue";
+    }
+
+    case "variants": {
+      const mgr = ctx.orchestrator.getModelVariants();
+      const sub = args[0];
+      if (sub === "set") {
+        const variant = args[1];
+        if (!variant) { renderer.error("usage: /variants set <fast|default|high|max>"); return "continue"; }
+        const config = mgr.getVariant("default", variant);
+        if (config) {
+          renderer.info(`✓ variant: ${variant} (temp=${config.temperature}, maxTokens=${config.maxTokens})`);
+        } else {
+          renderer.error(`unknown variant: ${variant}`);
+        }
+        return "continue";
+      }
+      const variants = mgr.listVariants();
+      process.stdout.write("\n");
+      for (const v of variants) {
+        renderer.info(`\x1b[1m${v}\x1b[0m`);
+      }
+      process.stdout.write("\n");
+      return "continue";
+    }
+
+    case "ultrawork": {
+      const uw = ctx.orchestrator.getUltrawork();
+      const overrides = uw.getOverrides();
+      renderer.info(`\x1b[1multrawork mode\x1b[0m: model=${overrides.model}, maxTurns=${overrides.maxTurns}, forceMultiAgent=${overrides.forceMultiAgent}`);
+      return "continue";
+    }
+
+    case "github": {
+      const gh = ctx.orchestrator.getGitHub();
+      const sub = args[0];
+      if (sub === "branch") {
+        const name = args[1];
+        if (!name) { renderer.error("usage: /github branch <name>"); return "continue"; }
+        try {
+          await gh.createBranch(name);
+          renderer.info(`✓ branch created: ${name}`);
+        } catch (e) { renderer.error((e as Error).message); }
+        return "continue";
+      }
+      if (sub === "pr") {
+        const title = args.slice(1).join(" ");
+        if (!title) { renderer.error("usage: /github pr <title>"); return "continue"; }
+        try {
+          const url = await gh.createPR(title, "");
+          renderer.info(`✓ PR created: ${url}`);
+        } catch (e) { renderer.error((e as Error).message); }
+        return "continue";
+      }
+      if (sub === "issue") {
+        const url = args[1];
+        if (!url) { renderer.error("usage: /github issue <url-or-number>"); return "continue"; }
+        try {
+          const info = await gh.parseIssue(url);
+          process.stdout.write("\n");
+          renderer.info(`\x1b[1m#${info.number}\x1b[0m ${info.title}`);
+          renderer.info(`\x1b[2m${info.body.slice(0, 200)}\x1b[0m`);
+          process.stdout.write("\n");
+        } catch (e) { renderer.error((e as Error).message); }
+        return "continue";
+      }
+      renderer.info("usage: /github [branch|pr|issue] ...");
+      return "continue";
+    }
+
     case "help": {
       process.stdout.write("\n");
       renderer.info("\x1b[1m/status\x1b[0m\x1b[2m              agent statuses");
@@ -1305,6 +1602,29 @@ export async function handleCommand(
       renderer.info("\x1b[1m/checkpoint rollback\x1b[0m\x1b[2m rollback to latest");
       renderer.info("\x1b[1m/spec\x1b[0m \x1b[2m<task>          generate structured spec pipeline");
       renderer.info("\x1b[1m/ideate\x1b[0m \x1b[2m<context>      brainstorm improvements across dimensions");
+      renderer.info("\x1b[1m/doctor\x1b[0m\x1b[2m              run system diagnostics");
+      renderer.info("\x1b[1m/stats\x1b[0m\x1b[2m               session statistics");
+      renderer.info("\x1b[1m/worktree\x1b[0m\x1b[2m            manage git worktrees");
+      renderer.info("\x1b[1m/worktree create\x1b[0m \x1b[2m<b> create worktree for branch");
+      renderer.info("\x1b[1m/worktree remove\x1b[0m \x1b[2m<p> remove worktree");
+      renderer.info("\x1b[1m/worktree cleanup\x1b[0m\x1b[2m    remove all worktrees");
+      renderer.info("\x1b[1m/background\x1b[0m\x1b[2m          list background tasks");
+      renderer.info("\x1b[1m/background cancel\x1b[0m \x1b[2m<id> cancel a background task");
+      renderer.info("\x1b[1m/background result\x1b[0m \x1b[2m<id> get task result");
+      renderer.info("\x1b[1m/stash\x1b[0m\x1b[2m               prompt stash (push/pop/list)");
+      renderer.info("\x1b[1m/question\x1b[0m\x1b[2m            agent question info");
+      renderer.info("\x1b[1m/search\x1b[0m \x1b[2m<query>       code search");
+      renderer.info("\x1b[1m/tasks\x1b[0m\x1b[2m               list persistent tasks");
+      renderer.info("\x1b[1m/tasks create\x1b[0m \x1b[2m<subj>  create a task");
+      renderer.info("\x1b[1m/tasks done\x1b[0m \x1b[2m<id>      mark task completed");
+      renderer.info("\x1b[1m/handoff\x1b[0m\x1b[2m             generate session handoff document");
+      renderer.info("\x1b[1m/refactor\x1b[0m \x1b[2m<goal>      run automated refactor");
+      renderer.info("\x1b[1m/variants\x1b[0m\x1b[2m            list model variants");
+      renderer.info("\x1b[1m/variants set\x1b[0m \x1b[2m<name>  set model variant");
+      renderer.info("\x1b[1m/ultrawork\x1b[0m\x1b[2m           show ultrawork mode config");
+      renderer.info("\x1b[1m/github branch\x1b[0m \x1b[2m<name> create branch");
+      renderer.info("\x1b[1m/github pr\x1b[0m \x1b[2m<title>    create pull request");
+      renderer.info("\x1b[1m/github issue\x1b[0m \x1b[2m<url>   view issue details");
       renderer.info("\x1b[1m/clear\x1b[0m\x1b[2m               clear conversation");
       renderer.info("\x1b[1m/lang\x1b[0m \x1b[2m<language>      set response language");
       renderer.info("\x1b[1m/help\x1b[0m\x1b[2m                this help");

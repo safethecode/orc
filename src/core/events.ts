@@ -63,7 +63,32 @@ export type OrcEvent =
   | { type: "context:sibling_summary"; subtaskId: string; siblingCount: number; filesShared: string[] }
   | { type: "worker:signal_done"; workerId: string }
   | { type: "worker:result_marker"; workerId: string; files: string[]; summary: string }
-  | { type: "file:change"; file: string; changeType: string };
+  | { type: "file:change"; file: string; changeType: string }
+  | { type: "branch:switch"; from: string; to: string }
+  | { type: "question:ask"; questionId: string; question: string }
+  | { type: "question:reply"; questionId: string; answer: string }
+  | { type: "background:spawn"; taskId: string; provider: string }
+  | { type: "background:complete"; taskId: string; success: boolean }
+  | { type: "worktree:create"; branch: string; path: string; agentId?: string }
+  | { type: "worktree:remove"; path: string }
+  | { type: "recovery:strategy"; strategy: string; action: string; details: string }
+  | { type: "stats:record"; tokens: number; cost: number; model: string }
+  | { type: "thinking:block"; agent: string; content: string; tokens: number }
+  | { type: "ultrawork:activate"; model: string; overrides: string }
+  | { type: "doctor:check"; check: string; status: "pass" | "warn" | "fail" }
+  | { type: "stash:push"; index: number; preview: string }
+  | { type: "stash:pop"; text: string }
+  | { type: "frecency:update"; file: string; score: number }
+  | { type: "notification:sent"; title: string }
+  | { type: "todo:continue"; iteration: number; remaining: number }
+  | { type: "babysitter:nudge"; taskId: string }
+  | { type: "acp:request"; method: string; sessionId?: string }
+  | { type: "sdk:request"; method: string; path: string }
+  | { type: "web:connect"; clientId: string }
+  | { type: "web:disconnect"; clientId: string }
+  | { type: "refactor:phase"; phase: string; status: "start" | "complete" | "failed" }
+  | { type: "github:action"; action: string; detail: string }
+  | { type: "copilot:auth"; provider: string; status: "started" | "success" | "failed" };
 
 export class OrcEventBus extends EventEmitter {
   publish(event: OrcEvent): void {

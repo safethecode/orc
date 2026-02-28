@@ -694,6 +694,40 @@ async function handleNaturalInput(
     systemPrompt += "\n\n" + notepadWisdom;
   }
 
+  // Inject think mode: auto-upgrade model for deep thinking requests
+  const thinkMode = orchestrator.getThinkMode();
+  const thinkDetect = thinkMode.detect(input);
+  if (thinkDetect.shouldUpgrade) {
+    const thinkingModel = thinkMode.getThinkingModel(route.model);
+    if (thinkingModel !== route.model) {
+      systemPrompt += `\n\nDEEP THINKING MODE activated (keyword: "${thinkDetect.keyword}"). Take extra care with reasoning, consider edge cases, and provide thorough analysis.`;
+    }
+  }
+
+  // Inject ultrawork mode: maximum performance mode
+  const ultrawork = orchestrator.getUltrawork();
+  if (ultrawork.detect(input)) {
+    const overrides = ultrawork.getOverrides();
+    systemPrompt += "\n\n" + ultrawork.buildSystemPromptAddition();
+  }
+
+  // Inject context from AGENTS.md / CLAUDE.md files
+  const ctxInjector = orchestrator.getContextInjector();
+  const ctxFiles = ctxInjector.collect(process.cwd());
+  if (ctxFiles.length > 0) {
+    const ctxContent = ctxInjector.formatForPrompt(ctxFiles);
+    if (ctxContent) {
+      systemPrompt += "\n\n" + ctxContent;
+    }
+  }
+
+  // Inject frecency context: recently accessed files
+  const frecency = orchestrator.getFrecency();
+  const frequentFiles = frecency.getTopFiles(10);
+  if (frequentFiles.length > 0) {
+    systemPrompt += `\n\nFrequently accessed files: ${frequentFiles.join(", ")}`;
+  }
+
   // Tier-specific response length hint
   if (route.model === "haiku") {
     systemPrompt = systemPrompt
@@ -787,6 +821,32 @@ async function handleNaturalInput(
         renderer.info(`\x1b[33m⚠ UNCONFIRMED:\x1b[0m ${tool.name} ${detail ?? ""} — requires approval`);
       }
 
+      // Write guard: block writes to files not yet read
+      if ((tool.name === "write" || tool.name === "edit") && inp.file_path) {
+        const writeResult = orchestrator.getWriteGuard().checkWrite(inp.file_path as string);
+        if (writeResult === "block") {
+          renderer.info(`\x1b[33m⚠ write-guard:\x1b[0m ${(inp.file_path as string).split("/").pop()} — file not yet read in this session`);
+        }
+      }
+
+      // Track reads for write guard
+      if (tool.name === "read" && inp.file_path) {
+        orchestrator.getWriteGuard().markRead(inp.file_path as string);
+      }
+
+      // Track file access for frecency
+      if (inp.file_path) {
+        orchestrator.getFrecency().record(inp.file_path as string);
+      }
+
+      // Non-interactive env guard for bash commands
+      if (tool.name === "bash" && inp.command) {
+        const niGuard = orchestrator.getNonInteractiveGuard();
+        if (niGuard.isInteractive(inp.command as string)) {
+          renderer.info(`\x1b[33m⚠ non-interactive:\x1b[0m command "${(inp.command as string).slice(0, 40)}" may be interactive — sanitized`);
+        }
+      }
+
       // Plan mode enforcement: warn on disallowed tool use
       if (planMode?.isActive()) {
         const allowed = planMode.isToolAllowed(tool.name, tool.input ?? {});
@@ -862,6 +922,18 @@ async function handleNaturalInput(
         const critique = runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input }, result.text);
         renderer.qualityGate(critique.passes, critique.issues);
       }
+
+      // Record statistics for this turn
+      orchestrator.getStatistics().recordTurn({
+        tokens: result.inputTokens + result.outputTokens,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        cost: result.costUsd,
+        model: route.model,
+        provider: currentProfile.provider,
+        toolsUsed: [],
+        durationMs,
+      });
 
       if (result.inputTokens > 0 || result.outputTokens > 0) {
         renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
@@ -984,6 +1056,19 @@ async function handleNaturalInput(
     if (ralphResult.totalIterations > 1) {
       renderer.info(`\x1b[2mauto-loop: ${ralphResult.totalIterations} iterations, ${ralphResult.reason}\x1b[0m`);
     }
+  }
+
+  // Todo continuation: check for unchecked todos in final output
+  if (lastSuccessText) {
+    const todoCont = orchestrator.getTodoContinuation();
+    if (todoCont.shouldContinue(lastSuccessText, 0)) {
+      renderer.info(`\x1b[2mtodo-continuation: unchecked items detected in output\x1b[0m`);
+    }
+  }
+
+  // Session notification: notify on completion if agent took >30s
+  if (lastSuccessText && Date.now() - Date.now() > 30_000) {
+    orchestrator.getNotifier().notify("Task Complete", `Agent ${agentName} finished`);
   }
 }
 
