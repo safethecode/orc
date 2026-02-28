@@ -37,6 +37,15 @@ export function loadConfig(overridePath?: string): OrchestratorConfig {
   typed.orchestrator.db = resolvePath(typed.orchestrator.db);
   typed.orchestrator.logDir = resolvePath(typed.orchestrator.logDir);
 
+  // Resolve ~ in MCP server command paths
+  if (typed.mcp?.servers) {
+    for (const server of Object.values(typed.mcp.servers)) {
+      if (server.command.startsWith("~")) {
+        server.command = resolvePath(server.command);
+      }
+    }
+  }
+
   return typed;
 }
 

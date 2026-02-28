@@ -64,6 +64,16 @@ export interface SupervisorConfig {
   contextPropagation?: { enabled: boolean; includeCodebaseMap: boolean; includeMemory: boolean; maxContextTokens: number; summarizeSiblingResults: boolean };
 }
 
+export interface McpServerConfig {
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
+export interface McpConfig {
+  servers: Record<string, McpServerConfig>;
+}
+
 export interface OrchestratorConfig {
   orchestrator: {
     sessionPrefix: string;
@@ -76,6 +86,7 @@ export interface OrchestratorConfig {
   providers: Record<string, ProviderConfig>;
   routing: RoutingConfig;
   supervisor?: SupervisorConfig;
+  mcp?: McpConfig;
 }
 
 // ── Agent Profile ─────────────────────────────────────────────────────
@@ -91,6 +102,7 @@ export interface AgentProfile {
   systemPrompt: string;
   maxTurns?: number;
   skills?: string[];
+  mcpServers?: string[];
 }
 
 // ── Task Types ────────────────────────────────────────────────────────

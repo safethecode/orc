@@ -72,6 +72,9 @@ routing:
       model: "opus"
       keywords: ["architect", "design", "security", "optimize", "migrate"]
 
+mcp:
+  servers: {}
+
 supervisor:
   enabled: true
   workerTimeout: 300000
