@@ -90,6 +90,7 @@ export interface OrchestratorConfig {
   mcp?: McpConfig;
   permissions?: import("../core/permissions.ts").PermissionConfig;
   theme?: string;
+  categories?: Record<string, { model?: string; tier?: import("./types.ts").ModelTier; temperature?: number; description?: string }>;
 }
 
 // ── Agent Profile ─────────────────────────────────────────────────────
