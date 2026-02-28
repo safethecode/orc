@@ -323,8 +323,9 @@ async function handleNaturalInput(
   // Publish event
   eventBus.publish({ type: "agent:start", agent: agentName, tier: route.model, reason: route.reason });
 
-  // Show agent header
+  // Show agent header + spinner immediately
   renderer.agentHeader(agentName, route.model, route.reason);
+  renderer.startSpinner(agentName, route.model);
 
   // Parallel: MCP scout (Haiku) + skill matching (token-based, sync) + skill resolve (I/O)
   const skillIndex = orchestrator.getSkillIndex();
@@ -352,7 +353,10 @@ async function handleNaturalInput(
     allMatched.length > 0 ? skillIndex.resolve(allMatched) : Promise.resolve([]),
   ]);
 
-  // Render scout results
+  // Render scout results (pause spinner for clean output)
+  const hasScoutOutput = (allMatched.length > 0 && skillBodies.length > 0) || (mcpScoutResult.needed && mcpScoutResult.servers.length > 0);
+  if (hasScoutOutput) renderer.stopSpinner();
+
   if (allMatched.length > 0 && skillBodies.length > 0) {
     renderer.dim(`  skills: ${allMatched.map(s => s.name).join(", ")}`);
   }
@@ -364,6 +368,9 @@ async function handleNaturalInput(
       renderer.mcpScout(connected, mcpScoutResult.durationMs);
     }
   }
+
+  // Restart spinner for prompt building + agent execution
+  if (hasScoutOutput) renderer.startSpinner(agentName, route.model);
 
   // Set tier-specific token budget before building prompt
   conversation.setTokenBudget(TIER_BUDGETS[route.model] ?? TIER_BUDGETS.sonnet);
@@ -476,9 +483,9 @@ async function handleNaturalInput(
         }
       }
       renderer.retryAttempt(attempt, maxRetries, lastError ?? "unknown");
+      renderer.startSpinner(agentName, route.model);
     }
 
-    renderer.startSpinner(agentName, route.model);
     const streamer = new AgentStreamer();
     onStreamer(streamer);
     let hasContent = false;
@@ -794,6 +801,7 @@ async function executeSubtask(
   const watcher = orchestrator.getConflictWatcher();
 
   renderer.agentHeader(agentName, modelTier, subtask.agentRole);
+  renderer.startSpinner(agentName, modelTier);
 
   // Register with WorkerBus for inter-agent communication
   workerBus.registerWorker({
@@ -813,8 +821,11 @@ async function executeSubtask(
     cachedMcp ? Promise.resolve(cachedMcp) : scoutMcp(subtask.prompt, cancellation.signal).then(r => { mcpScoutCache.set(cacheKey, r); return r; }),
   ]);
 
-  // Render scout results (skills first, then MCP)
+  // Render scout results (pause spinner for clean output)
   let skillBodies: string[] = [];
+  const hasSubScoutOutput = (skillScoutResult.needed && skillScoutResult.skills.length > 0) || (mcpScoutResult.needed && mcpScoutResult.servers.length > 0);
+  if (hasSubScoutOutput) renderer.stopSpinner();
+
   if (skillScoutResult.needed && skillScoutResult.skills.length > 0) {
     skillBodies = await orchestrator.getSkillIndex().resolve(skillScoutResult.skills);
     renderer.skillScout(skillScoutResult.skills.map(s => s.name), skillScoutResult.durationMs);
@@ -827,6 +838,8 @@ async function executeSubtask(
       renderer.mcpScout(connected, mcpScoutResult.durationMs);
     }
   }
+
+  if (hasSubScoutOutput) renderer.startSpinner(agentName, modelTier);
 
   // Build enriched prompt via shared ContextPropagator (replaces manual .slice(0, 2000))
   let enrichedPrompt: string;

@@ -274,6 +274,11 @@ export function separator(): void {
 let spinner: Ora | null = null;
 
 export function startSpinner(agentName: string, tier: ModelTier): void {
+  // Stop any existing spinner to prevent orphaned instances
+  if (spinner) {
+    spinner.stop();
+    process.stdout.write("\r\x1b[K");
+  }
   const color = tier === "opus" ? "magenta" : tier === "sonnet" ? "cyan" : "green";
   spinner = ora({
     text: `${DIM}${agentName} is thinking...${RESET}`,
