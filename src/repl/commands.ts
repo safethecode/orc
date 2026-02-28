@@ -3,6 +3,9 @@ import type { Conversation } from "./conversation.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
 import { loadExecPolicy, trustProject, isProjectTrusted } from "../sandbox/rules.ts";
 import { getCatalogEntry } from "../mcp/catalog.ts";
+import { selectPhases, buildPhasePrompt, parseSpecResult } from "../core/spec-pipeline.ts";
+import { buildIdeationPrompt, parseIdeationResponse, prioritizeIdeas, DIMENSION_PROMPTS } from "../core/ideation.ts";
+import type { SpecPhase, IdeationDimension } from "../config/types.ts";
 import * as renderer from "./renderer.ts";
 
 export const COMMANDS = [
@@ -11,7 +14,7 @@ export const COMMANDS = [
   "/ownership", "/spawn", "/task", "/mcp",
   "/pause", "/resume", "/sessions", "/memory",
   "/diff", "/compact", "/trust", "/consolidate",
-  "/checkpoint", "/help", "/quit",
+  "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
 
 export const LANGUAGES = [
@@ -483,6 +486,83 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "spec": {
+      const task = args.join(" ");
+      if (!task) {
+        renderer.error("usage: /spec <task description>");
+        return "continue";
+      }
+
+      const complexity = args.length > 20 ? "complex" : args.length > 8 ? "standard" : "simple";
+      const phases = selectPhases(complexity);
+      renderer.info(`spec pipeline: ${complexity} (${phases.join(" → ")})`);
+
+      const outputs = new Map<SpecPhase, string>();
+      for (const phase of phases) {
+        renderer.info(`\x1b[2m▸ ${phase}...\x1b[0m`);
+        const prompt = buildPhasePrompt(phase, { task, previousOutputs: outputs });
+        // Store prompt as output placeholder (agent execution would replace this)
+        outputs.set(phase, prompt);
+      }
+
+      const specOutput = outputs.get("spec") ?? outputs.get("planning") ?? "";
+      const parsed = parseSpecResult(specOutput);
+
+      process.stdout.write("\n");
+      if (parsed.requirements.length > 0) {
+        renderer.info("\x1b[1mRequirements:\x1b[0m");
+        for (const r of parsed.requirements.slice(0, 10)) renderer.info(`  • ${r}`);
+      }
+      if (parsed.implementationSteps.length > 0) {
+        renderer.info("\x1b[1mImplementation Steps:\x1b[0m");
+        for (const s of parsed.implementationSteps.slice(0, 10)) renderer.info(`  ${s}`);
+      }
+      if (parsed.risks.length > 0) {
+        renderer.info("\x1b[1mRisks:\x1b[0m");
+        for (const r of parsed.risks.slice(0, 5)) renderer.info(`  △ ${r}`);
+      }
+      renderer.info(`\x1b[2mestimated complexity: ${parsed.estimatedComplexity}\x1b[0m`);
+      process.stdout.write("\n");
+      return "continue";
+    }
+
+    case "ideate": {
+      const task = args.join(" ");
+      if (!task) {
+        renderer.error("usage: /ideate <code context or task>");
+        return "continue";
+      }
+
+      const dimensions = Object.keys(DIMENSION_PROMPTS) as IdeationDimension[];
+      renderer.info(`ideation: analyzing ${dimensions.length} dimensions...`);
+
+      const allIdeas: import("../config/types.ts").Idea[] = [];
+      for (const dim of dimensions) {
+        const prompt = buildIdeationPrompt(dim, task);
+        // In a full flow the prompt would be sent to an agent
+        // For now, provide the structured prompt for user to feed to an agent
+        renderer.info(`  \x1b[2m▸ ${dim}: ${DIMENSION_PROMPTS[dim].slice(0, 60)}...\x1b[0m`);
+      }
+
+      // If no ideas parsed (no agent call), show prompt summary
+      if (allIdeas.length === 0) {
+        process.stdout.write("\n");
+        renderer.info("Prompts generated for each dimension.");
+        renderer.info("Use these as subtask prompts in multi-agent mode for full analysis.");
+        renderer.info(`\x1b[2mdimensions: ${dimensions.join(", ")}\x1b[0m`);
+      } else {
+        const prioritized = prioritizeIdeas(allIdeas);
+        process.stdout.write("\n");
+        for (const idea of prioritized.slice(0, 10)) {
+          const prio = idea.priority === "high" ? "\x1b[31m" : idea.priority === "medium" ? "\x1b[33m" : "\x1b[32m";
+          renderer.info(`${prio}[${idea.priority}]\x1b[0m ${idea.title} \x1b[2m(effort: ${idea.effort})\x1b[0m`);
+          if (idea.description) renderer.info(`  \x1b[2m${idea.description.slice(0, 100)}\x1b[0m`);
+        }
+      }
+      process.stdout.write("\n");
+      return "continue";
+    }
+
     case "help": {
       process.stdout.write("\n");
       renderer.info("\x1b[1m/status\x1b[0m\x1b[2m              agent statuses");
@@ -511,6 +591,8 @@ export async function handleCommand(
       renderer.info("\x1b[1m/checkpoint\x1b[0m\x1b[2m          create a git checkpoint");
       renderer.info("\x1b[1m/checkpoint list\x1b[0m\x1b[2m     list checkpoints");
       renderer.info("\x1b[1m/checkpoint rollback\x1b[0m\x1b[2m rollback to latest");
+      renderer.info("\x1b[1m/spec\x1b[0m \x1b[2m<task>          generate structured spec pipeline");
+      renderer.info("\x1b[1m/ideate\x1b[0m \x1b[2m<context>      brainstorm improvements across dimensions");
       renderer.info("\x1b[1m/clear\x1b[0m\x1b[2m               clear conversation");
       renderer.info("\x1b[1m/lang\x1b[0m \x1b[2m<language>      set response language");
       renderer.info("\x1b[1m/help\x1b[0m\x1b[2m                this help");
