@@ -14,8 +14,9 @@ import { RolloutRecorder } from "../session/rollout.ts";
 import { eventBus } from "../core/events.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
 import { decompose } from "../core/decomposer.ts";
-import { scoutSkills } from "./skill-scout.ts";
-import { scoutMcp } from "../mcp/mcp-scout.ts";
+import { scoutSkills, type ScoutResult } from "./skill-scout.ts";
+import { scoutMcp, type McpScoutResult } from "../mcp/mcp-scout.ts";
+import { ScoutCache } from "./scout-cache.ts";
 import * as renderer from "./renderer.ts";
 
 export async function startRepl(
@@ -32,6 +33,10 @@ export async function startRepl(
   const rollout = new RolloutRecorder(
     `${config.orchestrator.dataDir}/sessions`,
   );
+
+  // Session-level caches to avoid redundant Haiku scout calls
+  const mcpScoutCache = new ScoutCache();
+  const skillScoutCache = new ScoutCache();
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -185,6 +190,8 @@ export async function startRepl(
         cancellation,
         (streamer) => { currentStreamer = streamer; },
         pinnedAgent,
+        mcpScoutCache,
+        skillScoutCache,
       );
       hasInteraction = true;
       currentStreamer = null;
@@ -245,6 +252,8 @@ async function handleNaturalInput(
   cancellation: CancellationToken,
   onStreamer: (s: AgentStreamer) => void,
   pinned: string | null,
+  mcpScoutCache: ScoutCache,
+  skillScoutCache: ScoutCache,
 ): Promise<void> {
   let route: RouteResult;
   let agentName: string;
@@ -264,7 +273,7 @@ async function handleNaturalInput(
   }
 
   if (route.multiAgent) {
-    await handleMultiAgent(input, orchestrator, config, conversation, rollout, cancellation, onStreamer);
+    await handleMultiAgent(input, orchestrator, config, conversation, rollout, cancellation, onStreamer, mcpScoutCache, skillScoutCache);
     return;
   }
 
@@ -305,9 +314,10 @@ async function handleNaturalInput(
     }
   }
 
-  // Run MCP scout and skill resolve in parallel
+  // Run MCP scout and skill resolve in parallel (with cache)
+  const cachedMcp = mcpScoutCache.get<McpScoutResult>(input);
   const [mcpScoutResult, skillBodies] = await Promise.all([
-    scoutMcp(input, cancellation.signal),
+    cachedMcp ? Promise.resolve(cachedMcp) : scoutMcp(input, cancellation.signal).then(r => { mcpScoutCache.set(input, r); return r; }),
     allMatched.length > 0 ? skillIndex.resolve(allMatched) : Promise.resolve([]),
   ]);
 
@@ -479,6 +489,8 @@ async function handleMultiAgent(
   rollout: RolloutRecorder,
   cancellation: CancellationToken,
   onStreamer: (s: AgentStreamer) => void,
+  mcpScoutCache: ScoutCache,
+  skillScoutCache: ScoutCache,
 ): Promise<void> {
   const taskId = `repl-${Date.now().toString(36)}`;
 
@@ -603,13 +615,25 @@ async function handleMultiAgent(
     );
     renderer.phaseHeader(phase.name, phaseSubtasks.length, phase.parallelizable);
 
-    for (const st of phaseSubtasks) {
-      if (cancellation.cancelled) break;
-
-      const r = await executeSubtask(st, orchestrator, config, cancellation, onStreamer, previousResults);
-      if (r) {
-        allResults.push(r);
-        previousResults.push(r.result.text);
+    if (phase.parallelizable && phaseSubtasks.length > 1) {
+      const promises = phaseSubtasks.map(st =>
+        executeSubtask(st, orchestrator, config, cancellation, onStreamer, previousResults, mcpScoutCache, skillScoutCache),
+      );
+      const results = await Promise.all(promises);
+      for (const r of results) {
+        if (r) {
+          allResults.push(r);
+          previousResults.push(r.result.text);
+        }
+      }
+    } else {
+      for (const st of phaseSubtasks) {
+        if (cancellation.cancelled) break;
+        const r = await executeSubtask(st, orchestrator, config, cancellation, onStreamer, previousResults, mcpScoutCache, skillScoutCache);
+        if (r) {
+          allResults.push(r);
+          previousResults.push(r.result.text);
+        }
       }
     }
   }
@@ -648,6 +672,8 @@ async function executeSubtask(
   cancellation: CancellationToken,
   onStreamer: (s: AgentStreamer) => void,
   previousResults: string[],
+  mcpScoutCache: ScoutCache,
+  skillScoutCache: ScoutCache,
 ): Promise<{ subtask: SubTask; result: StreamResult & { durationMs: number } } | null> {
   const providerConfig = config.providers[subtask.provider];
   if (!providerConfig) {
@@ -660,10 +686,13 @@ async function executeSubtask(
 
   renderer.agentHeader(agentName, modelTier, subtask.agentRole);
 
-  // Parallel Haiku scout: skill + MCP discovery at the same time
+  // Parallel Haiku scout: skill + MCP discovery at the same time (with cache)
+  const cacheKey = subtask.prompt;
+  const cachedSkill = skillScoutCache.get<ScoutResult>(cacheKey);
+  const cachedMcp = mcpScoutCache.get<McpScoutResult>(cacheKey);
   const [skillScoutResult, mcpScoutResult] = await Promise.all([
-    scoutSkills(subtask, orchestrator.getSkillIndex(), cancellation.signal),
-    scoutMcp(subtask.prompt, cancellation.signal),
+    cachedSkill ? Promise.resolve(cachedSkill) : scoutSkills(subtask, orchestrator.getSkillIndex(), cancellation.signal).then(r => { skillScoutCache.set(cacheKey, r); return r; }),
+    cachedMcp ? Promise.resolve(cachedMcp) : scoutMcp(subtask.prompt, cancellation.signal).then(r => { mcpScoutCache.set(cacheKey, r); return r; }),
   ]);
 
   // Render scout results (skills first, then MCP)
