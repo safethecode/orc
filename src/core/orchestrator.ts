@@ -276,7 +276,6 @@ export class Orchestrator {
     const command = buildCommand(providerConfig, profile, {
       prompt: profile.systemPrompt,
       model: profile.model,
-      maxBudgetUsd: profile.maxBudgetUsd,
       systemPrompt: profile.systemPrompt,
       maxTurns: profile.maxTurns,
     });

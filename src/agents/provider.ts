@@ -7,7 +7,6 @@ import type {
 export interface CommandOptions {
   prompt: string;
   model?: ModelTier | string;
-  maxBudgetUsd?: number;
   systemPrompt?: string;
   workdir?: string;
   useStdin?: boolean;
@@ -20,7 +19,6 @@ export function buildCommand(
   options: CommandOptions,
 ): string[] {
   const model = options.model ?? profile.model;
-  const budget = options.maxBudgetUsd ?? profile.maxBudgetUsd;
 
   let cmd: string[];
 
@@ -32,7 +30,6 @@ export function buildCommand(
         "--model", model,
         "--output-format", "stream-json",
         "--verbose",
-        "--max-budget-usd", String(budget),
       ];
     } else {
       cmd = [
@@ -41,7 +38,6 @@ export function buildCommand(
         "--model", model,
         "--output-format", "stream-json",
         "--verbose",
-        "--max-budget-usd", String(budget),
       ];
     }
 

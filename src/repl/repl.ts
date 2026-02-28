@@ -356,7 +356,6 @@ async function handleNaturalInput(
   const cmd = buildCommand(providerConfig, profile, {
     prompt: fullPrompt,
     model: route.model,
-    maxBudgetUsd: profile.maxBudgetUsd,
     systemPrompt,
     maxTurns: profile.maxTurns,
   });
