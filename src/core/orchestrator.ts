@@ -48,6 +48,7 @@ import { CostEstimator } from "./cost-estimator.ts";
 import { CheckpointManager } from "./checkpoint.ts";
 import { Supervisor } from "./supervisor.ts";
 import { McpClientManager } from "../mcp/client-manager.ts";
+import { LspManager } from "../lsp/index.ts";
 import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
@@ -88,6 +89,7 @@ export class Orchestrator {
   private supervisor!: Supervisor;
   private skillIndex: SkillIndex;
   private mcpManager: McpClientManager;
+  private lspManager: LspManager;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -108,6 +110,7 @@ export class Orchestrator {
     this.dynamicSecurity = new DynamicSecurityProfile();
     this.skillIndex = new SkillIndex();
     this.mcpManager = new McpClientManager();
+    this.lspManager = new LspManager(process.cwd());
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -614,7 +617,12 @@ export class Orchestrator {
     return this.compressor;
   }
 
+  getLspManager(): LspManager {
+    return this.lspManager;
+  }
+
   async shutdown(): Promise<void> {
+    await this.lspManager.shutdownAll();
     this.checkpointManager.stopAll();
     this.health.stop();
     this.sleepInhibitor.release();

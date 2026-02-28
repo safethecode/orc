@@ -427,6 +427,12 @@ async function handleNaturalInput(
     systemPrompt += "\n\n" + orchestrator.getDecisions().formatForPrompt(decisions);
   }
 
+  // Inject LSP capabilities context
+  const lspActive = orchestrator.getLspManager().listActive();
+  if (lspActive.length > 0) {
+    systemPrompt += `\n\nLSP servers active: ${lspActive.join(", ")}. You can use go-to-definition, find-references, and diagnostics for structural code navigation.`;
+  }
+
   // Tier-specific response length hint
   if (route.model === "haiku") {
     systemPrompt = systemPrompt

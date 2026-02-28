@@ -12,7 +12,7 @@ export const COMMANDS = [
   "/status", "/stop", "/clear", "/lang",
   "/budget", "/trace", "/agents", "/messages",
   "/ownership", "/spawn", "/task", "/mcp",
-  "/pause", "/resume", "/sessions", "/memory",
+  "/lsp", "/pause", "/resume", "/sessions", "/memory",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
@@ -522,6 +522,58 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "lsp": {
+      const lspMgr = ctx.orchestrator.getLspManager();
+      const sub = args[0];
+
+      if (sub === "diagnostics") {
+        const file = args[1];
+        if (!file) { renderer.error("usage: /lsp diagnostics <file>"); return "continue"; }
+        const diags = await lspMgr.getDiagnostics(file);
+        if (diags.length === 0) {
+          renderer.info("no diagnostics");
+        } else {
+          process.stdout.write("\n");
+          for (const d of diags) {
+            const color = d.severity === "error" ? "\x1b[31m" : d.severity === "warning" ? "\x1b[33m" : "\x1b[2m";
+            renderer.info(`${color}${d.severity}\x1b[0m ${d.file}:${d.line + 1}:${d.column + 1} ${d.message}`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "symbols") {
+        const file = args[1];
+        if (!file) { renderer.error("usage: /lsp symbols <file>"); return "continue"; }
+        const symbols = await lspMgr.documentSymbols(file);
+        if (symbols.length === 0) {
+          renderer.info("no symbols found");
+        } else {
+          process.stdout.write("\n");
+          for (const s of symbols) {
+            renderer.info(`\x1b[1m${s.kind}\x1b[0m ${s.name} \x1b[2m${s.file}:${s.line + 1}\x1b[0m`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      // Default: show active LSP servers
+      const active = lspMgr.listActive();
+      if (active.length === 0) {
+        renderer.info("no LSP servers running");
+        renderer.info("\x1b[2musage: /lsp diagnostics <file> | /lsp symbols <file>\x1b[0m");
+      } else {
+        process.stdout.write("\n");
+        for (const name of active) {
+          renderer.info(`\x1b[32m●\x1b[0m ${name}`);
+        }
+        process.stdout.write("\n");
+      }
+      return "continue";
+    }
+
     case "spec": {
       const task = args.join(" ");
       if (!task) {
@@ -616,6 +668,9 @@ export async function handleCommand(
       renderer.info("\x1b[1m/mcp tools\x1b[0m\x1b[2m           list MCP tools");
       renderer.info("\x1b[1m/mcp connect\x1b[0m \x1b[2m<name>   connect catalog server");
       renderer.info("\x1b[1m/mcp disconnect\x1b[0m \x1b[2m<n>  disconnect server");
+      renderer.info("\x1b[1m/lsp\x1b[0m\x1b[2m                 active LSP servers");
+      renderer.info("\x1b[1m/lsp diagnostics\x1b[0m \x1b[2m<f> file diagnostics");
+      renderer.info("\x1b[1m/lsp symbols\x1b[0m \x1b[2m<file>   document symbols");
       renderer.info("\x1b[1m/pause\x1b[0m\x1b[2m               save session snapshot");
       renderer.info("\x1b[1m/resume\x1b[0m\x1b[2m              restore last session");
       renderer.info("\x1b[1m/sessions\x1b[0m\x1b[2m            saved session list");
