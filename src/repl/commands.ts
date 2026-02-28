@@ -8,6 +8,7 @@ import { buildIdeationPrompt, parseIdeationResponse, prioritizeIdeas, DIMENSION_
 import type { SpecPhase, IdeationDimension } from "../config/types.ts";
 import type { PlanMode } from "./plan-mode.ts";
 import { SessionForkManager } from "../core/session-fork.ts";
+import { ContextCompactor } from "../core/compaction.ts";
 import * as renderer from "./renderer.ts";
 
 export const COMMANDS = [
@@ -460,15 +461,22 @@ export async function handleCommand(
     }
 
     case "compact": {
-      const before = ctx.conversation.length;
-      const summary = ctx.conversation.generateSummary();
+      const compactor = new ContextCompactor();
+      const turns = ctx.conversation.getTurns();
+      if (turns.length === 0) {
+        renderer.info("nothing to compact");
+        return "continue";
+      }
+      const { turns: compactedTurns, result: compactionResult } = compactor.compact(turns);
       ctx.conversation.clear();
-      ctx.conversation.add({
-        role: "assistant",
-        content: `[Compacted ${before} turns. Summary: ${summary}]`,
-        timestamp: new Date().toISOString(),
-      });
-      renderer.info(`\u2713 compacted ${before} turns`);
+      for (const turn of compactedTurns) {
+        ctx.conversation.add(turn);
+      }
+      renderer.info(
+        `\u2713 compacted ${compactionResult.originalTurns} → ${compactionResult.compactedTurns} turns ` +
+        `(~${compactionResult.originalTokens.toLocaleString()} → ~${compactionResult.compactedTokens.toLocaleString()} tokens, ` +
+        `${compactionResult.prunedToolOutputs} tool outputs pruned)`,
+      );
       return "continue";
     }
 
