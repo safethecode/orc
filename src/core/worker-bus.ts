@@ -5,6 +5,8 @@ import type { SessionManager } from "../session/manager.ts";
 import type { Store } from "../db/store.ts";
 import { eventBus } from "./events.ts";
 
+const MAX_MESSAGES = 500;
+
 export class WorkerBus extends EventEmitter {
   private manifests: Map<string, WorkerManifest> = new Map(); // agentName → manifest
   private messages: WorkerMessage[] = [];
@@ -33,6 +35,10 @@ export class WorkerBus extends EventEmitter {
     };
 
     this.messages.push(fullMsg);
+    // FIFO eviction to prevent memory leak
+    if (this.messages.length > MAX_MESSAGES) {
+      this.messages = this.messages.slice(-MAX_MESSAGES);
+    }
 
     // Persist to DB
     this.store.addWorkerMessage({

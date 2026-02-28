@@ -65,6 +65,8 @@ const CONFLICT_PATTERNS: Array<{
   },
 ];
 
+const MAX_DIFFS = 100;
+
 export class ConflictWatcher {
   private diffs: Map<string, AgentDiff> = new Map();
 
@@ -72,6 +74,11 @@ export class ConflictWatcher {
 
   recordDiff(diff: AgentDiff): void {
     this.diffs.set(diff.agentName, diff);
+    // Evict oldest entries if over limit
+    if (this.diffs.size > MAX_DIFFS) {
+      const first = this.diffs.keys().next().value;
+      if (first) this.diffs.delete(first);
+    }
   }
 
   analyze(): LogicalConflict[] {
