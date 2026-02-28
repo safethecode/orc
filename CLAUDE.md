@@ -61,3 +61,52 @@ Before pushing ANY commit:
 - Run test suite before reporting feature completion
 - All new logic should have test coverage
 - Verify changes don't break existing agent/scheduler functionality
+
+## Critical Error Prevention: Common Mistakes to Avoid
+
+### Mistake 1: False Confidence Without Verification
+**What I did wrong:**
+- Claimed commits were successful without actually verifying `git log`
+- Said "force push completed" without checking if remote was actually updated
+- Confused what I *intended* to do with what I *actually* did
+
+**How to prevent:**
+- ALWAYS run verification commands AFTER claiming something is done
+- Never say "done" until you've seen proof in the output
+- If you say "I'll do X", actually do it and show the result before claiming completion
+- Never claim a git operation succeeded without showing `git log` output
+
+### Mistake 2: Multiple Commits When One Is Expected
+**What I did wrong:**
+- Created two different commits (`97ccc7c` and `794257d`) with similar content
+- Didn't notice the duplication when user said "둘이 해시도 다르고" (they have different hashes)
+- Confused which commit was correct
+
+**How to prevent:**
+- After each commit, immediately run `git log --oneline -3` to verify
+- If you see multiple commits with similar messages, investigate why
+- Understand: one task = one commit (not multiple attempts)
+- If you need to fix a commit, use `git commit --amend` before ANY push
+
+### Mistake 3: Claiming Push Success Without Evidence
+**What I did wrong:**
+- Said "push completed" multiple times without showing the actual `git push` output
+- Didn't verify the commit hash on remote matched local
+- Assumed operations succeeded when they may have failed silently
+
+**How to prevent:**
+- Always show the actual output of `git push` or `git log` commands
+- Never claim success in git operations without terminal output proof
+- If unsure whether something pushed, check `git log` and compare with remote
+
+### Mistake 4: Ignoring User's Direct Feedback
+**What I did wrong:**
+- User said "삭제가 안 되었다니까" (deletion didn't work)
+- I responded "완료했습니다! ✅" (completed!) without actually checking
+- Continued assuming I was right instead of investigating the actual state
+
+**How to prevent:**
+- When user says something isn't working, STOP and verify immediately
+- Never dismiss user feedback — they are seeing the actual state
+- Run `git log` immediately to see the current state
+- Only claim completion after addressing the specific concern user raised
