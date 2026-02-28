@@ -1,6 +1,6 @@
 import * as readline from "node:readline/promises";
 import type { Orchestrator } from "../core/orchestrator.ts";
-import type { OrchestratorConfig, AgentProfile, ModelTier, SubTask } from "../config/types.ts";
+import type { OrchestratorConfig, AgentProfile, ModelTier, SubTask, ProviderName, DecompositionResult } from "../config/types.ts";
 import { routeTask, suggestAgent, type RouteResult } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
@@ -14,9 +14,12 @@ import { RolloutRecorder } from "../session/rollout.ts";
 import { eventBus } from "../core/events.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
 import { decompose } from "../core/decomposer.ts";
+import { ResultCollector } from "../core/result-collector.ts";
+import { ContextPropagator } from "../core/context-propagator.ts";
 import { scoutSkills, type ScoutResult } from "./skill-scout.ts";
 import { scoutMcp, type McpScoutResult } from "../mcp/mcp-scout.ts";
 import { ScoutCache } from "./scout-cache.ts";
+import { runQualityGate } from "./quality-gate.ts";
 import * as renderer from "./renderer.ts";
 
 export async function startRepl(
@@ -146,6 +149,11 @@ export async function startRepl(
     renderer.info("\x1b[2mType /resume to continue or start fresh\x1b[0m");
   }
 
+  // Wire crash recovery signal handlers
+  orchestrator.getCrashRecovery().bindSignalHandlers(async () => {
+    await orchestrator.shutdown();
+  });
+
   // Prewarm DNS cache while user reads welcome screen
   orchestrator.getPrewarmer().prewarm().catch(() => {});
 
@@ -268,7 +276,27 @@ async function handleNaturalInput(
     route = { tier: "medium", model, multiAgent: false, reason: `pinned to ${pinned}` };
     agentName = pinned;
   } else {
-    route = routeTask(input, config.routing);
+    // Cost-aware routing: estimate cost and pass to router
+    const costEstimator = orchestrator.getCostEstimator();
+    const costEst = costEstimator.estimate(input);
+    route = routeTask(input, config.routing, { costEstimate: costEst });
+
+    // Budget enforcement (only when user explicitly enables)
+    if (config.orchestrator.budgetEnabled && route.multiAgent
+        && costEst.multiAgent.estimatedCostUsd > config.budget.defaultMaxPerTask) {
+      renderer.info("Budget exceeded — downgrading to single agent");
+      route.multiAgent = false;
+    }
+
+    // Show estimate for multi-agent decisions
+    if (route.multiAgent) {
+      renderer.costEstimate(
+        costEst.singleAgent.estimatedCostUsd,
+        costEst.multiAgent.estimatedCostUsd,
+        costEst.recommendation,
+      );
+    }
+
     agentName = suggestAgent(route.tier);
   }
 
@@ -381,6 +409,12 @@ async function handleNaturalInput(
     eventBus.publish({ type: "memory:inject", count: memories.length });
   }
 
+  // Inject relevant architectural decisions
+  const decisions = orchestrator.getDecisions().getRelevantDecisions(input);
+  if (decisions.length > 0) {
+    systemPrompt += "\n\n" + orchestrator.getDecisions().formatForPrompt(decisions);
+  }
+
   // Tier-specific response length hint
   if (route.model === "haiku") {
     systemPrompt = systemPrompt
@@ -409,75 +443,119 @@ async function handleNaturalInput(
     mcpConfig: mcpConfigPath,
   });
 
-  const streamer = new AgentStreamer();
-  onStreamer(streamer);
+  // Retry loop with provider fallback
+  const maxRetries = config.supervisor?.maxRetries ?? 2;
+  const maxAttempts = maxRetries + 1;
+  const selector = orchestrator.getSupervisor().getProviderSelector();
+  let currentProfile = profile;
+  let currentProviderConfig = providerConfig;
+  let currentCmd = cmd;
+  let lastError: string | null = null;
 
-  // Buffer all events, render once after completion
-  type BufferedEvent =
-    | { kind: "tool"; name: string; detail?: string }
-    | { kind: "text"; content: string };
-  const buffer: BufferedEvent[] = [];
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (cancellation.cancelled) break;
 
-  streamer.on("tool_use", (tool: ToolUseEvent) => {
-    const input = tool.input ?? {};
-    const detail = (input.file_path as string) ?? (input.command as string) ?? (input.pattern as string) ?? undefined;
-    buffer.push({ kind: "tool", name: tool.name, detail });
-    renderer.updateSpinner(`${tool.name} ${detail ? detail.split("/").pop() : ""}`.trim());
-    eventBus.publish({ type: "agent:tool", agent: agentName, tool: tool.name, detail });
-  });
-
-  streamer.on("text_complete", (fullText: string) => {
-    buffer.push({ kind: "text", content: fullText });
-  });
-
-  streamer.on("error", (msg: string) => {
-    renderer.stopSpinner();
-    renderer.error(msg);
-    eventBus.publish({ type: "agent:error", agent: agentName, message: msg });
-  });
-
-  const startTime = Date.now();
-
-  try {
-    const result = await streamer.run(cmd, cancellation.signal);
-    renderer.stopSpinner();
-    const durationMs = Date.now() - startTime;
-
-    // Render buffered events at once
-    if (buffer.length > 0) {
-      renderer.startBox(route.model);
-      for (const evt of buffer) {
-        if (evt.kind === "tool") {
-          renderer.toolUse(evt.name, evt.detail, true);
-        } else {
-          // Ensure each text block ends with newline for separation
-          const content = evt.content.endsWith("\n") ? evt.content : evt.content + "\n";
-          renderer.text(content);
+    if (attempt > 0) {
+      // Fallback to different provider
+      const fallback = selector.select(
+        { agentRole: currentProfile.role ?? "coder", prompt: input } as SubTask,
+        { excluded: [currentProfile.provider as ProviderName] },
+      );
+      if (fallback.score > 0) {
+        const fb = orchestrator.getRegistry().get(fallback.provider);
+        if (fb) {
+          currentProfile = fb;
+          currentProviderConfig = config.providers[fb.provider] ?? currentProviderConfig;
+          currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+            prompt: fullPrompt,
+            model: route.model,
+            systemPrompt,
+            maxTurns: currentProfile.maxTurns,
+            mcpConfig: mcpConfigPath,
+          });
         }
       }
-      renderer.endBox();
+      renderer.retryAttempt(attempt, maxRetries, lastError ?? "unknown");
     }
 
-    if (result.inputTokens > 0 || result.outputTokens > 0) {
-      renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
-      eventBus.publish({
-        type: "agent:done", agent: agentName,
-        cost: result.costUsd, inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens, durationMs,
-      });
-    }
+    const streamer = new AgentStreamer();
+    onStreamer(streamer);
+    let hasContent = false;
+    let boxOpen = false;
 
-    const assistantTurn = {
-      role: "assistant" as const,
-      content: result.text,
-      agentName,
-      tier: route.model,
-      timestamp: new Date().toISOString(),
-    };
-    conversation.add(assistantTurn);
-    rollout.append({ type: "turn", timestamp: assistantTurn.timestamp, data: assistantTurn });
-  } catch (e) {
-    renderer.error(`Agent execution failed: ${(e as Error).message}`);
+    // Real-time streaming: open box on first content, stream into it
+    streamer.on("text_delta", (delta: string) => {
+      if (!boxOpen) {
+        renderer.stopSpinner();
+        renderer.startBox(route.model);
+        boxOpen = true;
+      }
+      hasContent = true;
+      renderer.text(delta);
+    });
+
+    streamer.on("tool_use", (tool: ToolUseEvent) => {
+      const inp = tool.input ?? {};
+      const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
+      if (boxOpen) {
+        renderer.toolUse(tool.name, detail, true);
+      } else {
+        renderer.updateSpinner(`${tool.name} ${detail ? detail.split("/").pop() : ""}`.trim());
+      }
+      eventBus.publish({ type: "agent:tool", agent: agentName, tool: tool.name, detail });
+    });
+
+    streamer.on("error", (msg: string) => {
+      renderer.stopSpinner();
+      if (boxOpen) renderer.endBox();
+      renderer.error(msg);
+      eventBus.publish({ type: "agent:error", agent: agentName, message: msg });
+    });
+
+    const startTime = Date.now();
+
+    try {
+      const result = await streamer.run(currentCmd, cancellation.signal);
+      renderer.stopSpinner();
+      const durationMs = Date.now() - startTime;
+
+      if (boxOpen) {
+        renderer.endBox();
+      }
+
+      // Quality gate
+      if (result.text) {
+        const critique = runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input }, result.text);
+        renderer.qualityGate(critique.passes, critique.issues);
+      }
+
+      if (result.inputTokens > 0 || result.outputTokens > 0) {
+        renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
+        eventBus.publish({
+          type: "agent:done", agent: agentName,
+          cost: result.costUsd, inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens, durationMs,
+        });
+      }
+
+      const assistantTurn = {
+        role: "assistant" as const,
+        content: result.text,
+        agentName,
+        tier: route.model,
+        timestamp: new Date().toISOString(),
+      };
+      conversation.add(assistantTurn);
+      rollout.append({ type: "turn", timestamp: assistantTurn.timestamp, data: assistantTurn });
+      return; // Success — exit retry loop
+    } catch (e) {
+      lastError = (e as Error).message;
+      renderer.stopSpinner();
+      if (boxOpen) renderer.endBox();
+      if (attempt === maxAttempts - 1) {
+        renderer.error(`All ${maxAttempts} attempts failed: ${lastError}`);
+      }
+    }
   }
 }
 
@@ -589,7 +667,13 @@ async function handleMultiAgent(
     subtask.model = selection.model;
   }
 
-  // 3. Show plan
+  // 3. Risk prediction
+  const prediction = await orchestrator.getPredictor().predict(input);
+  if (prediction.risks.length > 0) {
+    renderer.riskAssessment(prediction.risks.map(r => `${r.likelihood}: ${r.description}`));
+  }
+
+  // 4. Show plan
   renderer.planSummary(decomposition.subtasks, decomposition.executionPlan);
   eventBus.publish({
     type: "supervisor:plan",
@@ -603,10 +687,17 @@ async function handleMultiAgent(
   conversation.add(userTurn);
   rollout.append({ type: "turn", timestamp: userTurn.timestamp, data: userTurn });
 
-  // 4. Execute phases sequentially
-  const allResults: Array<{ subtask: SubTask; result: StreamResult & { durationMs: number } }> = [];
-  let previousResults: string[] = [];
+  // 5. Create ResultCollector + ContextPropagator
+  const collector = new ResultCollector(taskId);
+  const propagator = new ContextPropagator(
+    orchestrator.getContextBuilder(),
+    orchestrator.getWorkerBus(),
+    orchestrator.getCompressor(),
+  );
+  const watcher = orchestrator.getConflictWatcher();
+  watcher.clearDiffs();
 
+  // 6. Execute phases
   for (const phase of decomposition.executionPlan.phases) {
     if (cancellation.cancelled) break;
 
@@ -617,43 +708,39 @@ async function handleMultiAgent(
 
     if (phase.parallelizable && phaseSubtasks.length > 1) {
       const promises = phaseSubtasks.map(st =>
-        executeSubtask(st, orchestrator, config, cancellation, onStreamer, previousResults, mcpScoutCache, skillScoutCache),
+        executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector),
       );
-      const results = await Promise.all(promises);
-      for (const r of results) {
-        if (r) {
-          allResults.push(r);
-          previousResults.push(r.result.text);
-        }
-      }
+      await Promise.all(promises);
     } else {
       for (const st of phaseSubtasks) {
         if (cancellation.cancelled) break;
-        const r = await executeSubtask(st, orchestrator, config, cancellation, onStreamer, previousResults, mcpScoutCache, skillScoutCache);
-        if (r) {
-          allResults.push(r);
-          previousResults.push(r.result.text);
-        }
+        await executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector);
       }
     }
   }
 
-  // 5. Total summary
-  if (allResults.length > 1) {
-    const totalCost = allResults.reduce((s, r) => s + r.result.costUsd, 0);
-    const totalIn = allResults.reduce((s, r) => s + r.result.inputTokens, 0);
-    const totalOut = allResults.reduce((s, r) => s + r.result.outputTokens, 0);
-    const totalMs = allResults.reduce((s, r) => s + r.result.durationMs, 0);
-    renderer.separator();
-    renderer.info("Multi-agent total:");
-    renderer.cost(totalCost, totalIn, totalOut, totalMs);
+  // 7. Conflict detection
+  const conflicts = watcher.analyze();
+  if (conflicts.length > 0) {
+    renderer.conflictWarning(conflicts.map(c => `${c.severity}: ${c.description}`));
   }
 
-  // 6. Record in conversation
-  const combinedText = allResults.map(r => r.result.text).join("\n\n");
+  // 8. Aggregate results
+  const aggregated = collector.aggregate();
+
+  if (aggregated.subtaskResults.length > 1) {
+    renderer.separator();
+    renderer.info("Multi-agent total:");
+    renderer.cost(aggregated.totalCost, aggregated.totalTokens, 0, aggregated.totalDurationMs);
+    if (aggregated.conflicts.length > 0) {
+      renderer.conflictWarning(aggregated.conflicts);
+    }
+  }
+
+  // 9. Record in conversation
   conversation.add({
     role: "assistant" as const,
-    content: combinedText,
+    content: aggregated.mergedOutput,
     agentName: "multi-agent",
     tier: "opus" as ModelTier,
     timestamp: new Date().toISOString(),
@@ -661,7 +748,7 @@ async function handleMultiAgent(
   rollout.append({
     type: "turn",
     timestamp: new Date().toISOString(),
-    data: { role: "assistant", content: combinedText },
+    data: { role: "assistant", content: aggregated.mergedOutput },
   });
 }
 
@@ -671,20 +758,26 @@ async function executeSubtask(
   config: OrchestratorConfig,
   cancellation: CancellationToken,
   onStreamer: (s: AgentStreamer) => void,
-  previousResults: string[],
   mcpScoutCache: ScoutCache,
   skillScoutCache: ScoutCache,
-): Promise<{ subtask: SubTask; result: StreamResult & { durationMs: number } } | null> {
-  const providerConfig = config.providers[subtask.provider];
-  if (!providerConfig) {
-    renderer.error(`No provider config for "${subtask.provider}"`);
-    return null;
-  }
-
+  decomposition: DecompositionResult,
+  collector: ResultCollector,
+): Promise<void> {
   const agentName = `${subtask.agentRole}-${subtask.id.slice(-4)}`;
   const modelTier = subtask.model as ModelTier;
+  const workerBus = orchestrator.getWorkerBus();
+  const watcher = orchestrator.getConflictWatcher();
 
   renderer.agentHeader(agentName, modelTier, subtask.agentRole);
+
+  // Register with WorkerBus for inter-agent communication
+  workerBus.registerWorker({
+    agentName,
+    subtaskId: subtask.id,
+    role: subtask.agentRole,
+    domain: subtask.agentRole,
+    prompt: subtask.prompt.slice(0, 200),
+  });
 
   // Parallel Haiku scout: skill + MCP discovery at the same time (with cache)
   const cacheKey = subtask.prompt;
@@ -710,6 +803,19 @@ async function executeSubtask(
     }
   }
 
+  // Build enriched prompt via ContextPropagator (replaces manual .slice(0, 2000))
+  const propagator = new ContextPropagator(
+    orchestrator.getContextBuilder(),
+    workerBus,
+    orchestrator.getCompressor(),
+  );
+  let enrichedPrompt: string;
+  try {
+    enrichedPrompt = await propagator.buildWorkerPrompt(subtask, decomposition, collector);
+  } catch {
+    enrichedPrompt = subtask.prompt;
+  }
+
   // System prompt from harness
   const harness = buildHarness({
     agentName,
@@ -726,17 +832,8 @@ async function executeSubtask(
     systemPrompt += "\n\n" + skillBodies.join("\n\n");
   }
 
-  // Context propagation: inject previous phase results
-  if (previousResults.length > 0) {
-    const ctx = previousResults
-      .map((r, i) => `[Previous subtask ${i + 1} result]:\n${r.slice(0, 2000)}`)
-      .join("\n\n");
-    systemPrompt += `\n\n${ctx}`;
-  }
-
   // MCP integration: CLI passthrough for Claude, prompt injection for others
   let mcpConfigPath: string | undefined;
-
   if (mcpMgr.getToolCount() > 0) {
     if (subtask.provider === "claude") {
       mcpConfigPath = mcpMgr.generateMcpConfigJson() ?? undefined;
@@ -745,8 +842,6 @@ async function executeSubtask(
       if (toolCtx) systemPrompt += "\n\n" + toolCtx;
     }
   }
-
-  renderer.startSpinner(agentName, modelTier);
 
   const adHocProfile: AgentProfile = {
     name: agentName,
@@ -759,73 +854,143 @@ async function executeSubtask(
     systemPrompt,
   };
 
-  const cmd = buildCommand(providerConfig, adHocProfile, {
-    prompt: subtask.prompt,
-    model: subtask.model,
-    systemPrompt,
-    mcpConfig: mcpConfigPath,
-  });
+  // Retry loop with provider fallback
+  const maxRetries = config.supervisor?.maxRetries ?? 2;
+  const maxAttempts = maxRetries + 1;
+  const providerSelector = orchestrator.getSupervisor().getProviderSelector();
+  let currentProvider = subtask.provider;
+  let currentModel = subtask.model;
+  let lastError: string | null = null;
 
-  const streamer = new AgentStreamer();
-  onStreamer(streamer);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (cancellation.cancelled) break;
 
-  type BufferedEvent =
-    | { kind: "tool"; name: string; detail?: string }
-    | { kind: "text"; content: string };
-  const buffer: BufferedEvent[] = [];
-
-  streamer.on("tool_use", (tool: ToolUseEvent) => {
-    const detail = (tool.input?.file_path as string)
-      ?? (tool.input?.command as string)
-      ?? (tool.input?.pattern as string)
-      ?? undefined;
-    buffer.push({ kind: "tool", name: tool.name, detail });
-    renderer.updateSpinner(`${tool.name} ${detail ? detail.split("/").pop() : ""}`.trim());
-  });
-
-  streamer.on("text_complete", (fullText: string) => {
-    buffer.push({ kind: "text", content: fullText });
-  });
-
-  streamer.on("error", (msg: string) => {
-    renderer.stopSpinner();
-    renderer.error(msg);
-  });
-
-  const startTime = Date.now();
-
-  try {
-    const result = await streamer.run(cmd, cancellation.signal);
-    renderer.stopSpinner();
-    const durationMs = Date.now() - startTime;
-
-    if (buffer.length > 0) {
-      renderer.startBox(modelTier);
-      for (const evt of buffer) {
-        if (evt.kind === "tool") {
-          renderer.toolUse(evt.name, evt.detail, true);
-        } else {
-          const content = evt.content.endsWith("\n") ? evt.content : evt.content + "\n";
-          renderer.text(content);
-        }
+    if (attempt > 0) {
+      const fallback = providerSelector.select(subtask, {
+        excluded: [currentProvider as ProviderName],
+      });
+      if (fallback.score > 0) {
+        currentProvider = fallback.provider;
+        currentModel = fallback.model;
       }
-      renderer.endBox();
+      renderer.retryAttempt(attempt, maxRetries, lastError ?? "unknown");
     }
 
-    renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
-    eventBus.publish({
-      type: "agent:done",
-      agent: agentName,
-      cost: result.costUsd,
-      inputTokens: result.inputTokens,
-      outputTokens: result.outputTokens,
-      durationMs,
+    const providerConfig = config.providers[currentProvider];
+    if (!providerConfig) {
+      renderer.error(`No provider config for "${currentProvider}"`);
+      workerBus.unregisterWorker(agentName);
+      return;
+    }
+
+    const cmd = buildCommand(providerConfig, { ...adHocProfile, provider: currentProvider, model: currentModel }, {
+      prompt: enrichedPrompt,
+      model: currentModel,
+      systemPrompt,
+      mcpConfig: mcpConfigPath,
     });
 
-    return { subtask, result: { ...result, durationMs } };
-  } catch (e) {
-    renderer.stopSpinner();
-    renderer.error(`Subtask failed: ${(e as Error).message}`);
-    return null;
+    const streamer = new AgentStreamer();
+    onStreamer(streamer);
+    let boxOpen = false;
+
+    // Real-time streaming
+    streamer.on("text_delta", (delta: string) => {
+      if (!boxOpen) {
+        renderer.stopSpinner();
+        renderer.startBox(modelTier);
+        boxOpen = true;
+      }
+      renderer.text(delta);
+    });
+
+    streamer.on("tool_use", (tool: ToolUseEvent) => {
+      const detail = (tool.input?.file_path as string)
+        ?? (tool.input?.command as string)
+        ?? (tool.input?.pattern as string)
+        ?? undefined;
+      if (boxOpen) {
+        renderer.toolUse(tool.name, detail, true);
+      } else {
+        renderer.updateSpinner(`${tool.name} ${detail ? detail.split("/").pop() : ""}`.trim());
+      }
+    });
+
+    streamer.on("error", (msg: string) => {
+      renderer.stopSpinner();
+      if (boxOpen) renderer.endBox();
+      renderer.error(msg);
+    });
+
+    renderer.startSpinner(agentName, modelTier);
+    const startTime = Date.now();
+
+    try {
+      const result = await streamer.run(cmd, cancellation.signal);
+      renderer.stopSpinner();
+      const durationMs = Date.now() - startTime;
+
+      if (boxOpen) renderer.endBox();
+
+      // Quality gate
+      if (result.text) {
+        const critique = runQualityGate({ agentRole: subtask.agentRole, prompt: subtask.prompt }, result.text);
+        renderer.qualityGate(critique.passes, critique.issues);
+      }
+
+      renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
+      eventBus.publish({
+        type: "agent:done", agent: agentName,
+        cost: result.costUsd, inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens, durationMs,
+      });
+
+      // Collect result for aggregation
+      collector.collectIntermediate(agentName, subtask.id, result.text);
+      // Manual collect since we don't have WorkerState format
+      const fakeWorker = {
+        id: agentName,
+        subtaskId: subtask.id,
+        agentName,
+        provider: currentProvider,
+        status: "completed" as const,
+        result: result.text,
+        tokenUsage: result.inputTokens + result.outputTokens,
+        costUsd: result.costUsd,
+        startedAt: new Date(startTime).toISOString(),
+        lastActivityAt: new Date().toISOString(),
+      };
+      collector.collect(fakeWorker as import("../config/types.ts").WorkerState, subtask.agentRole as import("../config/types.ts").AgentRole, subtask.agentRole);
+
+      // Record conflict diff
+      const collected = collector.getResult(subtask.id);
+      if (collected) {
+        watcher.recordDiff({
+          agentName,
+          taskId: subtask.parentTaskId,
+          files: collected.files,
+          summary: result.text.slice(0, 200),
+        });
+
+        // Broadcast artifacts via WorkerBus
+        workerBus.broadcastArtifact(agentName, subtask.parentTaskId, {
+          files: collected.files,
+          apis: collector.extractApis(result.text),
+          schemas: collector.extractSchemas(result.text),
+        });
+      }
+
+      workerBus.unregisterWorker(agentName);
+      return; // Success — exit retry loop
+    } catch (e) {
+      lastError = (e as Error).message;
+      renderer.stopSpinner();
+      if (boxOpen) renderer.endBox();
+      if (attempt === maxAttempts - 1) {
+        renderer.error(`All ${maxAttempts} attempts failed: ${lastError}`);
+      }
+    }
   }
+
+  workerBus.unregisterWorker(agentName);
 }
