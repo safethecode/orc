@@ -19,6 +19,7 @@ export const COMMANDS = [
   "/plan", "/fork", "/lsp", "/pause", "/resume", "/sessions", "/memory",
   "/permissions", "/undo", "/redo",
   "/theme", "/models", "/plugins", "/share", "/ast",
+  "/pipeline", "/boulder", "/notepad",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
@@ -643,6 +644,139 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "pipeline": {
+      const task = args.join(" ");
+      if (!task) {
+        renderer.error("usage: /pipeline <task description>");
+        return "continue";
+      }
+      const pipeline = ctx.orchestrator.getPlanningPipeline();
+      const result = await pipeline.runPipeline(task);
+      process.stdout.write("\n");
+      for (const stage of result.stages) {
+        const icon = stage.completed ? "\x1b[32m\u2713\x1b[0m" : "\x1b[31m\u2717\x1b[0m";
+        renderer.info(`${icon} ${stage.stage} \x1b[2m(${stage.durationMs}ms)\x1b[0m ${stage.output}`);
+      }
+      process.stdout.write("\n" + pipeline.formatPlan(result.plan) + "\n\n");
+      return "continue";
+    }
+
+    case "boulder": {
+      const boulderMgr = ctx.orchestrator.getBoulderManager();
+      const sub = args[0];
+
+      if (sub === "list") {
+        const boulders = await boulderMgr.list();
+        if (boulders.length === 0) {
+          renderer.info("no boulders");
+        } else {
+          process.stdout.write("\n");
+          for (const b of boulders) {
+            const pct = b.totalSteps > 0 ? Math.round((b.completedSteps.length / b.totalSteps) * 100) : 0;
+            const color = b.status === "in_progress" ? "\x1b[33m" : b.status === "completed" ? "\x1b[32m" : "\x1b[31m";
+            renderer.info(`${color}${b.status}\x1b[0m  ${b.task.slice(0, 60)}  \x1b[2m${pct}% (${b.completedSteps.length}/${b.totalSteps})\x1b[0m`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "resume") {
+        const latest = await boulderMgr.loadLatest();
+        if (!latest) {
+          renderer.info("no active boulder to resume");
+        } else {
+          process.stdout.write("\n" + boulderMgr.formatResumeContext(latest) + "\n\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "pause") {
+        const latest = await boulderMgr.loadLatest();
+        if (!latest) { renderer.info("no active boulder"); return "continue"; }
+        const hint = args.slice(1).join(" ") || "manually paused";
+        await boulderMgr.pause(latest.id, hint);
+        renderer.info(`\u2713 boulder paused: ${hint}`);
+        return "continue";
+      }
+
+      if (sub === "cleanup") {
+        const removed = await boulderMgr.cleanup();
+        renderer.info(`\u2713 cleaned up ${removed} completed boulders`);
+        return "continue";
+      }
+
+      // Default: show latest
+      const latest = await boulderMgr.loadLatest();
+      if (latest) {
+        process.stdout.write("\n" + boulderMgr.formatResumeContext(latest) + "\n\n");
+      } else {
+        renderer.info("no active boulder");
+        renderer.info("\x1b[2musage: /boulder list | /boulder resume | /boulder pause <hint>\x1b[0m");
+      }
+      return "continue";
+    }
+
+    case "notepad": {
+      const npMgr = ctx.orchestrator.getNotepadManager();
+      const sub = args[0];
+
+      if (sub === "list") {
+        const names = npMgr.listNotepads();
+        if (names.length === 0) {
+          renderer.info("no notepads");
+        } else {
+          process.stdout.write("\n");
+          for (const name of names) {
+            renderer.info(`  ${name}`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "add") {
+        const notepadName = args[1] || "session";
+        const category = (args[2] || "learning") as import("../core/notepad.ts").NoteCategory;
+        const content = args.slice(3).join(" ");
+        if (!content) { renderer.error("usage: /notepad add <pad> <category> <content>"); return "continue"; }
+        npMgr.addNote(notepadName, category, content, "user");
+        await npMgr.save(notepadName);
+        renderer.info(`\u2713 note added to ${notepadName} [${category}]`);
+        return "continue";
+      }
+
+      if (sub === "search") {
+        const query = args.slice(1).join(" ");
+        if (!query) { renderer.error("usage: /notepad search <query>"); return "continue"; }
+        const results = npMgr.search(query);
+        if (results.length === 0) {
+          renderer.info("no matches");
+        } else {
+          process.stdout.write("\n");
+          for (const note of results.slice(0, 10)) {
+            renderer.info(`\x1b[1m[${note.category}]\x1b[0m ${note.content.slice(0, 80)} \x1b[2m(${note.source})\x1b[0m`);
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "show") {
+        const name = args[1] || "session";
+        const wisdom = npMgr.getWisdom(name);
+        if (wisdom) {
+          process.stdout.write("\n" + wisdom + "\n\n");
+        } else {
+          renderer.info(`notepad "${name}" is empty`);
+        }
+        return "continue";
+      }
+
+      renderer.info("usage: /notepad [list|add|search|show] ...");
+      return "continue";
+    }
+
     case "diff": {
       const ghostSha = ctx.orchestrator.getGhostSha();
       if (!ghostSha) {
@@ -1058,6 +1192,13 @@ export async function handleCommand(
       renderer.info("\x1b[1m/share import\x1b[0m \x1b[2m<file>  import shared session");
       renderer.info("\x1b[1m/ast search\x1b[0m \x1b[2m<pattern> structural code search");
       renderer.info("\x1b[1m/ast replace\x1b[0m \x1b[2m<p> <r>  structural code replace");
+      renderer.info("\x1b[1m/pipeline\x1b[0m \x1b[2m<task>      run plan→review→validate pipeline");
+      renderer.info("\x1b[1m/boulder\x1b[0m\x1b[2m             active boulders (WIP tasks)");
+      renderer.info("\x1b[1m/boulder resume\x1b[0m \x1b[2m<id>  resume a boulder");
+      renderer.info("\x1b[1m/boulder pause\x1b[0m \x1b[2m<id>   pause a boulder");
+      renderer.info("\x1b[1m/notepad\x1b[0m\x1b[2m             list notepads");
+      renderer.info("\x1b[1m/notepad add\x1b[0m \x1b[2m<name>    create new notepad");
+      renderer.info("\x1b[1m/notepad search\x1b[0m \x1b[2m<q>  search notepad entries");
       renderer.info("\x1b[1m/diff\x1b[0m\x1b[2m                show changes since session start");
       renderer.info("\x1b[1m/compact\x1b[0m\x1b[2m             compress conversation history");
       renderer.info("\x1b[1m/trust\x1b[0m\x1b[2m               trust project config dir");
