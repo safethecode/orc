@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { McpConfig } from "../config/types.ts";
+import type { McpCatalogEntry } from "./catalog.ts";
 
 export interface McpToolInfo {
   serverName: string;
@@ -81,6 +82,48 @@ export class McpClientManager {
     });
 
     return `## Available MCP Tools\n\nThe following external tools are available via MCP servers. You can reference them in your response when relevant.\n\n${lines.join("\n")}`;
+  }
+
+  async connectOnDemand(entries: McpCatalogEntry[]): Promise<string[]> {
+    const connected: string[] = [];
+    for (const entry of entries) {
+      if (this.clients.has(entry.name)) {
+        connected.push(entry.name);
+        continue;
+      }
+      try {
+        const transport = new StdioClientTransport({
+          command: entry.command,
+          args: entry.args,
+          stderr: "pipe",
+        });
+        const client = new Client({ name: "orc", version: "0.1.0" });
+        await client.connect(transport);
+
+        const { tools } = await client.listTools();
+        for (const tool of tools) {
+          this.toolCache.push({
+            serverName: entry.name,
+            name: tool.name,
+            description: tool.description ?? "",
+            inputSchema: tool.inputSchema as Record<string, unknown>,
+          });
+        }
+
+        this.clients.set(entry.name, client);
+        this.transports.set(entry.name, transport);
+
+        // Also register in config so generateMcpConfigJson picks them up
+        if (!this.config) this.config = { servers: {} };
+        this.config.servers[entry.name] = {
+          command: entry.command,
+          args: entry.args,
+        };
+
+        connected.push(entry.name);
+      } catch { /* skip failed server */ }
+    }
+    return connected;
   }
 
   generateMcpConfigJson(serverNames?: string[]): string | null {
