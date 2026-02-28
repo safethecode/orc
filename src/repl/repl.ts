@@ -21,6 +21,7 @@ import { scoutMcp, type McpScoutResult } from "../mcp/mcp-scout.ts";
 import { ScoutCache } from "./scout-cache.ts";
 import { runQualityGate } from "./quality-gate.ts";
 import { HashlineEditor } from "../core/hashline.ts";
+import { PlanMode } from "./plan-mode.ts";
 import { getPhaseModel } from "../core/phase-config.ts";
 import { detectRecurringIssues, DEFAULT_QA_CONFIG } from "../core/qa-loop.ts";
 import type { QAIssue, ExecutionPhase } from "../config/types.ts";
@@ -31,6 +32,7 @@ export async function startRepl(
   config: OrchestratorConfig,
 ): Promise<void> {
   const conversation = new Conversation();
+  const planMode = new PlanMode();
   let currentStreamer: AgentStreamer | null = null;
   let currentCancellation: CancellationToken | null = null;
   let hasInteraction = false;
@@ -170,7 +172,10 @@ export async function startRepl(
       let input: string;
       try {
         promptActive = true;
-        input = await rl.question(renderer.PROMPT);
+        const prompt = planMode.isActive()
+          ? `\x1b[1m\x1b[33m[plan]\x1b[35m ❯\x1b[0m `
+          : renderer.PROMPT;
+        input = await rl.question(prompt);
         promptActive = false;
       } catch {
         promptActive = false;
@@ -184,6 +189,7 @@ export async function startRepl(
         const result = await handleCommand(trimmed, {
           orchestrator,
           conversation,
+          planMode,
           getPinnedAgent: () => pinnedAgent,
           setPinnedAgent: (name) => { pinnedAgent = name; },
         });
@@ -208,6 +214,7 @@ export async function startRepl(
         pinnedAgent,
         mcpScoutCache,
         skillScoutCache,
+        planMode,
       );
       hasInteraction = true;
       currentStreamer = null;
@@ -270,6 +277,7 @@ async function handleNaturalInput(
   pinned: string | null,
   mcpScoutCache: ScoutCache,
   skillScoutCache: ScoutCache,
+  planMode?: PlanMode,
 ): Promise<void> {
   let route: RouteResult;
   let agentName: string;
@@ -430,6 +438,11 @@ async function handleNaturalInput(
   const decisions = orchestrator.getDecisions().getRelevantDecisions(input);
   if (decisions.length > 0) {
     systemPrompt += "\n\n" + orchestrator.getDecisions().formatForPrompt(decisions);
+  }
+
+  // Inject plan mode restrictions
+  if (planMode?.isActive()) {
+    systemPrompt += "\n\n" + planMode.getSystemPromptAddition();
   }
 
   // Inject hashline editing instructions for code-editing agents
