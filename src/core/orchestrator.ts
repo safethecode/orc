@@ -63,6 +63,14 @@ import { SessionSharer } from "./session-share.ts";
 import { OAuthMcpAuth } from "./oauth-mcp.ts";
 import { AstGrep } from "./ast-grep.ts";
 import { InputHandler } from "../repl/input-handler.ts";
+import { PlanningPipeline } from "./planning-pipeline.ts";
+import { BoulderManager } from "./boulder.ts";
+import { NotepadManager } from "./notepad.ts";
+import { CommentChecker } from "./comment-checker.ts";
+import { RalphLoop } from "./ralph-loop.ts";
+import { RuntimeFallbackManager } from "./runtime-fallback.ts";
+import { TmuxVisualizer } from "./tmux-viz.ts";
+import { IntentGate } from "./intent-gate.ts";
 import type { WorkerBus } from "./worker-bus.ts";
 import type { SubTask } from "../config/types.ts";
 import type { Database } from "bun:sqlite";
@@ -117,6 +125,14 @@ export class Orchestrator {
   private oauthMcp: OAuthMcpAuth;
   private astGrep: AstGrep;
   private inputHandler: InputHandler;
+  private planningPipeline: PlanningPipeline;
+  private boulderManager: BoulderManager;
+  private notepadManager: NotepadManager;
+  private commentChecker: CommentChecker;
+  private ralphLoop: RalphLoop;
+  private runtimeFallback: RuntimeFallbackManager;
+  private tmuxViz: TmuxVisualizer;
+  private intentGate: IntentGate;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -151,6 +167,14 @@ export class Orchestrator {
     this.oauthMcp = new OAuthMcpAuth(config.orchestrator.dataDir);
     this.astGrep = new AstGrep();
     this.inputHandler = new InputHandler();
+    this.planningPipeline = new PlanningPipeline();
+    this.boulderManager = new BoulderManager(process.cwd());
+    this.notepadManager = new NotepadManager(process.cwd());
+    this.commentChecker = new CommentChecker();
+    this.ralphLoop = new RalphLoop();
+    this.runtimeFallback = new RuntimeFallbackManager();
+    this.tmuxViz = new TmuxVisualizer();
+    this.intentGate = new IntentGate();
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -299,6 +323,9 @@ export class Orchestrator {
 
     // Load user plugins
     await this.pluginManager.loadAll();
+
+    // Load saved notepads from disk
+    await this.notepadManager.loadAll();
 
     // Start file watcher for external change detection
     this.fileWatcher.on("change", (event: import("./file-watcher.ts").FileChangeEvent) => {
@@ -731,8 +758,41 @@ export class Orchestrator {
     return this.inputHandler;
   }
 
+  getPlanningPipeline(): PlanningPipeline {
+    return this.planningPipeline;
+  }
+
+  getBoulderManager(): BoulderManager {
+    return this.boulderManager;
+  }
+
+  getNotepadManager(): NotepadManager {
+    return this.notepadManager;
+  }
+
+  getCommentChecker(): CommentChecker {
+    return this.commentChecker;
+  }
+
+  getRalphLoop(): RalphLoop {
+    return this.ralphLoop;
+  }
+
+  getRuntimeFallback(): RuntimeFallbackManager {
+    return this.runtimeFallback;
+  }
+
+  getTmuxViz(): TmuxVisualizer {
+    return this.tmuxViz;
+  }
+
+  getIntentGate(): IntentGate {
+    return this.intentGate;
+  }
+
   async shutdown(): Promise<void> {
     this.fileWatcher.stop();
+    await this.tmuxViz.cleanup().catch(() => {});
     await this.pluginManager.emit("session:end", { data: {}, projectDir: process.cwd() }).catch(() => {});
     await this.lspManager.shutdownAll();
     this.checkpointManager.stopAll();
