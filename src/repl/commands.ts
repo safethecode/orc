@@ -95,6 +95,42 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "budget": {
+      const store = ctx.orchestrator.getStore();
+      const config = ctx.orchestrator.getConfig();
+      const tasks = store.listTasks();
+
+      const totalCost = tasks.reduce((sum, t) => sum + (t.costUsd ?? 0), 0);
+      const totalTokens = tasks.reduce((sum, t) => sum + (t.tokenUsage ?? 0), 0);
+      const taskCount = tasks.filter((t) => t.costUsd && t.costUsd > 0).length;
+
+      const budgetLimit = config.budget?.defaultMaxPerTask ?? 0;
+      const budgetEnabled = config.orchestrator?.budgetEnabled ?? false;
+
+      process.stdout.write("\n");
+      renderer.info(`\x1b[1mSession Budget\x1b[0m`);
+      renderer.info(`  spent: \x1b[1m$${totalCost < 0.01 ? totalCost.toFixed(4) : totalCost.toFixed(2)}\x1b[0m  (${totalTokens.toLocaleString()} tokens, ${taskCount} tasks)`);
+      if (budgetEnabled && budgetLimit > 0) {
+        const pct = Math.round((totalCost / budgetLimit) * 100);
+        const color = pct > 90 ? "\x1b[31m" : pct > 70 ? "\x1b[33m" : "\x1b[32m";
+        renderer.info(`  limit: $${budgetLimit.toFixed(2)}  ${color}${pct}% used\x1b[0m`);
+      } else {
+        renderer.info(`  \x1b[2mbudget enforcement: off\x1b[0m`);
+      }
+
+      // Show per-prompt estimate if user provided an argument
+      const prompt = args.join(" ");
+      if (prompt) {
+        const estimator = ctx.orchestrator.getCostEstimator();
+        const est = estimator.estimate(prompt);
+        process.stdout.write("\n");
+        renderer.info(estimator.formatEstimate(est));
+      }
+
+      process.stdout.write("\n");
+      return "continue";
+    }
+
     case "trace": {
       const tracer = ctx.orchestrator.getTracer();
       const active = tracer.getActiveSpans();
