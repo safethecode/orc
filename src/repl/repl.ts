@@ -24,6 +24,8 @@ import { HashlineEditor } from "../core/hashline.ts";
 import { PlanMode } from "./plan-mode.ts";
 import { FileRefResolver } from "./file-ref.ts";
 import { SessionForkManager } from "../core/session-fork.ts";
+import { SessionSharer } from "../core/session-share.ts";
+import { InputHandler, type InputResult } from "./input-handler.ts";
 import { getPhaseModel } from "../core/phase-config.ts";
 import { detectRecurringIssues, DEFAULT_QA_CONFIG } from "../core/qa-loop.ts";
 import type { QAIssue, ExecutionPhase } from "../config/types.ts";
@@ -37,6 +39,7 @@ export async function startRepl(
   const planMode = new PlanMode();
   const fileRef = new FileRefResolver(process.cwd());
   const forkManager = new SessionForkManager();
+  const inputHandler = orchestrator.getInputHandler();
   let currentStreamer: AgentStreamer | null = null;
   let currentCancellation: CancellationToken | null = null;
   let hasInteraction = false;
@@ -155,6 +158,24 @@ export async function startRepl(
     renderer.info(`\x1b[2mFormatters: ${detectedFormatters.join(", ")}\x1b[0m`);
   }
 
+  // Show active theme
+  const theme = orchestrator.getThemeManager().get();
+  if (theme.name !== "default") {
+    renderer.info(`\x1b[2mTheme: ${theme.name}\x1b[0m`);
+  }
+
+  // Show loaded plugins
+  const plugins = orchestrator.getPluginManager().list();
+  if (plugins.length > 0) {
+    renderer.info(`\x1b[2mPlugins: ${plugins.map(p => p.name).join(", ")}\x1b[0m`);
+  }
+
+  // Show ast-grep availability
+  const astGrepAvailable = await orchestrator.getAstGrep().isAvailable();
+  if (astGrepAvailable) {
+    renderer.info(`\x1b[2mAST-Grep: available\x1b[0m`);
+  }
+
   // Show last session hint if available
   const lastSnapshot = orchestrator.getStore().getLatestSnapshot();
   if (lastSnapshot) {
@@ -173,6 +194,12 @@ export async function startRepl(
   // Capture initial git snapshot for undo/redo
   const gitSnapshots = orchestrator.getGitSnapshots();
   gitSnapshots.capture(0, "session-start").catch(() => {});
+
+  // Emit session:start plugin hook
+  orchestrator.getPluginManager().emit("session:start", {
+    data: { projectDir: process.cwd() },
+    projectDir: process.cwd(),
+  }).catch(() => {});
 
   // Prewarm DNS cache while user reads welcome screen
   orchestrator.getPrewarmer().prewarm().catch(() => {});
@@ -195,6 +222,28 @@ export async function startRepl(
       const trimmed = input.trim();
       if (!trimmed) continue;
 
+      // Process through InputHandler: inline bash (!cmd), editor (/editor), multiline
+      if (inputHandler.isInlineBash(trimmed)) {
+        const bashResult = await inputHandler.process(trimmed);
+        if (bashResult.text) {
+          renderer.info(bashResult.text);
+        }
+        continue;
+      }
+      if (inputHandler.isEditorCommand(trimmed)) {
+        const editorResult = await inputHandler.process(trimmed);
+        if (editorResult.metadata?.cancelled) {
+          renderer.info("editor cancelled");
+          continue;
+        }
+        if (editorResult.text) {
+          // Feed editor content as regular input
+          input = editorResult.text;
+        } else {
+          continue;
+        }
+      }
+
       if (isCommand(trimmed)) {
         const result = await handleCommand(trimmed, {
           orchestrator,
@@ -207,6 +256,12 @@ export async function startRepl(
         if (result === "quit") break;
         continue;
       }
+
+      // Plugin hook: message:before
+      await orchestrator.getPluginManager().emit("message:before", {
+        data: { input: trimmed },
+        projectDir: process.cwd(),
+      });
 
       // Reset doom loop detector for new message
       orchestrator.getDoomLoop().reset();
@@ -244,6 +299,12 @@ export async function startRepl(
       currentStreamer = null;
       currentCancellation = null;
 
+      // Plugin hook: message:after
+      orchestrator.getPluginManager().emit("message:after", {
+        data: { input: resolvedInput ?? trimmed },
+        projectDir: process.cwd(),
+      }).catch(() => {});
+
       // Release sleep inhibitor after agent work
       orchestrator.getSleepInhibitor().release();
 
@@ -271,6 +332,12 @@ export async function startRepl(
       // Persist rollout (deferred: only written if there was interaction)
       rollout.persist();
     }
+
+    // Emit session:end plugin hook
+    await orchestrator.getPluginManager().emit("session:end", {
+      data: { turnCount: conversation.length, projectDir: process.cwd() },
+      projectDir: process.cwd(),
+    }).catch(() => {});
 
     // Show ghost commit diff summary on exit
     const ghostSha = orchestrator.getGhostSha();
@@ -494,6 +561,17 @@ async function handleNaturalInput(
   const customToolsCtx = orchestrator.getCustomTools().formatForPrompt();
   if (customToolsCtx) {
     systemPrompt += "\n\n" + customToolsCtx;
+  }
+
+  // Inject plugin tools context
+  const pluginTools = orchestrator.getPluginManager().getPluginTools();
+  if (pluginTools.length > 0) {
+    systemPrompt += "\n\nPlugin tools available: " + pluginTools.map(t => `${t.name} (${t.pluginName}): ${t.description}`).join("; ");
+  }
+
+  // Inject AST-grep availability
+  if (await orchestrator.getAstGrep().isAvailable()) {
+    systemPrompt += "\n\nAST-Grep (sg) is available for structural code search and replace. Use patterns like `$FUNC($$$ARGS)` for AST-aware matching.";
   }
 
   // Tier-specific response length hint
