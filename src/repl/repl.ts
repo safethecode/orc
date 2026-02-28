@@ -365,9 +365,6 @@ async function handleNaturalInput(
     }
   }
 
-  // Start spinner while waiting for response
-  renderer.startSpinner(agentName, route.model);
-
   // Set tier-specific token budget before building prompt
   conversation.setTokenBudget(TIER_BUDGETS[route.model] ?? TIER_BUDGETS.sonnet);
   const fullPrompt = conversation.buildPrompt(input);
@@ -481,6 +478,7 @@ async function handleNaturalInput(
       renderer.retryAttempt(attempt, maxRetries, lastError ?? "unknown");
     }
 
+    renderer.startSpinner(agentName, route.model);
     const streamer = new AgentStreamer();
     onStreamer(streamer);
     let hasContent = false;
