@@ -30,6 +30,7 @@ export function buildCommand(
         "--model", model,
         "--output-format", "stream-json",
         "--verbose",
+        "--dangerously-skip-permissions",
       ];
     } else {
       cmd = [
@@ -38,6 +39,7 @@ export function buildCommand(
         "--model", model,
         "--output-format", "stream-json",
         "--verbose",
+        "--dangerously-skip-permissions",
       ];
     }
 
