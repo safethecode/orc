@@ -176,6 +176,21 @@ export async function startRepl(
     renderer.info(`\x1b[2mAST-Grep: available\x1b[0m`);
   }
 
+  // Show active boulder (resume context)
+  const activeBoulder = await orchestrator.getBoulderManager().loadLatest();
+  if (activeBoulder) {
+    const pct = activeBoulder.totalSteps > 0
+      ? Math.round((activeBoulder.completedSteps.length / activeBoulder.totalSteps) * 100)
+      : 0;
+    renderer.info(`\x1b[2mBoulder: "${activeBoulder.task}" ${pct}% (${activeBoulder.status})\x1b[0m`);
+  }
+
+  // Show notepad count
+  const notepadNames = orchestrator.getNotepadManager().listNotepads();
+  if (notepadNames.length > 0) {
+    renderer.info(`\x1b[2mNotepads: ${notepadNames.join(", ")}\x1b[0m`);
+  }
+
   // Show last session hint if available
   const lastSnapshot = orchestrator.getStore().getLatestSnapshot();
   if (lastSnapshot) {
@@ -574,6 +589,25 @@ async function handleNaturalInput(
     systemPrompt += "\n\nAST-Grep (sg) is available for structural code search and replace. Use patterns like `$FUNC($$$ARGS)` for AST-aware matching.";
   }
 
+  // Inject IntentGate classification context
+  const intentGate = orchestrator.getIntentGate();
+  const intentResult = intentGate.classify(input);
+  if (intentResult.confidence >= 0.7) {
+    systemPrompt += "\n\n" + intentGate.formatForPrompt(intentResult);
+  }
+
+  // Inject boulder resume context (if active work exists)
+  const boulder = await orchestrator.getBoulderManager().loadLatest();
+  if (boulder && boulder.status !== "completed") {
+    systemPrompt += "\n\n" + orchestrator.getBoulderManager().formatResumeContext(boulder);
+  }
+
+  // Inject notepad wisdom
+  const notepadWisdom = orchestrator.getNotepadManager().getWisdom("session");
+  if (notepadWisdom) {
+    systemPrompt += "\n\n" + notepadWisdom;
+  }
+
   // Tier-specific response length hint
   if (route.model === "haiku") {
     systemPrompt = systemPrompt
@@ -673,6 +707,19 @@ async function handleNaturalInput(
       // Auto-format after write/edit tool use
       if ((tool.name === "write" || tool.name === "edit") && inp.file_path) {
         orchestrator.getFormatter().format(inp.file_path as string).catch(() => {});
+        // Comment checker: warn about AI-generated comment patterns (fire-and-forget)
+        (async () => {
+          try {
+            const file = Bun.file(inp.file_path as string);
+            if (await file.exists()) {
+              const content = await file.text();
+              const checkResult = orchestrator.getCommentChecker().check(inp.file_path as string, content);
+              if (checkResult.issues.length > 0) {
+                renderer.info(`\x1b[2mcomment check: ${checkResult.issues.length} AI-pattern issues in ${(inp.file_path as string).split("/").pop()}\x1b[0m`);
+              }
+            }
+          } catch { /* ignore comment check errors */ }
+        })();
       }
 
       if (boxOpen) {
