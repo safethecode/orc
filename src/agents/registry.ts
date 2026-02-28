@@ -57,6 +57,7 @@ export function parseProfile(content: string): AgentProfile {
     worktree: (frontmatter.worktree as boolean) ?? false,
     systemPrompt,
     skills: (frontmatter.skills as string[]) ?? [],
+    mcpServers: (frontmatter.mcpServers as string[]) ?? undefined,
   };
 }
 

@@ -11,6 +11,7 @@ export interface CommandOptions {
   workdir?: string;
   useStdin?: boolean;
   maxTurns?: number;
+  mcpConfig?: string;
 }
 
 export function buildCommand(
@@ -49,6 +50,10 @@ export function buildCommand(
 
     if (options.systemPrompt) {
       cmd.push("--system-prompt", options.systemPrompt);
+    }
+
+    if (options.mcpConfig) {
+      cmd.push("--mcp-config", options.mcpConfig);
     }
   } else if (provider.command === "codex") {
     const codexPrompt = options.systemPrompt
