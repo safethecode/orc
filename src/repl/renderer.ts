@@ -36,9 +36,15 @@ const TIER_BG: Record<ModelTier, string> = {
 // ── Box State (for streaming bordered output) ────────────────────────
 
 let boxColor = GRAY;
+let boxTextW = 0; // max text width inside box (set on startBox)
 let atLineStart = true;
 const BOX_PAD = "  ";
 const boxBorder = () => `${boxColor}│${RESET} `;
+const boxBorderR = () => ` ${boxColor}│${RESET}`;
+
+function stripAnsi(str: string): string {
+  return str.replace(/\x1b\[[0-9;]*m/g, "");
+}
 
 // ── Markdown State ──────────────────────────────────────────────────
 
@@ -84,8 +90,11 @@ export function startBox(tier: ModelTier): void {
   lineBuffer = "";
   inCodeBlock = false;
 
-  const w = (process.stdout.columns || 80) - 4;
-  process.stdout.write(`${BOX_PAD}${color}╭${"─".repeat(w)}${RESET}\n`);
+  // Box layout:  BOX_PAD + ╭ + ─×dashW + ╮  (total = columns)
+  // Content:     BOX_PAD + │ + space + text(textW) + space + │
+  const dashW = (process.stdout.columns || 80) - 4; // -2 pad -1 ╭ -1 ╮
+  boxTextW = dashW - 2; // text area = dashes minus 2 inner spaces
+  process.stdout.write(`${BOX_PAD}${color}╭${"─".repeat(dashW)}╮${RESET}\n`);
 }
 
 export function endBox(): void {
@@ -95,8 +104,8 @@ export function endBox(): void {
   if (!atLineStart) {
     process.stdout.write("\n");
   }
-  const w = (process.stdout.columns || 80) - 4;
-  process.stdout.write(`${BOX_PAD}${boxColor}╰${"─".repeat(w)}${RESET}\n`);
+  const dashW = (process.stdout.columns || 80) - 4;
+  process.stdout.write(`${BOX_PAD}${boxColor}╰${"─".repeat(dashW)}╯${RESET}\n`);
 }
 
 // ── Streaming Text (writes inside box with markdown) ────────────────
@@ -112,10 +121,12 @@ export function text(content: string): void {
 }
 
 function flushLineBuffer(): void {
-  const maxW = (process.stdout.columns || 80) - 4;
-  const wrapped = wrapText(lineBuffer, maxW);
+  const wrapped = wrapText(lineBuffer, boxTextW);
   for (const wline of wrapped) {
-    process.stdout.write(`${BOX_PAD}${boxBorder()}${renderMarkdownLine(wline)}\n`);
+    const rendered = renderMarkdownLine(wline);
+    const visW = displayWidth(stripAnsi(rendered));
+    const pad = Math.max(0, boxTextW - visW);
+    process.stdout.write(`${BOX_PAD}${boxBorder()}${rendered}${" ".repeat(pad)}${boxBorderR()}\n`);
   }
   lineBuffer = "";
   atLineStart = true;
@@ -233,8 +244,15 @@ function renderMarkdownLine(line: string): string {
 
 export function toolUse(name: string, detail?: string, insideBox = false): void {
   const label = detail ? `${name} ${detail}` : name;
-  const prefix = insideBox ? `${BOX_PAD}${boxBorder()}` : "  ";
-  process.stdout.write(`${prefix}${DIM}${YELLOW}▸${RESET} ${DIM}${label}${RESET}\n`);
+  if (insideBox) {
+    const visW = displayWidth(label) + 2; // ▸ + space
+    const pad = Math.max(0, boxTextW - visW);
+    process.stdout.write(
+      `${BOX_PAD}${boxBorder()}${DIM}${YELLOW}▸${RESET} ${DIM}${label}${RESET}${" ".repeat(pad)}${boxBorderR()}\n`,
+    );
+  } else {
+    process.stdout.write(`  ${DIM}${YELLOW}▸${RESET} ${DIM}${label}${RESET}\n`);
+  }
 }
 
 // ── Cost / Stats ─────────────────────────────────────────────────────
