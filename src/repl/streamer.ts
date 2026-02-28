@@ -162,10 +162,11 @@ export class AgentStreamer extends EventEmitter {
       return;
     }
 
-    // content_block_delta: accumulate text, don't emit yet
+    // content_block_delta: accumulate text AND emit delta for real-time streaming
     if (msg.type === "content_block_delta") {
       if (msg.delta?.text) {
         this.textBuffer += msg.delta.text;
+        this.emit("text_delta", msg.delta.text);
       }
       return;
     }
