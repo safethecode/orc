@@ -338,3 +338,47 @@ export function skillScout(names: string[], durationMs: number): void {
     `  ${DIM}skills: ${names.join(", ")}  ${GRAY}(scout ${time})${RESET}\n`,
   );
 }
+
+// ── Retry ───────────────────────────────────────────────────────────
+
+export function retryAttempt(attempt: number, maxAttempts: number, reason: string): void {
+  process.stdout.write(
+    `  ${YELLOW}⟳${RESET} ${DIM}retry ${attempt}/${maxAttempts}: ${reason}${RESET}\n`,
+  );
+}
+
+// ── Quality Gate ────────────────────────────────────────────────────
+
+export function qualityGate(passes: boolean, issues: string[]): void {
+  if (passes) {
+    process.stdout.write(`  ${GREEN}✓${RESET} ${DIM}quality gate passed${RESET}\n`);
+  } else {
+    process.stdout.write(
+      `  ${YELLOW}⚠${RESET} ${DIM}quality gate: ${issues.join(", ")}${RESET}\n`,
+    );
+  }
+}
+
+// ── Cost Estimate ───────────────────────────────────────────────────
+
+export function costEstimate(single: number, multi: number, recommendation: string): void {
+  process.stdout.write(
+    `  ${DIM}cost: ~$${single.toFixed(3)} single / ~$${multi.toFixed(3)} multi → ${recommendation}${RESET}\n`,
+  );
+}
+
+// ── Conflict Warning ────────────────────────────────────────────────
+
+export function conflictWarning(conflicts: string[]): void {
+  for (const c of conflicts) {
+    process.stdout.write(`  ${RED}⚠${RESET} ${DIM}${c}${RESET}\n`);
+  }
+}
+
+// ── Risk Assessment ─────────────────────────────────────────────────
+
+export function riskAssessment(risks: string[]): void {
+  for (const r of risks) {
+    process.stdout.write(`  ${YELLOW}△${RESET} ${DIM}${r}${RESET}\n`);
+  }
+}
