@@ -659,6 +659,7 @@ export interface WorkerState {
   turnHistory: WorkerTurnProgress[];
   corrections: string[];
   intermediateResults: string[];
+  traceContext?: { traceId: string; spanId: string };
 }
 
 // ── Result Collection ───────────────────────────────────────────────

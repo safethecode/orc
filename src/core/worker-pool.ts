@@ -156,13 +156,54 @@ export class WorkerPool {
     return this.getByStatus("failed", "timeout");
   }
 
+  getCancelled(): WorkerState[] {
+    return this.getByStatus("cancelled");
+  }
+
+  /**
+   * Cancel a running worker. Marks as cancelled, clears timeout, publishes event.
+   * Returns the worker state or undefined if not found or already terminal.
+   */
+  cancel(workerId: string, reason: string): WorkerState | undefined {
+    const worker = this.workers.get(workerId);
+    if (!worker) return undefined;
+    if (worker.status === "completed" || worker.status === "cancelled") return undefined;
+
+    worker.status = "cancelled";
+    worker.error = `Cancelled: ${reason}`;
+    worker.lastActivityAt = new Date().toISOString();
+
+    this.clearTimeoutTimer(workerId);
+
+    eventBus.publish({
+      type: "worker:cancel",
+      workerId,
+      reason,
+    });
+
+    return worker;
+  }
+
+  /**
+   * Cancel all active (spawning | running) workers.
+   * Returns the list of workers that were actually cancelled.
+   */
+  cancelAll(reason: string): WorkerState[] {
+    const cancelled: WorkerState[] = [];
+    for (const worker of this.getActive()) {
+      const result = this.cancel(worker.id, reason);
+      if (result) cancelled.push(result);
+    }
+    return cancelled;
+  }
+
   getAll(): WorkerState[] {
     return [...this.workers.values()];
   }
 
   countByStatus(): Record<WorkerStatus, number> {
     const counts: Record<WorkerStatus, number> = {
-      spawning: 0, running: 0, completed: 0, failed: 0, timeout: 0,
+      spawning: 0, running: 0, completed: 0, failed: 0, timeout: 0, cancelled: 0,
     };
     for (const w of this.workers.values()) {
       counts[w.status]++;

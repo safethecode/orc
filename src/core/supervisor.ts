@@ -28,6 +28,7 @@ import { WorkerBus } from "./worker-bus.ts";
 import { ContextPropagator } from "./context-propagator.ts";
 import { FeedbackLoop } from "./feedback-loop.ts";
 import { eventBus } from "./events.ts";
+import type { DistributedTracer, TraceContext } from "./distributed-trace.ts";
 
 export interface SupervisorDeps {
   config: OrchestratorConfig;
@@ -62,6 +63,7 @@ export class Supervisor {
   private contextPropagator: ContextPropagator;
   private feedbackLoop: FeedbackLoop;
   private multiTurnConfig: Required<MultiTurnConfig>;
+  private tracer: DistributedTracer | null = null;
 
   constructor(deps: SupervisorDeps, options?: SupervisorOptions) {
     this.deps = deps;
@@ -122,67 +124,196 @@ export class Supervisor {
   }
 
   async execute(taskId: string, prompt: string): Promise<AggregatedResult> {
-    // 1. Decompose task
-    const decomposition = decompose(prompt, taskId);
+    // Start root trace for this execution
+    const rootCtx = this.tracer?.startTrace("supervisor.execute", "supervisor", {
+      taskId,
+      promptLength: prompt.length,
+    }) ?? null;
 
-    // 1.5. Single-agent fallback — skip supervisor overhead for trivial decompositions
-    if (decomposition.subtasks.length <= 1) {
+    try {
+      // 1. Decompose task
+      const decomposeCtx = rootCtx
+        ? this.tracer!.startSpan(rootCtx, "decomposer.decompose", "decomposer", { taskId })
+        : null;
+
+      const decomposition = decompose(prompt, taskId);
+
+      if (decomposeCtx) {
+        // Add domain detection as child span
+        const domainCtx = this.tracer!.startSpan(decomposeCtx, "domain.detect", "decomposer", { taskId });
+        const domains = detectDomains(prompt);
+        this.tracer!.addTags(domainCtx.spanId, { domainCount: domains.length, domains: domains.join(",") });
+        this.tracer!.endSpan(domainCtx.spanId, "ok");
+
+        this.tracer!.addTags(decomposeCtx.spanId, {
+          subtaskCount: decomposition.subtasks.length,
+          strategy: decomposition.executionPlan.strategy,
+        });
+        this.tracer!.endSpan(decomposeCtx.spanId, "ok");
+      }
+
+      // 1.5. Single-agent fallback — skip supervisor overhead for trivial decompositions
+      if (decomposition.subtasks.length <= 1) {
+        eventBus.publish({
+          type: "supervisor:plan",
+          taskId,
+          phases: 0,
+          estimatedCost: decomposition.estimatedTotalCost,
+        });
+        const result = await this.executeSingleFallback(taskId, decomposition, rootCtx);
+        if (rootCtx) {
+          this.tracer!.addTags(rootCtx.spanId, { singleAgent: true, success: result.success });
+          this.tracer!.endSpan(rootCtx.spanId, result.success ? "ok" : "error");
+        }
+        return result;
+      }
+
+      // 2. Select optimal provider+model for each subtask
+      const providerCtx = rootCtx
+        ? this.tracer!.startSpan(rootCtx, "provider.select", "provider-selector", { taskId })
+        : null;
+      this.assignProviders(decomposition.subtasks);
+      if (providerCtx) {
+        this.tracer!.endSpan(providerCtx.spanId, "ok");
+      }
+
+      // 3. Publish execution plan
+      const plan = decomposition.executionPlan;
       eventBus.publish({
         type: "supervisor:plan",
         taskId,
-        phases: 0,
+        phases: plan.phases.length,
         estimatedCost: decomposition.estimatedTotalCost,
       });
-      return this.executeSingleFallback(taskId, decomposition);
-    }
 
-    // 2. Select optimal provider+model for each subtask
-    this.assignProviders(decomposition.subtasks);
+      // 4. Initialize worker bus for this task
+      this.workerBus.clearTask(taskId);
 
-    // 3. Publish execution plan
-    const plan = decomposition.executionPlan;
-    eventBus.publish({
-      type: "supervisor:plan",
-      taskId,
-      phases: plan.phases.length,
-      estimatedCost: decomposition.estimatedTotalCost,
-    });
+      // 5. Subscribe to turn events for progress + stuck detection
+      const unsubscribeTurnEvents = this.subscribeTurnEvents(taskId);
 
-    // 4. Initialize worker bus for this task
-    this.workerBus.clearTask(taskId);
+      // 6. Execute phase by phase
+      const collector = new ResultCollector(taskId);
 
-    // 5. Subscribe to turn events for progress + stuck detection
-    const unsubscribeTurnEvents = this.subscribeTurnEvents(taskId);
+      for (const phase of plan.phases) {
+        const phaseSubtasks = decomposition.subtasks.filter(
+          st => phase.subtaskIds.includes(st.id)
+        );
 
-    // 6. Execute phase by phase
-    const collector = new ResultCollector(taskId);
+        if (phase.parallelizable) {
+          await this.executeParallel(phaseSubtasks, collector, decomposition, rootCtx);
+        } else {
+          await this.executeSequential(phaseSubtasks, collector, decomposition, rootCtx);
+        }
 
-    for (const phase of plan.phases) {
-      const phaseSubtasks = decomposition.subtasks.filter(
-        st => phase.subtaskIds.includes(st.id)
-      );
-
-      if (phase.parallelizable) {
-        await this.executeParallel(phaseSubtasks, collector, decomposition);
-      } else {
-        await this.executeSequential(phaseSubtasks, collector, decomposition);
+        // After each phase: run conflict analysis on completed results, then clear diffs to avoid re-detection
+        this.analyzePhaseConflicts(phaseSubtasks, collector);
+        this.deps.conflictWatcher?.clearDiffs();
       }
 
-      // After each phase: run conflict analysis on completed results, then clear diffs to avoid re-detection
-      this.analyzePhaseConflicts(phaseSubtasks, collector);
-      this.deps.conflictWatcher?.clearDiffs();
+      // 7. Aggregate and return
+      const mergeCtx = rootCtx
+        ? this.tracer!.startSpan(rootCtx, "result.merge", "result-collector", { taskId })
+        : null;
+      const result = collector.aggregate();
+      if (mergeCtx) {
+        this.tracer!.addTags(mergeCtx.spanId, {
+          subtaskResults: result.subtaskResults.length,
+          conflicts: result.conflicts.length,
+          totalTokens: result.totalTokens,
+        });
+        this.tracer!.endSpan(mergeCtx.spanId, "ok");
+      }
+
+      // 8. Cleanup
+      unsubscribeTurnEvents();
+      this.feedbackLoop.stopAll();
+      this.workerBus.clearTask(taskId);
+      this.pool.clear();
+
+      if (rootCtx) {
+        this.tracer!.addTags(rootCtx.spanId, {
+          success: result.success,
+          totalTokens: result.totalTokens,
+          totalCost: result.totalCost,
+        });
+        this.tracer!.endSpan(rootCtx.spanId, result.success ? "ok" : "error");
+      }
+
+      return result;
+    } catch (err) {
+      if (rootCtx) {
+        this.tracer!.endSpan(
+          rootCtx.spanId,
+          "error",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Cancel a specific subtask by its subtask ID.
+   * Stops monitoring, kills the worker session, and marks as cancelled.
+   */
+  async cancelSubtask(subtaskId: string, reason: string): Promise<boolean> {
+    const worker = this.pool.getBySubtask(subtaskId);
+    if (!worker) return false;
+
+    // Stop feedback monitoring
+    this.feedbackLoop.stopMonitoring(worker.id);
+
+    // Kill the worker session (best-effort; session may already be dead)
+    try {
+      await this.deps.stopWorker(worker.agentName);
+    } catch { /* session may already be dead */ }
+
+    // Mark cancelled in pool
+    this.pool.cancel(worker.id, reason);
+
+    return true;
+  }
+
+  /**
+   * Cancel a specific worker by its worker ID.
+   * Stops monitoring, kills the worker session, and marks as cancelled.
+   */
+  async cancelWorker(workerId: string, reason: string): Promise<boolean> {
+    const worker = this.pool.get(workerId);
+    if (!worker) return false;
+
+    // Stop feedback monitoring
+    this.feedbackLoop.stopMonitoring(worker.id);
+
+    // Kill the worker session (best-effort)
+    try {
+      await this.deps.stopWorker(worker.agentName);
+    } catch { /* session may already be dead */ }
+
+    // Mark cancelled in pool
+    const result = this.pool.cancel(workerId, reason);
+    return result !== undefined;
+  }
+
+  /**
+   * Cancel all active workers, optionally for a specific task.
+   * Returns the number of workers cancelled.
+   */
+  async cancelAll(reason: string): Promise<number> {
+    const active = this.pool.getActive();
+    let cancelled = 0;
+
+    for (const worker of active) {
+      this.feedbackLoop.stopMonitoring(worker.id);
+      try {
+        await this.deps.stopWorker(worker.agentName);
+      } catch { /* session may already be dead */ }
+      const result = this.pool.cancel(worker.id, reason);
+      if (result) cancelled++;
     }
 
-    // 7. Aggregate and return
-    const result = collector.aggregate();
-
-    // 8. Cleanup
-    unsubscribeTurnEvents();
-    this.feedbackLoop.stopAll();
-    this.workerBus.clearTask(taskId);
-    this.pool.clear();
-
-    return result;
+    return cancelled;
   }
 
   getPool(): WorkerPool {
@@ -195,6 +326,14 @@ export class Supervisor {
 
   getWorkerBus(): WorkerBus {
     return this.workerBus;
+  }
+
+  getWorkerPool(): WorkerPool {
+    return this.pool;
+  }
+
+  setTracer(tracer: DistributedTracer): void {
+    this.tracer = tracer;
   }
 
   private assignProviders(subtasks: SubTask[]): void {
@@ -213,8 +352,9 @@ export class Supervisor {
     subtasks: SubTask[],
     collector: ResultCollector,
     decomposition: DecompositionResult,
+    parentCtx?: TraceContext | null,
   ): Promise<void> {
-    const promises = subtasks.map(st => this.executeSubtask(st, collector, decomposition));
+    const promises = subtasks.map(st => this.executeSubtask(st, collector, decomposition, parentCtx));
     await Promise.allSettled(promises);
   }
 
@@ -222,9 +362,10 @@ export class Supervisor {
     subtasks: SubTask[],
     collector: ResultCollector,
     decomposition: DecompositionResult,
+    parentCtx?: TraceContext | null,
   ): Promise<void> {
     for (const subtask of subtasks) {
-      await this.executeSubtask(subtask, collector, decomposition);
+      await this.executeSubtask(subtask, collector, decomposition, parentCtx);
     }
   }
 
@@ -232,6 +373,7 @@ export class Supervisor {
     subtask: SubTask,
     collector: ResultCollector,
     decomposition: DecompositionResult,
+    parentCtx?: TraceContext | null,
   ): Promise<void> {
     eventBus.publish({
       type: "supervisor:dispatch",
@@ -537,8 +679,14 @@ export class Supervisor {
         settle(null);
       };
 
+      const onCancel = (e: { workerId: string; reason: string }) => {
+        if (e.workerId !== workerId) return;
+        settle(null);
+      };
+
       eventBus.on("worker:complete", onComplete as (e: unknown) => void);
       eventBus.on("worker:fail", onFail as (e: unknown) => void);
+      eventBus.on("worker:cancel", onCancel as (e: unknown) => void);
 
       // Polling fallback — check pool state (updated by FeedbackLoop) + DB directly
       const pollInterval = setInterval(() => {
@@ -549,7 +697,7 @@ export class Supervisor {
           settle({ result: worker.result, tokenUsage: worker.tokenUsage, costUsd: worker.costUsd });
           return;
         }
-        if (worker?.status === "failed") {
+        if (worker?.status === "failed" || worker?.status === "cancelled") {
           settle(null);
           return;
         }
@@ -572,6 +720,7 @@ export class Supervisor {
       const cleanup = () => {
         eventBus.removeListener("worker:complete", onComplete as (e: unknown) => void);
         eventBus.removeListener("worker:fail", onFail as (e: unknown) => void);
+        eventBus.removeListener("worker:cancel", onCancel as (e: unknown) => void);
         clearInterval(pollInterval);
         clearTimeout(timer);
       };

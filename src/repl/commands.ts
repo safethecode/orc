@@ -25,7 +25,7 @@ export const COMMANDS = [
   "/doctor", "/stats", "/worktree", "/background", "/stash",
   "/question", "/search", "/tasks", "/handoff", "/refactor",
   "/variants", "/fastwork", "/ultrathink", "/github",
-  "/queue",
+  "/queue", "/cancel", "/dlq",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
@@ -973,6 +973,76 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "cancel": {
+      const sub = args[0];
+      const supervisor = ctx.orchestrator.getSupervisor();
+      const pool = supervisor.getPool();
+
+      if (!sub) {
+        renderer.error("usage: /cancel <worker-id>  — cancel a specific worker (partial ID match)");
+        renderer.error("       /cancel all           — cancel all running workers");
+        renderer.error("       /cancel queue <id>    — remove a task from the scheduler queue");
+        return "continue";
+      }
+
+      if (sub === "all") {
+        const reason = args.slice(1).join(" ") || "user requested";
+        const count = await ctx.orchestrator.cancelAllWorkers(reason);
+        if (count === 0) {
+          renderer.info("no active workers to cancel");
+        } else {
+          renderer.info(`cancelled ${count} worker${count !== 1 ? "s" : ""}`);
+        }
+
+        // Show current status
+        const counts = pool.countByStatus();
+        renderer.info(`\x1b[2mstatus: ${counts.running} running, ${counts.completed} completed, ${counts.failed} failed, ${counts.cancelled} cancelled\x1b[0m`);
+        return "continue";
+      }
+
+      if (sub === "queue") {
+        const taskId = args[1];
+        if (!taskId) { renderer.error("usage: /cancel queue <task-id>"); return "continue"; }
+        const scheduler = ctx.orchestrator.getScheduler();
+        const matched = findTaskById(scheduler, taskId);
+        if (!matched) { renderer.error(`task not found in queue: ${taskId}`); return "continue"; }
+        const ok = scheduler.cancel(matched);
+        renderer.info(ok ? `cancelled queued task ${matched.slice(0, 12)}` : `task not found in queue: ${taskId}`);
+        return "continue";
+      }
+
+      // Cancel a specific worker by partial ID match
+      const reason = args.slice(1).join(" ") || "user requested";
+      const allWorkers = pool.getActive();
+      const matched = allWorkers.find(
+        (w) => w.id === sub || w.id.startsWith(sub),
+      );
+
+      if (!matched) {
+        renderer.error(`no active worker matching "${sub}"`);
+        const active = pool.getActive();
+        if (active.length > 0) {
+          renderer.info("\x1b[2mactive workers:\x1b[0m");
+          for (const w of active) {
+            renderer.info(`  \x1b[2m${w.id}  ${w.agentName}  ${w.status}\x1b[0m`);
+          }
+        }
+        return "continue";
+      }
+
+      const ok = await ctx.orchestrator.cancelWorker(matched.id, reason);
+      if (ok) {
+        renderer.info(`cancelled ${matched.id} (${matched.agentName})`);
+      } else {
+        renderer.error(`failed to cancel ${matched.id}`);
+      }
+
+      // Show current status
+      const counts = pool.countByStatus();
+      renderer.info(`\x1b[2mstatus: ${counts.running} running, ${counts.completed} completed, ${counts.failed} failed, ${counts.cancelled} cancelled\x1b[0m`);
+      return "continue";
+    }
+
     case "diff": {
       const ghostSha = ctx.orchestrator.getGhostSha();
       if (!ghostSha) {
@@ -1830,6 +1900,9 @@ export async function handleCommand(
       renderer.info("\x1b[1m/queue demote\x1b[0m \x1b[2m<id>   demote one priority level");
       renderer.info("\x1b[1m/queue force\x1b[0m \x1b[2m<id>    force-execute immediately");
       renderer.info("\x1b[1m/queue cancel\x1b[0m \x1b[2m<id>   cancel queued task");
+      renderer.info("\x1b[1m/cancel\x1b[0m \x1b[2m<worker-id>    cancel a specific running worker");
+      renderer.info("\x1b[1m/cancel all\x1b[0m\x1b[2m          cancel all running workers");
+      renderer.info("\x1b[1m/cancel queue\x1b[0m \x1b[2m<id>   remove task from scheduler queue");
       renderer.info("\x1b[1m/clear\x1b[0m\x1b[2m               clear conversation");
       renderer.info("\x1b[1m/lang\x1b[0m \x1b[2m<language>      set response language");
       renderer.info("\x1b[1m/help\x1b[0m\x1b[2m                this help");
