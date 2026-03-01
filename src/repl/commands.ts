@@ -1387,14 +1387,79 @@ export async function handleCommand(
     }
 
     case "search": {
-      const engine = ctx.orchestrator.getCodeSearch();
+      const sub = args[0];
+
+      if (sub === "web") {
+        const query = args.slice(1).join(" ");
+        if (!query) { renderer.error("usage: /search web <query>"); return "continue"; }
+        try {
+          const webEngine = ctx.orchestrator.getWebSearch();
+          const results = await webEngine.search(query);
+          if (results.length === 0) {
+            renderer.info("no results");
+          } else {
+            process.stdout.write("\n");
+            for (const r of results) {
+              renderer.info(`\x1b[1m${r.title}\x1b[0m`);
+              renderer.info(`  \x1b[2m${r.url}\x1b[0m`);
+              if (r.snippet) renderer.info(`  ${r.snippet.slice(0, 150)}`);
+            }
+            process.stdout.write("\n");
+          }
+        } catch (e) { renderer.error((e as Error).message); }
+        return "continue";
+      }
+
+      if (sub === "code") {
+        const query = args.slice(1).join(" ");
+        if (!query) { renderer.error("usage: /search code <query>"); return "continue"; }
+        try {
+          const codeEngine = ctx.orchestrator.getBuiltinCodeSearch();
+          const results = await codeEngine.search(query);
+          if (results.length === 0) {
+            renderer.info("no results");
+          } else {
+            process.stdout.write("\n");
+            for (const r of results) {
+              const loc = r.repo ? `\x1b[36m${r.repo}\x1b[0m/` : "";
+              const lineInfo = r.line ? `:${r.line}` : "";
+              renderer.info(`${loc}\x1b[1m${r.file}\x1b[0m${lineInfo}`);
+              if (r.content) renderer.info(`  \x1b[2m${r.content.slice(0, 120)}\x1b[0m`);
+            }
+            process.stdout.write("\n");
+          }
+        } catch (e) { renderer.error((e as Error).message); }
+        return "continue";
+      }
+
+      if (sub === "local") {
+        const query = args.slice(1).join(" ");
+        if (!query) { renderer.error("usage: /search local <query>"); return "continue"; }
+        try {
+          const codeEngine = ctx.orchestrator.getBuiltinCodeSearch();
+          const results = await codeEngine.search(query, { local: true });
+          if (results.length === 0) {
+            renderer.info("no results");
+          } else {
+            process.stdout.write("\n");
+            for (const r of results) {
+              const lineInfo = r.line ? `:${r.line}` : "";
+              renderer.info(`\x1b[1m${r.file}\x1b[0m${lineInfo}`);
+              if (r.content) renderer.info(`  \x1b[2m${r.content.slice(0, 120)}\x1b[0m`);
+            }
+            process.stdout.write("\n");
+          }
+        } catch (e) { renderer.error((e as Error).message); }
+        return "continue";
+      }
+
+      // Default: try existing Exa-based CodeSearchEngine first, then fall back to web search
       const query = args.join(" ");
-      if (!query) { renderer.error("usage: /search <query>"); return "continue"; }
+      if (!query) { renderer.error("usage: /search [web|code|local] <query>"); return "continue"; }
       try {
+        const engine = ctx.orchestrator.getCodeSearch();
         const results = await engine.search(query);
-        if (results.length === 0) {
-          renderer.info("no results");
-        } else {
+        if (results.length > 0) {
           process.stdout.write("\n");
           for (const r of results) {
             renderer.info(`\x1b[1m${r.title}\x1b[0m \x1b[2m(${r.score.toFixed(2)})\x1b[0m`);
@@ -1402,6 +1467,22 @@ export async function handleCommand(
             if (r.content) renderer.info(`  ${r.content.slice(0, 120)}`);
           }
           process.stdout.write("\n");
+        } else {
+          // Fall back to web search
+          const webEngine = ctx.orchestrator.getWebSearch();
+          const webResults = await webEngine.search(query);
+          if (webResults.length === 0) {
+            renderer.info("no results");
+          } else {
+            process.stdout.write("\n");
+            renderer.info("\x1b[2m(via web search)\x1b[0m");
+            for (const r of webResults) {
+              renderer.info(`\x1b[1m${r.title}\x1b[0m`);
+              renderer.info(`  \x1b[2m${r.url}\x1b[0m`);
+              if (r.snippet) renderer.info(`  ${r.snippet.slice(0, 150)}`);
+            }
+            process.stdout.write("\n");
+          }
         }
       } catch (e) { renderer.error((e as Error).message); }
       return "continue";
@@ -1620,7 +1701,10 @@ export async function handleCommand(
       renderer.info("\x1b[1m/background result\x1b[0m \x1b[2m<id> get task result");
       renderer.info("\x1b[1m/stash\x1b[0m\x1b[2m               prompt stash (push/pop/list)");
       renderer.info("\x1b[1m/question\x1b[0m\x1b[2m            agent question info");
-      renderer.info("\x1b[1m/search\x1b[0m \x1b[2m<query>       code search");
+      renderer.info("\x1b[1m/search\x1b[0m \x1b[2m<query>       search (Exa then web fallback)");
+      renderer.info("\x1b[1m/search web\x1b[0m \x1b[2m<query>   web search (DuckDuckGo/Exa)");
+      renderer.info("\x1b[1m/search code\x1b[0m \x1b[2m<query>  remote code search (grep.app)");
+      renderer.info("\x1b[1m/search local\x1b[0m \x1b[2m<query> local ripgrep search");
       renderer.info("\x1b[1m/tasks\x1b[0m\x1b[2m               list persistent tasks");
       renderer.info("\x1b[1m/tasks create\x1b[0m \x1b[2m<subj>  create a task");
       renderer.info("\x1b[1m/tasks done\x1b[0m \x1b[2m<id>      mark task completed");

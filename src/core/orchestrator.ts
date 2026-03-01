@@ -37,6 +37,7 @@ import { TaskLogger } from "../logging/task-logger.ts";
 import { CodebaseMap } from "../memory/codebase-map.ts";
 import { ContextBuilder } from "../memory/context-builder.ts";
 import { DynamicSecurityProfile } from "../sandbox/dynamic-profile.ts";
+import { initParser } from "../sandbox/safety.ts";
 import { AccountManager } from "../agents/account-manager.ts";
 import { TaskPredictor } from "./predictor.ts";
 import { PromptCache } from "./prompt-cache.ts";
@@ -92,6 +93,8 @@ import { FastworkMode } from "./fastwork.ts";
 import { UltrathinkMode } from "./ultrathink.ts";
 import { QuestionManager } from "./question-tool.ts";
 import { CodeSearchEngine } from "./code-search.ts";
+import { WebSearchEngine } from "./web-search.ts";
+import { BuiltinCodeSearch } from "./code-search-builtin.ts";
 import { StatisticsTracker } from "./statistics.ts";
 import { ContextInjector } from "./context-injector.ts";
 import { SessionToolkit } from "./session-tools.ts";
@@ -187,6 +190,8 @@ export class Orchestrator {
   private ultrathink: UltrathinkMode;
   private questionTool: QuestionManager;
   private codeSearch: CodeSearchEngine;
+  private webSearch: WebSearchEngine;
+  private builtinCodeSearch: BuiltinCodeSearch;
   private statistics: StatisticsTracker;
   private contextInjector: ContextInjector;
   private sessionTools: SessionToolkit;
@@ -265,6 +270,8 @@ export class Orchestrator {
     this.ultrathink = new UltrathinkMode();
     this.questionTool = new QuestionManager();
     this.codeSearch = new CodeSearchEngine();
+    this.webSearch = new WebSearchEngine();
+    this.builtinCodeSearch = new BuiltinCodeSearch();
     this.statistics = new StatisticsTracker();
     this.contextInjector = new ContextInjector();
     this.sessionTools = new SessionToolkit();
@@ -399,6 +406,13 @@ export class Orchestrator {
         await this.sessionManager.sendInput(to, `[Message from ${message.from}]: ${message.content}`);
       }
     });
+
+    // Initialize tree-sitter bash parser for safety classification (non-blocking)
+    try {
+      await initParser();
+    } catch {
+      // Parser init is optional — regex fallback is always available
+    }
 
     // Scan skills index for dynamic task-based matching
     await this.skillIndex.scan([
@@ -1050,6 +1064,14 @@ export class Orchestrator {
 
   getCodeSearch(): CodeSearchEngine {
     return this.codeSearch;
+  }
+
+  getWebSearch(): WebSearchEngine {
+    return this.webSearch;
+  }
+
+  getBuiltinCodeSearch(): BuiltinCodeSearch {
+    return this.builtinCodeSearch;
   }
 
   getStatistics(): StatisticsTracker {
