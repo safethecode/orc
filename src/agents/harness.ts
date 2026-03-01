@@ -1,5 +1,8 @@
 import type { AgentRole, ProviderName } from "../config/types.ts";
 import { loadProviderPrompt } from "./prompts/loader.ts";
+import { ToolSelector } from "../core/tool-selector.ts";
+
+const toolSelector = new ToolSelector();
 
 export interface HarnessOptions {
   agentName: string;
@@ -74,7 +77,11 @@ export function buildHarness(options: HarnessOptions): HarnessResult {
   const providerContent = providerPrompt || PROVIDER_HINTS[provider] || "";
   const providerSection = providerContent ? `\n\n## Provider Guidelines\n${providerContent}` : "";
 
-  const systemPrompt = `${identity}${protocol}${constraints}${providerSection}`;
+  // Layer 5 — Tool instructions
+  const toolInstructions = toolSelector.formatForPrompt(provider);
+  const toolSection = toolInstructions ? `\n\n## Tool Usage\n${toolInstructions}` : "";
+
+  const systemPrompt = `${identity}${protocol}${constraints}${providerSection}${toolSection}`;
 
   // Rough token estimate: ~1 token per 4 chars
   const tokenEstimate = Math.ceil(systemPrompt.length / 4);

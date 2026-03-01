@@ -94,12 +94,14 @@ export interface OrchestratorConfig {
   worktree?: GitWorktreeConfig;
   backgroundAgent?: BackgroundAgentConfig;
   ultrawork?: UltraworkConfig;
+  ultrathink?: UltrathinkConfig;
   statistics?: StatisticsConfig;
   recovery?: SessionRecoveryConfig;
   acp?: AcpConfig;
   sdkServer?: SdkServerConfig;
   webInterface?: WebInterfaceConfig;
   refactor?: RefactorConfig;
+  toolBranching?: Record<string, { editTool?: string; writeTool?: string; additionalTools?: string[]; guidelines?: string }>;
 }
 
 // ── Agent Profile ─────────────────────────────────────────────────────
@@ -810,6 +812,17 @@ export interface UltraworkConfig {
   maxTurns?: number;
   forceMultiAgent?: boolean;
   forcePlanning?: boolean;
+}
+
+// ── Ultrathink Mode ─────────────────────────────────────────────────
+export interface UltrathinkConfig {
+  enabled?: boolean;
+  defaultModel?: string;
+  maxTurns?: number;
+  temperature?: number;
+  forcePlanning?: boolean;
+  forceQA?: boolean;
+  forceIdeation?: boolean;
 }
 
 // ── Statistics ──────────────────────────────────────────────────────
