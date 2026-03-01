@@ -30,7 +30,7 @@ export const COMMANDS = [
   "/variants", "/fastwork", "/ultrathink", "/github",
   "/queue", "/cancel", "/dlq", "/enforce", "/doomloop",
   "/diff", "/compact", "/trust", "/consolidate",
-  "/checkpoint", "/spec", "/ideate", "/benchmark", "/help", "/quit",
+  "/checkpoint", "/spec", "/ideate", "/benchmark", "/optimize", "/help", "/quit",
 ];
 
 export const LANGUAGES = [
@@ -2262,6 +2262,20 @@ export async function handleCommand(
       }
 
       renderer.error("usage: /benchmark [run|report|tasks|cost]");
+      return "continue";
+    }
+
+    case "optimize": {
+      // /optimize <test-cmd> <metric-regex> <target> <file> [options]
+      // Example: /optimize "python tests/submission_tests.py" "CYCLES:\s+(\d+)" 1487 perf_takehome.py
+      if (args.length < 4) {
+        renderer.info("\x1b[1mUsage:\x1b[0m /optimize <test-cmd> <metric-regex> <target> <file> [--rounds N] [--paths N] [--iters N] [--model tier]");
+        renderer.info("\x1b[2mExample: /optimize \"python tests/submission_tests.py\" \"CYCLES:\\s+(\\d+)\" 1487 perf_takehome.py\x1b[0m");
+        renderer.info("\x1b[2mStarts iterative optimization: edit→test→measure→feedback loop with parallel exploration\x1b[0m");
+        return "continue";
+      }
+      // Store args for the REPL to pick up — actual execution happens in repl.ts
+      (ctx as any).__optimizeArgs = args;
       return "continue";
     }
 

@@ -34,6 +34,7 @@ import type { QAIssue, ExecutionPhase } from "../config/types.ts";
 import * as renderer from "./renderer.ts";
 import { LayoutManager } from "./layout-manager.ts";
 import { shouldBrainstorm, brainstorm } from "../core/brainstorm.ts";
+import { runOptimization, type OptimizationConfig, type OptimizationCallbacks } from "../core/optimization-harness.ts";
 
 export async function startRepl(
   orchestrator: Orchestrator,
@@ -309,6 +310,12 @@ export async function startRepl(
         } else {
           continue;
         }
+      }
+
+      // /optimize — special handler (runs optimization harness, not regular command)
+      if (trimmed.startsWith("/optimize ")) {
+        await handleOptimizeCommand(trimmed, orchestrator, config, layout);
+        continue;
       }
 
       if (isCommand(trimmed)) {
@@ -1852,4 +1859,176 @@ async function executeSubtask(
   }
 
   workerBus.unregisterWorker(agentName);
+}
+
+// ── /optimize Command Handler ──────────────────────────────────────
+
+async function handleOptimizeCommand(
+  input: string,
+  orchestrator: Orchestrator,
+  config: OrchestratorConfig,
+  layout: LayoutManager,
+): Promise<void> {
+  // Parse: /optimize "test cmd" "metric regex" target file [--rounds N] [--paths N] [--iters N] [--model tier]
+  const parts = input.slice("/optimize ".length);
+
+  // Extract quoted strings and bare args
+  const tokens: string[] = [];
+  let remaining = parts;
+  while (remaining.length > 0) {
+    remaining = remaining.trimStart();
+    if (remaining.startsWith('"')) {
+      const end = remaining.indexOf('"', 1);
+      if (end === -1) { tokens.push(remaining.slice(1)); break; }
+      tokens.push(remaining.slice(1, end));
+      remaining = remaining.slice(end + 1);
+    } else {
+      const space = remaining.indexOf(" ");
+      if (space === -1) { tokens.push(remaining); break; }
+      tokens.push(remaining.slice(0, space));
+      remaining = remaining.slice(space);
+    }
+  }
+
+  if (tokens.length < 4) {
+    renderer.info("\x1b[1mUsage:\x1b[0m /optimize \"<test-cmd>\" \"<metric-regex>\" <target> <file> [--rounds N] [--paths N] [--iters N] [--model tier]");
+    renderer.info("\x1b[2mExample:\x1b[0m /optimize \"python tests/submission_tests.py\" \"CYCLES:\\s+(\\d+)\" 1487 perf_takehome.py");
+    return;
+  }
+
+  const testCommand = tokens[0];
+  const metricPatternStr = tokens[1];
+  const target = parseFloat(tokens[2]);
+  const targetFile = tokens[3];
+
+  if (isNaN(target)) {
+    renderer.error("Target must be a number");
+    return;
+  }
+
+  let metricPattern: RegExp;
+  try {
+    metricPattern = new RegExp(metricPatternStr);
+  } catch {
+    renderer.error(`Invalid regex: ${metricPatternStr}`);
+    return;
+  }
+
+  // Parse optional flags
+  let maxRounds = 5;
+  let parallelPaths = 3;
+  let maxIterations = 15;
+  let explorerModel: ModelTier = "sonnet";
+
+  for (let i = 4; i < tokens.length - 1; i++) {
+    if (tokens[i] === "--rounds") maxRounds = parseInt(tokens[++i]) || maxRounds;
+    else if (tokens[i] === "--paths") parallelPaths = parseInt(tokens[++i]) || parallelPaths;
+    else if (tokens[i] === "--iters") maxIterations = parseInt(tokens[++i]) || maxIterations;
+    else if (tokens[i] === "--model") explorerModel = (tokens[++i] as ModelTier) || explorerModel;
+  }
+
+  const workdir = process.cwd();
+
+  // Read the target file to build domain context
+  let domainContext: string | undefined;
+  try {
+    const problemFile = await Bun.file(`${workdir}/problem.py`).text();
+    domainContext = `## ISA Reference (from problem.py)\n\`\`\`python\n${problemFile.slice(0, 8000)}\n\`\`\``;
+  } catch { /* no domain context available */ }
+
+  const optimConfig: OptimizationConfig = {
+    testCommand,
+    metricPattern,
+    target,
+    lowerIsBetter: true,
+    maxIterations,
+    parallelPaths,
+    maxRounds,
+    workdir,
+    targetFile,
+    domainContext,
+    explorerModel,
+  };
+
+  // Get provider config
+  const profile = orchestrator.getRegistry().get("coder");
+  if (!profile) {
+    renderer.error("No 'coder' profile found");
+    return;
+  }
+  const providerConfig = config.providers[profile.provider];
+  if (!providerConfig) {
+    renderer.error(`No provider config for "${profile.provider}"`);
+    return;
+  }
+
+  renderer.separator();
+  renderer.info(`\x1b[1mOptimization Harness\x1b[0m`);
+  renderer.info(`  test:   ${testCommand}`);
+  renderer.info(`  metric: ${metricPatternStr}`);
+  renderer.info(`  target: ${target}`);
+  renderer.info(`  file:   ${targetFile}`);
+  renderer.info(`  rounds: ${maxRounds} × ${parallelPaths} paths × ${maxIterations} iters`);
+  renderer.info(`  model:  ${explorerModel}`);
+  renderer.separator();
+
+  layout.enterAgentMode("optimize");
+
+  const callbacks: OptimizationCallbacks = {
+    onRoundStart: (round, paths) => {
+      renderer.info(`\n\x1b[1m\x1b[33m▶ Round ${round + 1}\x1b[0m  \x1b[2m${paths} exploration paths\x1b[0m`);
+    },
+    onIterationComplete: (path, step) => {
+      const marker = step.improved ? "\x1b[32m✓\x1b[0m" : step.correct ? "\x1b[33m○\x1b[0m" : "\x1b[31m✗\x1b[0m";
+      const metric = step.metric !== null ? `${step.metric}` : "N/A";
+      renderer.info(`  ${marker} path ${path} iter ${step.iteration}: ${metric} cycles → ${step.action}`);
+    },
+    onTournamentResult: (round, bestMetric, bestPath) => {
+      renderer.info(`\x1b[1m\x1b[32m★ Round ${round + 1} winner:\x1b[0m path ${bestPath} → ${bestMetric} cycles`);
+    },
+    onTestRun: (_path, output) => {
+      // Extract cycle count for live display
+      const m = output.match(metricPattern);
+      if (m) renderer.updateCostLive(parseFloat(m[1]) || 0);
+    },
+  };
+
+  const cancellation = new CancellationToken();
+  const abortController = new AbortController();
+
+  // Allow Ctrl+C to cancel
+  const sigHandler = () => {
+    cancellation.cancel();
+    abortController.abort();
+    renderer.info("\n\x1b[33mOptimization cancelled.\x1b[0m");
+  };
+  process.on("SIGINT", sigHandler);
+
+  try {
+    const result = await runOptimization(
+      `Optimize ${targetFile} to achieve < ${target} cycles. Test with: ${testCommand}`,
+      optimConfig,
+      providerConfig,
+      profile,
+      callbacks,
+      abortController.signal,
+    );
+
+    renderer.separator();
+    renderer.info(`\x1b[1mOptimization Complete\x1b[0m`);
+    renderer.info(`  initial:  ${result.initialMetric} cycles`);
+    renderer.info(`  best:     ${result.bestMetric} cycles`);
+    renderer.info(`  speedup:  ${(result.initialMetric / result.bestMetric).toFixed(1)}x`);
+    renderer.info(`  rounds:   ${result.totalRounds}`);
+    renderer.info(`  iters:    ${result.totalIterations}`);
+    renderer.info(`  duration: ${(result.durationMs / 1000 / 60).toFixed(1)} min`);
+    renderer.info(`  reason:   ${result.reason}`);
+    renderer.separator();
+  } catch (e) {
+    renderer.error(`Optimization failed: ${(e as Error).message}`);
+  } finally {
+    process.removeListener("SIGINT", sigHandler);
+    layout.exitAgentMode();
+    renderer.notifyIdle();
+  }
 }
