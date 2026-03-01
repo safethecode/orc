@@ -75,6 +75,7 @@ export type OrcEvent =
   | { type: "stats:record"; tokens: number; cost: number; model: string }
   | { type: "thinking:block"; agent: string; content: string; tokens: number }
   | { type: "ultrawork:activate"; model: string; overrides: string }
+  | { type: "ultrathink:activate"; model: string; overrides: string }
   | { type: "doctor:check"; check: string; status: "pass" | "warn" | "fail" }
   | { type: "stash:push"; index: number; preview: string }
   | { type: "stash:pop"; text: string }

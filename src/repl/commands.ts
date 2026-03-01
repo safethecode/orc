@@ -23,7 +23,7 @@ export const COMMANDS = [
   "/oauth", "/category",
   "/doctor", "/stats", "/worktree", "/background", "/stash",
   "/question", "/search", "/tasks", "/handoff", "/refactor",
-  "/variants", "/ultrawork", "/github",
+  "/variants", "/ultrawork", "/ultrathink", "/github",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
@@ -1499,6 +1499,13 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "ultrathink": {
+      const uth = ctx.orchestrator.getUltrathink();
+      const uthOverrides = uth.getOverrides();
+      renderer.info(`\x1b[1multrathink mode\x1b[0m: model=${uthOverrides.model}, maxTurns=${uthOverrides.maxTurns}, temperature=${uthOverrides.temperature}, forcePlanning=${uthOverrides.forcePlanning}, forceQA=${uthOverrides.forceQA}, forceIdeation=${uthOverrides.forceIdeation}`);
+      return "continue";
+    }
+
     case "github": {
       const gh = ctx.orchestrator.getGitHub();
       const sub = args[0];
@@ -1622,6 +1629,7 @@ export async function handleCommand(
       renderer.info("\x1b[1m/variants\x1b[0m\x1b[2m            list model variants");
       renderer.info("\x1b[1m/variants set\x1b[0m \x1b[2m<name>  set model variant");
       renderer.info("\x1b[1m/ultrawork\x1b[0m\x1b[2m           show ultrawork mode config");
+      renderer.info("\x1b[1m/ultrathink\x1b[0m\x1b[2m          show ultrathink mode config");
       renderer.info("\x1b[1m/github branch\x1b[0m \x1b[2m<name> create branch");
       renderer.info("\x1b[1m/github pr\x1b[0m \x1b[2m<title>    create pull request");
       renderer.info("\x1b[1m/github issue\x1b[0m \x1b[2m<url>   view issue details");

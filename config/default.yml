@@ -104,3 +104,12 @@ supervisor:
     includeMemory: true
     maxContextTokens: 4000
     summarizeSiblingResults: true
+
+ultrathink:
+  enabled: true
+  defaultModel: opus
+  maxTurns: 100
+  temperature: 0.1
+  forcePlanning: true
+  forceQA: true
+  forceIdeation: true

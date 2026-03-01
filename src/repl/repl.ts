@@ -711,6 +711,16 @@ async function handleNaturalInput(
     systemPrompt += "\n\n" + ultrawork.buildSystemPromptAddition();
   }
 
+  // Inject ultrathink mode: deep reasoning mode
+  const ultrathink = orchestrator.getUltrathink();
+  const ultrathinkResult = ultrathink.detect(input);
+  if (ultrathinkResult.detected) {
+    const uthOverrides = ultrathink.getOverrides();
+    route.model = uthOverrides.model as import("../config/types.ts").ModelTier;
+    systemPrompt += "\n\n" + ultrathink.buildSystemPromptAddition();
+    eventBus.publish({ type: "ultrathink:activate", model: uthOverrides.model, overrides: JSON.stringify(uthOverrides) });
+  }
+
   // Inject context from AGENTS.md / CLAUDE.md files
   const ctxInjector = orchestrator.getContextInjector();
   const ctxFiles = ctxInjector.collect(process.cwd());
