@@ -9,14 +9,15 @@
 //   5. If regressed or broken: rollback to last checkpoint
 //   6. Feed structured feedback to agent → next iteration
 //
-// Supports parallel tournament: N agents explore different strategies,
-// best result wins and becomes the starting point for the next round.
+// True parallel tournament: N agents explore different strategies in
+// isolated git worktrees, best result wins each round.
 
 import { AgentStreamer, type ToolUseEvent } from "../repl/streamer.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
 import type { ProviderConfig, AgentProfile, ModelTier } from "../config/types.ts";
 import { brainstorm, shouldBrainstorm } from "./brainstorm.ts";
+import { randomUUID } from "crypto";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -77,9 +78,9 @@ export interface OptimizationCallbacks {
 
 const DEFAULT_CONFIG: Partial<OptimizationConfig> = {
   lowerIsBetter: true,
-  maxIterations: 15,
+  maxIterations: 25,
   parallelPaths: 3,
-  maxRounds: 5,
+  maxRounds: 8,
   explorerModel: "sonnet",
 };
 
@@ -102,30 +103,9 @@ function isTargetReached(current: number, target: number, lowerIsBetter: boolean
   return lowerIsBetter ? current <= target : current >= target;
 }
 
-// ── Git Operations ─────────────────────────────────────────────────
+// ── File Operations ───────────────────────────────────────────────
 
-async function gitCheckpoint(workdir: string, label: string): Promise<string | null> {
-  try {
-    const proc = Bun.spawn(["git", "stash", "create", label], { cwd: workdir, stdout: "pipe", stderr: "pipe" });
-    const sha = (await new Response(proc.stdout).text()).trim();
-    await proc.exited;
-    return sha || null;
-  } catch {
-    return null;
-  }
-}
-
-async function gitRollbackFile(workdir: string, file: string): Promise<boolean> {
-  try {
-    const proc = Bun.spawn(["git", "checkout", "HEAD", "--", file], { cwd: workdir, stdout: "pipe", stderr: "pipe" });
-    await proc.exited;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function gitSaveFile(workdir: string, file: string): Promise<string | null> {
+async function saveFile(workdir: string, file: string): Promise<string | null> {
   try {
     const fullPath = `${workdir}/${file}`;
     const content = await Bun.file(fullPath).text();
@@ -135,7 +115,7 @@ async function gitSaveFile(workdir: string, file: string): Promise<string | null
   }
 }
 
-async function gitRestoreFile(workdir: string, file: string, content: string): Promise<boolean> {
+async function restoreFile(workdir: string, file: string, content: string): Promise<boolean> {
   try {
     const fullPath = `${workdir}/${file}`;
     await Bun.write(fullPath, content);
@@ -143,6 +123,52 @@ async function gitRestoreFile(workdir: string, file: string, content: string): P
   } catch {
     return false;
   }
+}
+
+// ── Git Worktree Operations ──────────────────────────────────────
+
+async function createWorktree(repoDir: string, worktreePath: string): Promise<boolean> {
+  try {
+    // Get current HEAD ref
+    const headProc = Bun.spawn(["git", "rev-parse", "HEAD"], { cwd: repoDir, stdout: "pipe", stderr: "pipe" });
+    const headSha = (await new Response(headProc.stdout).text()).trim();
+    await headProc.exited;
+
+    // Create a detached worktree at the current commit
+    const proc = Bun.spawn(
+      ["git", "worktree", "add", "--detach", worktreePath, headSha],
+      { cwd: repoDir, stdout: "pipe", stderr: "pipe" },
+    );
+    const exit = await proc.exited;
+    return exit === 0;
+  } catch {
+    return false;
+  }
+}
+
+async function removeWorktree(repoDir: string, worktreePath: string): Promise<void> {
+  try {
+    const proc = Bun.spawn(
+      ["git", "worktree", "remove", "--force", worktreePath],
+      { cwd: repoDir, stdout: "pipe", stderr: "pipe" },
+    );
+    await proc.exited;
+  } catch { /* best effort */ }
+}
+
+async function pruneWorktrees(repoDir: string): Promise<void> {
+  try {
+    const proc = Bun.spawn(["git", "worktree", "prune"], { cwd: repoDir, stdout: "pipe", stderr: "pipe" });
+    await proc.exited;
+  } catch { /* best effort */ }
+}
+
+/** Find the git root directory for a given path */
+async function findGitRoot(dir: string): Promise<string> {
+  const proc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+  const root = (await new Response(proc.stdout).text()).trim();
+  await proc.exited;
+  return root || dir;
 }
 
 // ── Test Runner ────────────────────────────────────────────────────
@@ -263,6 +289,7 @@ async function runExplorationPath(
   pathIndex: number,
   task: string,
   config: OptimizationConfig,
+  pathWorkdir: string, // isolated worktree or original workdir
   providerConfig: ProviderConfig,
   profile: AgentProfile,
   initialMetric: number,
@@ -272,10 +299,12 @@ async function runExplorationPath(
 ): Promise<{ history: OptimizationStep[]; bestMetric: number; bestCode: string | null }> {
   const history: OptimizationStep[] = [];
   let bestMetric = initialMetric;
-  let bestCode = await gitSaveFile(config.workdir, config.targetFile);
+  let bestCode = await saveFile(pathWorkdir, config.targetFile);
   let lastTestOutput: string | undefined;
 
-  const systemPrompt = buildOptimizationSystemPrompt(config);
+  // System prompt uses pathWorkdir so the agent knows where to edit
+  const pathConfig = { ...config, workdir: pathWorkdir };
+  const systemPrompt = buildOptimizationSystemPrompt(pathConfig);
 
   for (let iter = 0; iter < config.maxIterations; iter++) {
     if (signal?.aborted) break;
@@ -311,12 +340,12 @@ async function runExplorationPath(
     } catch {
       // Agent crashed — skip this iteration
       history.push({ iteration: iter, metric: null, correct: false, improved: false, action: "rollback" });
-      if (bestCode) await gitRestoreFile(config.workdir, config.targetFile, bestCode);
+      if (bestCode) await restoreFile(pathWorkdir, config.targetFile, bestCode);
       continue;
     }
 
-    // Auto-run tests
-    const testResult = await runTest(config.testCommand, config.workdir);
+    // Auto-run tests in the path's working directory
+    const testResult = await runTest(config.testCommand, pathWorkdir);
     callbacks.onTestRun?.(pathIndex, testResult.output);
     lastTestOutput = testResult.output;
 
@@ -327,7 +356,7 @@ async function runExplorationPath(
     if (metric !== null && correct && isImproved(metric, bestMetric, config.lowerIsBetter)) {
       // Improvement! Checkpoint.
       bestMetric = metric;
-      bestCode = await gitSaveFile(config.workdir, config.targetFile);
+      bestCode = await saveFile(pathWorkdir, config.targetFile);
       const step: OptimizationStep = { iteration: iter, metric, correct: true, improved: true, action: "checkpoint" };
       history.push(step);
       callbacks.onIterationComplete?.(pathIndex, step);
@@ -341,17 +370,58 @@ async function runExplorationPath(
       const step: OptimizationStep = { iteration: iter, metric, correct: true, improved: false, action: "rollback" };
       history.push(step);
       callbacks.onIterationComplete?.(pathIndex, step);
-      if (bestCode) await gitRestoreFile(config.workdir, config.targetFile, bestCode);
+      if (bestCode) await restoreFile(pathWorkdir, config.targetFile, bestCode);
     } else {
       // Broken — rollback
       const step: OptimizationStep = { iteration: iter, metric, correct: false, improved: false, action: "rollback" };
       history.push(step);
       callbacks.onIterationComplete?.(pathIndex, step);
-      if (bestCode) await gitRestoreFile(config.workdir, config.targetFile, bestCode);
+      if (bestCode) await restoreFile(pathWorkdir, config.targetFile, bestCode);
     }
   }
 
   return { history, bestMetric, bestCode };
+}
+
+// ── Worktree Setup/Teardown ──────────────────────────────────────
+
+async function setupWorktrees(
+  repoDir: string,
+  count: number,
+  bestCode: string | null,
+  targetFile: string,
+): Promise<string[]> {
+  const runId = randomUUID().slice(0, 8);
+  const paths: string[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const wtPath = `/tmp/orc-optimize-${runId}-path${i}`;
+    const ok = await createWorktree(repoDir, wtPath);
+    if (!ok) {
+      // Fallback: copy files manually
+      const proc = Bun.spawn(["cp", "-r", repoDir, wtPath], { stdout: "pipe", stderr: "pipe" });
+      await proc.exited;
+    }
+    // Seed the target file with best code
+    if (bestCode) {
+      await restoreFile(wtPath, targetFile, bestCode);
+    }
+    paths.push(wtPath);
+  }
+
+  return paths;
+}
+
+async function teardownWorktrees(repoDir: string, worktrees: string[]): Promise<void> {
+  for (const wt of worktrees) {
+    await removeWorktree(repoDir, wt);
+    // Also rm the directory in case worktree remove didn't clean it
+    try {
+      const proc = Bun.spawn(["rm", "-rf", wt], { stdout: "pipe", stderr: "pipe" });
+      await proc.exited;
+    } catch { /* best effort */ }
+  }
+  await pruneWorktrees(repoDir);
 }
 
 // ── Main Optimization Harness ──────────────────────────────────────
@@ -367,6 +437,9 @@ export async function runOptimization(
   const startTime = Date.now();
   const fullConfig = { ...DEFAULT_CONFIG, ...config } as OptimizationConfig;
   const allHistory: OptimizationStep[] = [];
+
+  // Find git root for worktree operations
+  const gitRoot = await findGitRoot(fullConfig.workdir);
 
   // 1. Get initial metric
   const initialTest = await runTest(fullConfig.testCommand, fullConfig.workdir);
@@ -384,7 +457,7 @@ export async function runOptimization(
   }
 
   let bestMetric = initialMetric;
-  let bestCode = await gitSaveFile(fullConfig.workdir, fullConfig.targetFile);
+  let bestCode = await saveFile(fullConfig.workdir, fullConfig.targetFile);
 
   // 2. Deliberation (strategy planning)
   let deliberation: string | undefined;
@@ -403,17 +476,17 @@ export async function runOptimization(
 
     callbacks.onRoundStart?.(round, fullConfig.parallelPaths);
 
-    // Ensure all paths start from the same best code
+    // Ensure main workdir has the best code
     if (bestCode) {
-      await gitRestoreFile(fullConfig.workdir, fullConfig.targetFile, bestCode);
+      await restoreFile(fullConfig.workdir, fullConfig.targetFile, bestCode);
     }
 
     // Run parallel exploration paths
     if (fullConfig.parallelPaths <= 1) {
-      // Single path — no parallelism overhead
+      // Single path — no worktree overhead
       const result = await runExplorationPath(
-        0, task, fullConfig, providerConfig, profile,
-        bestMetric, deliberation, callbacks, signal,
+        0, task, fullConfig, fullConfig.workdir,
+        providerConfig, profile, bestMetric, deliberation, callbacks, signal,
       );
       allHistory.push(...result.history);
       if (isImproved(result.bestMetric, bestMetric, fullConfig.lowerIsBetter)) {
@@ -421,43 +494,52 @@ export async function runOptimization(
         bestCode = result.bestCode;
       }
     } else {
-      // Parallel paths: each gets a copy of the best code
-      // Since they modify the same file, we serialize but vary the strategy
-      // TODO: true parallelism with git worktrees
-      const pathResults = [];
-      for (let p = 0; p < fullConfig.parallelPaths; p++) {
-        if (signal?.aborted) break;
-        // Restore best code before each path
-        if (bestCode) await gitRestoreFile(fullConfig.workdir, fullConfig.targetFile, bestCode);
-        const result = await runExplorationPath(
-          p, task, fullConfig, providerConfig, profile,
-          bestMetric, deliberation, callbacks, signal,
-        );
-        pathResults.push(result);
-        allHistory.push(...result.history);
-      }
+      // True parallel execution via git worktrees
+      const worktrees = await setupWorktrees(
+        gitRoot, fullConfig.parallelPaths, bestCode, fullConfig.targetFile,
+      );
 
-      // Tournament: find best path
-      let tournamentBest = bestMetric;
-      let tournamentCode = bestCode;
-      let tournamentPath = -1;
-      for (let p = 0; p < pathResults.length; p++) {
-        const r = pathResults[p];
-        if (isImproved(r.bestMetric, tournamentBest, fullConfig.lowerIsBetter)) {
-          tournamentBest = r.bestMetric;
-          tournamentCode = r.bestCode;
-          tournamentPath = p;
+      try {
+        // Launch all paths simultaneously
+        const pathPromises = worktrees.map((wtPath, p) =>
+          runExplorationPath(
+            p, task, fullConfig, wtPath,
+            providerConfig, profile, bestMetric, deliberation, callbacks, signal,
+          ),
+        );
+
+        const pathResults = await Promise.all(pathPromises);
+
+        // Collect history from all paths
+        for (const result of pathResults) {
+          allHistory.push(...result.history);
         }
-      }
-      if (tournamentPath >= 0) {
-        bestMetric = tournamentBest;
-        bestCode = tournamentCode;
-        callbacks.onTournamentResult?.(round, bestMetric, tournamentPath);
+
+        // Tournament: find best path
+        let tournamentBest = bestMetric;
+        let tournamentCode = bestCode;
+        let tournamentPath = -1;
+        for (let p = 0; p < pathResults.length; p++) {
+          const r = pathResults[p];
+          if (isImproved(r.bestMetric, tournamentBest, fullConfig.lowerIsBetter)) {
+            tournamentBest = r.bestMetric;
+            tournamentCode = r.bestCode;
+            tournamentPath = p;
+          }
+        }
+        if (tournamentPath >= 0) {
+          bestMetric = tournamentBest;
+          bestCode = tournamentCode;
+          callbacks.onTournamentResult?.(round, bestMetric, tournamentPath);
+        }
+      } finally {
+        // Always clean up worktrees
+        await teardownWorktrees(gitRoot, worktrees);
       }
     }
 
-    // Restore best code for next round
-    if (bestCode) await gitRestoreFile(fullConfig.workdir, fullConfig.targetFile, bestCode);
+    // Restore best code to main workdir for next round
+    if (bestCode) await restoreFile(fullConfig.workdir, fullConfig.targetFile, bestCode);
 
     // Check if target reached
     if (isTargetReached(bestMetric, fullConfig.target, fullConfig.lowerIsBetter)) {
@@ -472,10 +554,9 @@ export async function runOptimization(
       };
     }
 
-    // Update deliberation with new performance history for next round
-    // (Re-deliberate with knowledge of what worked)
+    // Re-deliberate with knowledge of what worked for next round
     if (round < fullConfig.maxRounds - 1 && allHistory.length > 0) {
-      const historyContext = allHistory.slice(-10).map(s =>
+      const historyContext = allHistory.slice(-15).map(s =>
         `iter ${s.iteration}: ${s.metric ?? "N/A"} cycles, ${s.action}${s.improved ? " (improved!)" : ""}`
       ).join("\n");
       const reDelibTask = `${task}\n\n## Previous Optimization Attempts\nBest so far: ${bestMetric} cycles (target: ${fullConfig.target})\n${historyContext}\n\nPropose the NEXT optimization strategy based on what worked and what didn't.`;
