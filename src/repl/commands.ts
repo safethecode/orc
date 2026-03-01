@@ -6,6 +6,7 @@ import { getCatalogEntry } from "../mcp/catalog.ts";
 import { selectPhases, buildPhasePrompt, parseSpecResult } from "../core/spec-pipeline.ts";
 import { buildIdeationPrompt, parseIdeationResponse, prioritizeIdeas, DIMENSION_PROMPTS } from "../core/ideation.ts";
 import type { SpecPhase, IdeationDimension } from "../config/types.ts";
+import type { TaskPriority } from "../core/scheduler.ts";
 import type { PlanMode } from "./plan-mode.ts";
 import { SessionForkManager } from "../core/session-fork.ts";
 import { ContextCompactor } from "../core/compaction.ts";
@@ -24,6 +25,7 @@ export const COMMANDS = [
   "/doctor", "/stats", "/worktree", "/background", "/stash",
   "/question", "/search", "/tasks", "/handoff", "/refactor",
   "/variants", "/fastwork", "/ultrathink", "/github",
+  "/queue",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
@@ -862,6 +864,111 @@ export async function handleCommand(
         renderer.info(`\x1b[1m${cat.name}\x1b[0m \x1b[2m→ ${cat.tier} (${cat.description})\x1b[0m`);
       }
       renderer.info("\n\x1b[2musage: /category list | /category classify <prompt>\x1b[0m");
+      process.stdout.write("\n");
+      return "continue";
+    }
+
+    case "queue": {
+      const scheduler = ctx.orchestrator.getScheduler();
+      const sub = args[0];
+
+      if (sub === "priority") {
+        const taskId = args[1];
+        const level = args[2] as TaskPriority | undefined;
+        if (!taskId || !level) {
+          renderer.error("usage: /queue priority <id> <critical|high|normal|low|background>");
+          return "continue";
+        }
+        const validLevels: TaskPriority[] = ["critical", "high", "normal", "low", "background"];
+        if (!validLevels.includes(level)) {
+          renderer.error(`invalid priority: ${level} (use: ${validLevels.join(", ")})`);
+          return "continue";
+        }
+        const matched = findTaskById(scheduler, taskId);
+        if (!matched) { renderer.error(`task not found in queue: ${taskId}`); return "continue"; }
+        const ok = scheduler.setPriority(matched, level);
+        renderer.info(ok ? `priority set to ${level} for ${taskId}` : `task not found in queue: ${taskId}`);
+        return "continue";
+      }
+
+      if (sub === "promote") {
+        const taskId = args[1];
+        if (!taskId) { renderer.error("usage: /queue promote <id>"); return "continue"; }
+        const matched = findTaskById(scheduler, taskId);
+        if (!matched) { renderer.error(`task not found in queue: ${taskId}`); return "continue"; }
+        const ok = scheduler.promote(matched);
+        renderer.info(ok ? `promoted ${taskId}` : `cannot promote ${taskId} (already at highest or not in queue)`);
+        return "continue";
+      }
+
+      if (sub === "demote") {
+        const taskId = args[1];
+        if (!taskId) { renderer.error("usage: /queue demote <id>"); return "continue"; }
+        const matched = findTaskById(scheduler, taskId);
+        if (!matched) { renderer.error(`task not found in queue: ${taskId}`); return "continue"; }
+        const ok = scheduler.demote(matched);
+        renderer.info(ok ? `demoted ${taskId}` : `cannot demote ${taskId} (already at lowest or not in queue)`);
+        return "continue";
+      }
+
+      if (sub === "force") {
+        const taskId = args[1];
+        if (!taskId) { renderer.error("usage: /queue force <id>"); return "continue"; }
+        const matched = findTaskById(scheduler, taskId);
+        if (!matched) { renderer.error(`task not found in queue: ${taskId}`); return "continue"; }
+        const snapshot = scheduler.getQueueSnapshot();
+        const entry = snapshot.find((q) => q.taskId === matched);
+        if (!entry) { renderer.error(`task not found in queue: ${taskId}`); return "continue"; }
+        // Build a minimal Task object for forceExecute
+        const store = ctx.orchestrator.getStore();
+        const task = store.getTask(matched);
+        if (!task) { renderer.error(`task not found: ${taskId}`); return "continue"; }
+        scheduler.forceExecute(task);
+        renderer.info(`force-executing ${taskId}`);
+        return "continue";
+      }
+
+      if (sub === "cancel") {
+        const taskId = args[1];
+        if (!taskId) { renderer.error("usage: /queue cancel <id>"); return "continue"; }
+        const matched = findTaskById(scheduler, taskId);
+        if (!matched) { renderer.error(`task not found in queue: ${taskId}`); return "continue"; }
+        const ok = scheduler.cancel(matched);
+        renderer.info(ok ? `cancelled ${taskId}` : `task not found in queue: ${taskId}`);
+        return "continue";
+      }
+
+      // Default: show running + queued tasks
+      const running = scheduler.getRunningSnapshot();
+      const queued = scheduler.getQueueSnapshot();
+
+      process.stdout.write("\n");
+      renderer.info(`\x1b[1mRunning (${running.length}/${scheduler.getRunningCount() + scheduler.getQueueLength() > 0 ? running.length : 0}):\x1b[0m`);
+      if (running.length === 0) {
+        renderer.info("  \x1b[2m(none)\x1b[0m");
+      } else {
+        for (const r of running) {
+          const elapsed = formatDuration(r.runningMs);
+          const store = ctx.orchestrator.getStore();
+          const task = store.getTask(r.taskId);
+          const label = task?.prompt?.slice(0, 40) ?? r.taskId;
+          renderer.info(`  \x1b[32m●\x1b[0m ${r.taskId.slice(0, 8)}  \x1b[33m[${r.priority}]\x1b[0m  ${elapsed}  \x1b[2m"${label}"\x1b[0m`);
+        }
+      }
+
+      process.stdout.write("\n");
+      renderer.info(`\x1b[1mQueued (${queued.length}):\x1b[0m`);
+      if (queued.length === 0) {
+        renderer.info("  \x1b[2m(none)\x1b[0m");
+      } else {
+        for (const q of queued) {
+          const waited = formatDuration(q.waitingMs);
+          const store = ctx.orchestrator.getStore();
+          const task = store.getTask(q.taskId);
+          const label = task?.prompt?.slice(0, 40) ?? q.taskId;
+          renderer.info(`  ${q.position}. ${q.taskId.slice(0, 8)}  \x1b[33m[${q.priority}]\x1b[0m  ${waited}  \x1b[2m"${label}"\x1b[0m`);
+        }
+      }
       process.stdout.write("\n");
       return "continue";
     }
@@ -1717,6 +1824,12 @@ export async function handleCommand(
       renderer.info("\x1b[1m/github branch\x1b[0m \x1b[2m<name> create branch");
       renderer.info("\x1b[1m/github pr\x1b[0m \x1b[2m<title>    create pull request");
       renderer.info("\x1b[1m/github issue\x1b[0m \x1b[2m<url>   view issue details");
+      renderer.info("\x1b[1m/queue\x1b[0m\x1b[2m               show running + queued tasks with priorities");
+      renderer.info("\x1b[1m/queue priority\x1b[0m \x1b[2m<id> <level> change task priority");
+      renderer.info("\x1b[1m/queue promote\x1b[0m \x1b[2m<id>  promote one priority level");
+      renderer.info("\x1b[1m/queue demote\x1b[0m \x1b[2m<id>   demote one priority level");
+      renderer.info("\x1b[1m/queue force\x1b[0m \x1b[2m<id>    force-execute immediately");
+      renderer.info("\x1b[1m/queue cancel\x1b[0m \x1b[2m<id>   cancel queued task");
       renderer.info("\x1b[1m/clear\x1b[0m\x1b[2m               clear conversation");
       renderer.info("\x1b[1m/lang\x1b[0m \x1b[2m<language>      set response language");
       renderer.info("\x1b[1m/help\x1b[0m\x1b[2m                this help");
@@ -1744,4 +1857,32 @@ export async function handleCommand(
       return "continue";
     }
   }
+}
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+}
+
+function findTaskById(
+  scheduler: import("../core/scheduler.ts").PriorityScheduler,
+  partialId: string,
+): string | null {
+  // Check queued tasks
+  const queued = scheduler.getQueueSnapshot();
+  const match = queued.find(
+    (q) => q.taskId === partialId || q.taskId.startsWith(partialId),
+  );
+  if (match) return match.taskId;
+
+  // Check running tasks
+  const running = scheduler.getRunningSnapshot();
+  const runMatch = running.find(
+    (r) => r.taskId === partialId || r.taskId.startsWith(partialId),
+  );
+  if (runMatch) return runMatch.taskId;
+
+  return null;
 }

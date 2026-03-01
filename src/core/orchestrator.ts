@@ -13,7 +13,7 @@ import { SessionManager } from "../session/manager.ts";
 import { Store } from "../db/store.ts";
 import { initDb } from "../db/schema.ts";
 import { routeTask, suggestAgent } from "./router.ts";
-import { Scheduler } from "./scheduler.ts";
+import { PriorityScheduler } from "./scheduler.ts";
 import { AgentRegistry } from "../agents/registry.ts";
 import { SkillIndex } from "../agents/skill-index.ts";
 import { buildCommand } from "../agents/provider.ts";
@@ -101,6 +101,7 @@ import { SessionToolkit } from "./session-tools.ts";
 import { MultiEditTool } from "./multiedit-tool.ts";
 import { BatchToolExecutor } from "./batch-tool.ts";
 import { RetryWithBackoff } from "./retry-backoff.ts";
+import { RateLimitScheduler } from "./rate-limit-scheduler.ts";
 import { AgentFallbackChain } from "./agent-fallback-chain.ts";
 import { ModelVariantManager } from "./model-variants.ts";
 import { InterleavedThinkingParser } from "./interleaved-thinking.ts";
@@ -113,6 +114,7 @@ import { AcpServer } from "./acp.ts";
 import { SdkServer } from "./sdk-server.ts";
 import { CopilotAuth } from "./copilot-auth.ts";
 import { RefactorEngine } from "./refactor-command.ts";
+import { DeadLetterQueue } from "./dead-letter-queue.ts";
 
 const MAX_AGENT_DEPTH = 5;
 
@@ -124,7 +126,7 @@ export class Orchestrator {
   private worktree: WorktreeManager;
   private inbox!: Inbox;
   private compressor: ContextCompressor;
-  private scheduler: Scheduler;
+  private scheduler: PriorityScheduler;
   private registry: AgentRegistry;
   private logger: Logger;
   private tracer: Tracer;
@@ -198,6 +200,7 @@ export class Orchestrator {
   private multiEdit: MultiEditTool;
   private batchTool: BatchToolExecutor;
   private retryBackoff: RetryWithBackoff;
+  private rateLimitScheduler: RateLimitScheduler;
   private fallbackChain: AgentFallbackChain;
   private modelVariants: ModelVariantManager;
   private thinkingParser: InterleavedThinkingParser;
@@ -217,7 +220,7 @@ export class Orchestrator {
   constructor(config: OrchestratorConfig) {
     this.config = config;
     this.sessionManager = new SessionManager(config.orchestrator.sessionPrefix);
-    this.scheduler = new Scheduler(config.orchestrator.maxConcurrentAgents);
+    this.scheduler = new PriorityScheduler(config.orchestrator.maxConcurrentAgents);
     this.registry = new AgentRegistry();
     this.logger = new Logger(config.orchestrator.logDir);
     this.tracer = new Tracer();
@@ -278,6 +281,7 @@ export class Orchestrator {
     this.multiEdit = new MultiEditTool();
     this.batchTool = new BatchToolExecutor();
     this.retryBackoff = new RetryWithBackoff();
+    this.rateLimitScheduler = new RateLimitScheduler();
     this.fallbackChain = new AgentFallbackChain();
     this.modelVariants = new ModelVariantManager();
     this.thinkingParser = new InterleavedThinkingParser();
@@ -802,7 +806,7 @@ export class Orchestrator {
     return this.tracer;
   }
 
-  getScheduler(): Scheduler {
+  getScheduler(): PriorityScheduler {
     return this.scheduler;
   }
 
@@ -1098,6 +1102,10 @@ export class Orchestrator {
     return this.retryBackoff;
   }
 
+  getRateLimitScheduler(): RateLimitScheduler {
+    return this.rateLimitScheduler;
+  }
+
   getFallbackChain(): AgentFallbackChain {
     return this.fallbackChain;
   }
@@ -1169,6 +1177,7 @@ export class Orchestrator {
       }
     }
 
+    this.rateLimitScheduler.clear();
     this.scheduler.clear();
     await this.mcpManager.disconnect();
   }

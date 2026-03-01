@@ -2,6 +2,8 @@
 
 export type ModelTier = "haiku" | "sonnet" | "opus";
 
+export type { TaskPriority } from "../core/scheduler.ts";
+
 export type AgentStatus =
   | "idle"
   | "running"
@@ -636,7 +638,7 @@ export interface ExecutionPhaseGroup {
 
 // ── Worker Types ────────────────────────────────────────────────────
 
-export type WorkerStatus = "spawning" | "running" | "completed" | "failed" | "timeout";
+export type WorkerStatus = "spawning" | "running" | "completed" | "failed" | "timeout" | "cancelled";
 
 export interface WorkerState {
   id: string;

@@ -89,7 +89,25 @@ export type OrcEvent =
   | { type: "web:disconnect"; clientId: string }
   | { type: "refactor:phase"; phase: string; status: "start" | "complete" | "failed" }
   | { type: "github:action"; action: string; detail: string }
-  | { type: "copilot:auth"; provider: string; status: "started" | "success" | "failed" };
+  | { type: "copilot:auth"; provider: string; status: "started" | "success" | "failed" }
+  | { type: "queue:enqueue"; taskId: string; priority: string; position: number }
+  | { type: "queue:dequeue"; taskId: string; waitedMs: number }
+  | { type: "queue:priority_change"; taskId: string; from: string; to: string }
+  | { type: "queue:force_execute"; taskId: string }
+  | { type: "queue:preempt"; preemptedTaskId: string; byTaskId: string }
+  | { type: "ratelimit:scheduled"; taskId: string; retryAt: string; retryAfterMs: number }
+  | { type: "ratelimit:resumed"; taskId: string; waitedMs: number }
+  | { type: "ratelimit:cancelled"; taskId: string }
+  | { type: "worker:cancel"; workerId: string; reason: string }
+  | { type: "task:cancel"; taskId: string; workersAffected: number; reason: string }
+  | { type: "stuck:detected"; workerId: string; reason: string; level: string; staleDurationMs: number }
+  | { type: "stuck:escalated"; workerId: string; level: string; action: string }
+  | { type: "stuck:rate_limited"; workerId: string; retryAfterMs: number; retryAt: string }
+  | { type: "stuck:recovered"; workerId: string; wasStuckMs: number }
+  | { type: "dlq:enqueue"; id: string; taskId: string; reason: string; error: string }
+  | { type: "dlq:retry"; id: string; taskId: string }
+  | { type: "dlq:resolved"; id: string; taskId: string }
+  | { type: "dlq:discarded"; id: string; taskId: string };
 
 export class OrcEventBus extends EventEmitter {
   publish(event: OrcEvent): void {
