@@ -1,3 +1,5 @@
+import { TreeSitterBashParser, type ParsedCommand } from "./tree-sitter-parser.ts";
+
 export type SafetyLevel = "safe" | "prompt" | "forbidden";
 
 const SAFE_COMMANDS: string[] = [
@@ -91,4 +93,71 @@ export function classifyCommand(command: string): SafetyLevel {
   }
 
   return "prompt";
+}
+
+// Shared tree-sitter parser instance
+let sharedParser: TreeSitterBashParser | null = null;
+
+export async function initParser(): Promise<boolean> {
+  sharedParser = new TreeSitterBashParser();
+  return sharedParser.initialize();
+}
+
+// AST-based classification using tree-sitter parsed data
+function classifyFromAST(parsed: ParsedCommand): SafetyLevel | null {
+  const DANGEROUS_COMMANDS = new Set([
+    "rm", "rmdir", "mkfs", "fdisk", "dd", "killall", "pkill",
+    "shutdown", "reboot", "halt", "poweroff",
+  ]);
+
+  const SAFE_COMMAND_NAMES = new Set([
+    "ls", "cat", "head", "tail", "echo", "pwd", "whoami", "date",
+    "wc", "which", "env", "printenv", "file", "stat", "du", "df",
+    "free", "uname", "hostname",
+  ]);
+
+  // Check if any command is dangerous
+  for (const cmd of [...parsed.commands, ...parsed.subcommands]) {
+    if (DANGEROUS_COMMANDS.has(cmd)) return "forbidden";
+  }
+
+  // Check for dangerous redirect targets
+  const sensitiveTargets = ["/etc/passwd", "/etc/shadow", ".ssh/"];
+  for (const redirect of parsed.redirects) {
+    if (sensitiveTargets.some(t => redirect.includes(t))) return "forbidden";
+  }
+
+  // Check for pipe-to-shell pattern
+  if (parsed.pipes) {
+    const cmds = parsed.commands;
+    const lastCmd = cmds[cmds.length - 1];
+    if (["sh", "bash", "zsh", "eval"].includes(lastCmd)) {
+      if (cmds.some(c => ["curl", "wget"].includes(c))) return "forbidden";
+    }
+  }
+
+  // All commands are in safe list
+  if (parsed.commands.every(c => SAFE_COMMAND_NAMES.has(c)) &&
+      parsed.subcommands.length === 0 &&
+      parsed.redirects.length === 0 &&
+      !parsed.backgrounded) {
+    return "safe";
+  }
+
+  return null; // inconclusive, fall through to regex
+}
+
+// Enhanced classify function: tries AST first, then falls back to regex
+export function classifyCommandEnhanced(command: string): SafetyLevel {
+  // Try AST-based classification first
+  if (sharedParser?.isReady()) {
+    const parsed = sharedParser.parse(command);
+    if (parsed) {
+      const astResult = classifyFromAST(parsed);
+      if (astResult !== null) return astResult;
+    }
+  }
+
+  // Fall back to regex-based classification
+  return classifyCommand(command);
 }
