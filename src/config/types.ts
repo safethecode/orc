@@ -104,6 +104,7 @@ export interface OrchestratorConfig {
   webInterface?: WebInterfaceConfig;
   refactor?: RefactorConfig;
   toolBranching?: Record<string, { editTool?: string; writeTool?: string; additionalTools?: string[]; guidelines?: string }>;
+  doomLoop?: import("../core/doom-loop.ts").DoomLoopConfig;
 }
 
 // ── Agent Profile ─────────────────────────────────────────────────────

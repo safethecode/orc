@@ -28,7 +28,7 @@ export const COMMANDS = [
   "/doctor", "/stats", "/worktree", "/background", "/stash",
   "/question", "/search", "/tasks", "/handoff", "/refactor",
   "/variants", "/fastwork", "/ultrathink", "/github",
-  "/queue", "/cancel", "/dlq", "/enforce",
+  "/queue", "/cancel", "/dlq", "/enforce", "/doomloop",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/benchmark", "/help", "/quit",
 ];
@@ -2055,6 +2055,26 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "doomloop": {
+      const doomLoop = ctx.orchestrator.getDoomLoop();
+      const subCmd = args[0];
+
+      if (subCmd === "on" || subCmd === "enable" || subCmd === "true") {
+        doomLoop.enable();
+        renderer.info("✓ doom loop detection enabled");
+      } else if (subCmd === "off" || subCmd === "disable" || subCmd === "false") {
+        doomLoop.disable();
+        renderer.info("✓ doom loop detection disabled");
+      } else if (subCmd === "status" || !subCmd) {
+        const enabled = doomLoop.isEnabled();
+        const status = enabled ? "\x1b[32menabled\x1b[0m" : "\x1b[90mdisabled\x1b[0m";
+        renderer.info(`doom loop detection: ${status}`);
+      } else {
+        renderer.error("usage: /doomloop [on|off|enable|disable|true|false|status]");
+      }
+      return "continue";
+    }
+
     case "github": {
       const gh = ctx.orchestrator.getGitHub();
       const sub = args[0];
@@ -2339,6 +2359,7 @@ export async function handleCommand(
       renderer.info("\x1b[1m/variants set\x1b[0m \x1b[2m<name>  set model variant");
       renderer.info("\x1b[1m/fastwork\x1b[0m\x1b[2m            show fastwork mode config");
       renderer.info("\x1b[1m/ultrathink\x1b[0m\x1b[2m          show ultrathink mode config");
+      renderer.info("\x1b[1m/doomloop\x1b[0m\x1b[2m            toggle doom loop detection (on|off|status)");
       renderer.info("\x1b[1m/github branch\x1b[0m \x1b[2m<name> create branch");
       renderer.info("\x1b[1m/github pr\x1b[0m \x1b[2m<title>    create pull request");
       renderer.info("\x1b[1m/github issue\x1b[0m \x1b[2m<url>   view issue details");

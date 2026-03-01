@@ -1,4 +1,5 @@
 export interface DoomLoopConfig {
+  enabled: boolean;        // default true
   maxRepetitions: number;  // default 5
   windowSize: number;      // track last N calls, default 15
   action: "warn" | "abort"; // default "warn"
@@ -20,6 +21,7 @@ export class DoomLoopDetector {
 
   constructor(config?: Partial<DoomLoopConfig>) {
     this.config = {
+      enabled: true,
       maxRepetitions: 5,
       windowSize: 15,
       action: "warn",
@@ -32,6 +34,15 @@ export class DoomLoopDetector {
    * Returns whether a loop was triggered, the repetition count, and the tool name.
    */
   record(tool: string, input: string): { triggered: boolean; count: number; tool: string } {
+    // If disabled, always return no trigger
+    if (!this.config.enabled) {
+      return {
+        triggered: false,
+        count: 0,
+        tool,
+      };
+    }
+
     const record: ToolCallRecord = {
       tool,
       input,
@@ -56,6 +67,21 @@ export class DoomLoopDetector {
   /** Reset history (e.g. on new message) */
   reset(): void {
     this.history = [];
+  }
+
+  /** Enable doom loop detection */
+  enable(): void {
+    this.config.enabled = true;
+  }
+
+  /** Disable doom loop detection */
+  disable(): void {
+    this.config.enabled = false;
+  }
+
+  /** Check if doom loop detection is enabled */
+  isEnabled(): boolean {
+    return this.config.enabled;
   }
 
   /** Get current repetition count for a tool+input combo within the window */

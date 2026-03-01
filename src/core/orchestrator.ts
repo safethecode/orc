@@ -253,7 +253,7 @@ export class Orchestrator {
     this.formatter = new AutoFormatter();
     this.customTools = new CustomToolLoader(process.cwd());
     this.fileWatcher = new FileWatcher(process.cwd());
-    this.doomLoop = new DoomLoopDetector();
+    this.doomLoop = new DoomLoopDetector(config.doomLoop);
     this.themeManager = new ThemeManager(config.theme);
     this.modelRegistry = new ModelRegistry();
     this.pluginManager = new PluginManager(process.cwd());

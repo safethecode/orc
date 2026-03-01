@@ -852,7 +852,7 @@ async function handleNaturalInput(
 
       // Inject-level violations (correction prompts queued)
       if (enforcement.injection) {
-        renderer.info(`\x1b[2m↩ enforcer injection queued (${enforcement.violations.filter(v => v.severity === "inject").length} rules)\x1b[0m`);
+        renderer.info(`\x1b[2m↩ enforcer correction queued (${enforcement.violations.filter(v => v.severity === "inject").length} rules)\x1b[0m`);
       }
 
       // Post-execution: record tool call for state tracking
