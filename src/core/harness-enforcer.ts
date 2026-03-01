@@ -10,7 +10,7 @@ import { eventBus } from "./events.ts";
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export type EnforcementSeverity = "block" | "warn" | "inject";
+export type EnforcementSeverity = "block" | "warn" | "inject" | "ask";
 
 export interface EnforcementViolation {
   ruleId: string;
@@ -25,6 +25,7 @@ export interface EnforcementResult {
   allowed: boolean;
   violations: EnforcementViolation[];
   injection?: string; // prompt to inject back to agent
+  askRequired?: boolean; // user approval needed before execution
 }
 
 export interface ToolCallInput {
@@ -363,20 +364,23 @@ const RULES: EnforcementRule[] = [
     name: "Command Safety",
     severity: "block",
     appliesTo: "all",
-    check(tool) {
+    check(tool, state) {
       if (!isBashTool(tool.toolName)) return null;
 
       const command = extractCommand(tool.input);
       if (!command) return null;
+
+      // Skip if user already approved this command
+      if ((state as any).__approvedCommands?.has(command.trim())) return null;
 
       const level = classifyCommandEnhanced(command);
 
       if (level === "forbidden") {
         return {
           ruleId: "command-safety",
-          severity: "block",
-          message: `Forbidden command blocked: ${command.slice(0, 100)}`,
-          suggestion: "Use a safer alternative. Destructive operations require explicit user approval.",
+          severity: "ask",
+          message: `Dangerous command detected: ${command.slice(0, 100)}`,
+          suggestion: "This command requires user approval before execution.",
           toolName: tool.toolName,
         };
       }
@@ -499,6 +503,7 @@ export class HarnessEnforcer {
   private activeRules: EnforcementRule[];
   private violations: EnforcementViolation[] = [];
   private enabled = true;
+  private approvedCommands: Set<string> = new Set();
 
   constructor(role: AgentRole) {
     this.role = role;
@@ -513,6 +518,8 @@ export class HarnessEnforcer {
       totalToolCalls: 0,
       turnNumber: 0,
     };
+    // Expose approved commands to rules via state
+    (this.state as any).__approvedCommands = this.approvedCommands;
 
     // Filter rules to those applicable to this role
     this.activeRules = RULES.filter(
@@ -533,6 +540,7 @@ export class HarnessEnforcer {
     const violations: EnforcementViolation[] = [];
     const injections: string[] = [];
     let blocked = false;
+    let askRequired = false;
 
     for (const rule of this.activeRules) {
       const violation = rule.check(tool, this.state, this.role);
@@ -543,6 +551,10 @@ export class HarnessEnforcer {
 
       if (violation.severity === "block") {
         blocked = true;
+      }
+
+      if (violation.severity === "ask") {
+        askRequired = true;
       }
 
       if (violation.severity === "inject" && violation.suggestion) {
@@ -562,9 +574,10 @@ export class HarnessEnforcer {
     }
 
     return {
-      allowed: !blocked,
+      allowed: !blocked && !askRequired,
       violations,
       injection: injections.length > 0 ? injections.join("\n") : undefined,
+      askRequired,
     };
   }
 
@@ -683,6 +696,11 @@ export class HarnessEnforcer {
   /** Advance turn counter. Call at each new agent turn. */
   nextTurn(): void {
     this.state.turnNumber++;
+  }
+
+  /** Approve a previously blocked command (user granted permission). */
+  approve(command: string): void {
+    this.approvedCommands.add(command.trim());
   }
 
   /** Mark a file as read externally (e.g., from initial context). */
