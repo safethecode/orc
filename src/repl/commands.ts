@@ -1,5 +1,8 @@
 import type { Orchestrator } from "../core/orchestrator.ts";
 import type { Conversation } from "./conversation.ts";
+import { BENCHMARK_TASKS, getTasksByCategory, getTasksByDifficulty, getTaskById } from "../benchmark/tasks.ts";
+import { BenchmarkRunner, estimateBenchmarkCost } from "../benchmark/runner.ts";
+import { ReportGenerator } from "../benchmark/report-generator.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
 import { loadExecPolicy, trustProject, isProjectTrusted } from "../sandbox/rules.ts";
 import { getCatalogEntry } from "../mcp/catalog.ts";
@@ -27,7 +30,7 @@ export const COMMANDS = [
   "/variants", "/fastwork", "/ultrathink", "/github",
   "/queue", "/cancel", "/dlq",
   "/diff", "/compact", "/trust", "/consolidate",
-  "/checkpoint", "/spec", "/ideate", "/help", "/quit",
+  "/checkpoint", "/spec", "/ideate", "/benchmark", "/help", "/quit",
 ];
 
 export const LANGUAGES = [
@@ -2029,6 +2032,159 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "benchmark": {
+      const sub = args[0];
+
+      if (!sub) {
+        // /benchmark — show benchmark info
+        process.stdout.write("\n");
+        renderer.info("\x1b[1mBenchmark Runner\x1b[0m");
+        renderer.info(`  tasks: \x1b[1m${BENCHMARK_TASKS.length}\x1b[0m across ${new Set(BENCHMARK_TASKS.map(t => t.category)).size} categories`);
+        renderer.info(`  categories: \x1b[2m${[...new Set(BENCHMARK_TASKS.map(t => t.category))].join(", ")}\x1b[0m`);
+        renderer.info(`  difficulty: \x1b[2measy (${getTasksByDifficulty("easy").length}), medium (${getTasksByDifficulty("medium").length}), hard (${getTasksByDifficulty("hard").length})\x1b[0m`);
+        process.stdout.write("\n");
+        renderer.info("\x1b[2musage:\x1b[0m");
+        renderer.info("  \x1b[1m/benchmark run\x1b[0m              \x1b[2mrun full suite (all providers)\x1b[0m");
+        renderer.info("  \x1b[1m/benchmark run <provider>\x1b[0m   \x1b[2mrun for one provider\x1b[0m");
+        renderer.info("  \x1b[1m/benchmark report\x1b[0m           \x1b[2mgenerate/show last report\x1b[0m");
+        renderer.info("  \x1b[1m/benchmark tasks\x1b[0m            \x1b[2mlist benchmark tasks\x1b[0m");
+        renderer.info("  \x1b[1m/benchmark cost\x1b[0m             \x1b[2mestimate cost for full run\x1b[0m");
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      if (sub === "tasks") {
+        process.stdout.write("\n");
+        const categories = [...new Set(BENCHMARK_TASKS.map(t => t.category))];
+        for (const cat of categories) {
+          renderer.info(`\x1b[1m${cat.charAt(0).toUpperCase() + cat.slice(1)}\x1b[0m`);
+          const tasks = getTasksByCategory(cat);
+          for (const task of tasks) {
+            const diffColor = task.difficulty === "easy" ? "\x1b[32m" : task.difficulty === "medium" ? "\x1b[33m" : "\x1b[31m";
+            renderer.info(`  ${diffColor}${task.difficulty.padEnd(6)}\x1b[0m ${task.name} \x1b[2m(${task.id})\x1b[0m`);
+            renderer.info(`         \x1b[2mtimeout: ${task.timeoutMs / 1000}s, budget: $${task.maxCostUsd.toFixed(2)}\x1b[0m`);
+          }
+        }
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      if (sub === "cost") {
+        const provider = args[1];
+        const providers = provider
+          ? [provider]
+          : ["claude", "codex", "gemini", "kiro"];
+
+        const estimate = estimateBenchmarkCost(
+          BENCHMARK_TASKS.length,
+          providers,
+          true, // harnessComparison
+        );
+
+        process.stdout.write("\n");
+        renderer.info("\x1b[1mBenchmark Cost Estimate\x1b[0m");
+        renderer.info(`  total runs: \x1b[1m${estimate.runCount}\x1b[0m (${BENCHMARK_TASKS.length} tasks x ${providers.length} providers x 2 harness modes)`);
+        renderer.info(`  estimated cost: \x1b[1m$${estimate.totalEstimate.toFixed(3)}\x1b[0m`);
+        process.stdout.write("\n");
+        for (const [prov, cost] of Object.entries(estimate.perProvider)) {
+          renderer.info(`  ${prov.padEnd(10)} $${cost.toFixed(3)}`);
+        }
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      if (sub === "run") {
+        const providerArg = args[1];
+        const providers = providerArg
+          ? [providerArg]
+          : ["claude", "codex", "gemini", "kiro"];
+
+        // Validate providers
+        const validProviders = ["claude", "codex", "gemini", "kiro"];
+        for (const p of providers) {
+          if (!validProviders.includes(p)) {
+            renderer.error(`unknown provider: ${p} (valid: ${validProviders.join(", ")})`);
+            return "continue";
+          }
+        }
+
+        const runner = new BenchmarkRunner({
+          providers,
+          harnessComparison: true,
+          parallel: false,
+          timeoutMs: 600_000,
+          maxCostUsd: 5.0,
+          evaluator: "auto",
+        });
+
+        renderer.info(`\x1b[1mstarting benchmark\x1b[0m: ${BENCHMARK_TASKS.length} tasks, ${providers.length} providers`);
+        renderer.info("\x1b[2mthis may take a while...\x1b[0m");
+
+        try {
+          const runs = await runner.runAll(BENCHMARK_TASKS);
+
+          const reportGen = new ReportGenerator();
+          const report = reportGen.generate(BENCHMARK_TASKS, runs);
+
+          // Save report to file
+          const reportPath = `${process.cwd()}/benchmark-report-${new Date().toISOString().split("T")[0]}.md`;
+          await Bun.write(reportPath, report);
+
+          // Store for /benchmark report
+          (ctx.orchestrator as any).__lastBenchmarkReport = report;
+          (ctx.orchestrator as any).__lastBenchmarkRuns = runs;
+
+          process.stdout.write("\n");
+          renderer.info(`\x1b[32m\u2713\x1b[0m benchmark complete: ${runs.length} runs`);
+          renderer.info(`  total cost: \x1b[1m$${runner.getTotalCost().toFixed(4)}\x1b[0m`);
+          renderer.info(`  report saved: \x1b[2m${reportPath}\x1b[0m`);
+
+          const completed = runs.filter(r => r.status === "completed").length;
+          const failed = runs.filter(r => r.status === "failed").length;
+          const timeout = runs.filter(r => r.status === "timeout").length;
+          const budgetExceeded = runs.filter(r => r.status === "budget_exceeded").length;
+
+          renderer.info(`  completed: ${completed}, failed: ${failed}, timeout: ${timeout}, budget_exceeded: ${budgetExceeded}`);
+          process.stdout.write("\n");
+        } catch (e) {
+          renderer.error(`benchmark failed: ${(e as Error).message}`);
+        }
+
+        return "continue";
+      }
+
+      if (sub === "report") {
+        const lastReport = (ctx.orchestrator as any).__lastBenchmarkReport as string | undefined;
+        if (!lastReport) {
+          renderer.info("no benchmark report available — run /benchmark run first");
+          return "continue";
+        }
+
+        process.stdout.write("\n");
+        // Print report lines (strip markdown headers for terminal readability)
+        for (const line of lastReport.split("\n")) {
+          if (line.startsWith("# ")) {
+            renderer.info(`\x1b[1m${line.slice(2)}\x1b[0m`);
+          } else if (line.startsWith("## ")) {
+            renderer.info(`\x1b[1m\x1b[36m${line.slice(3)}\x1b[0m`);
+          } else if (line.startsWith("### ")) {
+            renderer.info(`\x1b[1m${line.slice(4)}\x1b[0m`);
+          } else if (line.startsWith("---")) {
+            renderer.separator();
+          } else if (line.startsWith("|")) {
+            renderer.info(`\x1b[2m${line}\x1b[0m`);
+          } else if (line.trim()) {
+            renderer.info(line);
+          }
+        }
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      renderer.error("usage: /benchmark [run|report|tasks|cost]");
+      return "continue";
+    }
+
     case "help": {
       process.stdout.write("\n");
       renderer.info("\x1b[1m/status\x1b[0m\x1b[2m              agent statuses");
@@ -2142,6 +2298,12 @@ export async function handleCommand(
       renderer.info("\x1b[1m/dlq discard\x1b[0m \x1b[2m<id>     discard a dead letter");
       renderer.info("\x1b[1m/dlq stats\x1b[0m\x1b[2m           show DLQ statistics");
       renderer.info("\x1b[1m/dlq clear\x1b[0m\x1b[2m           discard all resolved/discarded entries");
+      renderer.info("\x1b[1m/benchmark\x1b[0m\x1b[2m           benchmark runner info");
+      renderer.info("\x1b[1m/benchmark run\x1b[0m\x1b[2m       run full benchmark suite (all providers)");
+      renderer.info("\x1b[1m/benchmark run\x1b[0m \x1b[2m<p>  run benchmarks for one provider");
+      renderer.info("\x1b[1m/benchmark report\x1b[0m\x1b[2m    generate/show last report");
+      renderer.info("\x1b[1m/benchmark tasks\x1b[0m\x1b[2m     list available benchmark tasks");
+      renderer.info("\x1b[1m/benchmark cost\x1b[0m\x1b[2m      estimate cost for full run");
       renderer.info("\x1b[1m/clear\x1b[0m\x1b[2m               clear conversation");
       renderer.info("\x1b[1m/lang\x1b[0m \x1b[2m<language>      set response language");
       renderer.info("\x1b[1m/help\x1b[0m\x1b[2m                this help");

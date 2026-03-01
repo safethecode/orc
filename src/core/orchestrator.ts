@@ -114,6 +114,8 @@ import { AcpServer } from "./acp.ts";
 import { SdkServer } from "./sdk-server.ts";
 import { CopilotAuth } from "./copilot-auth.ts";
 import { RefactorEngine } from "./refactor-command.ts";
+import { BenchmarkRunner } from "../benchmark/runner.ts";
+import { ReportGenerator } from "../benchmark/report-generator.ts";
 import { DeadLetterQueue } from "./dead-letter-queue.ts";
 import { StuckDetector } from "./stuck-detector.ts";
 import { EscalationManager } from "./escalation-manager.ts";
@@ -216,6 +218,8 @@ export class Orchestrator {
   private sdkServer: SdkServer;
   private copilotAuth: CopilotAuth;
   private refactorEngine: RefactorEngine;
+  private benchmarkRunner: BenchmarkRunner;
+  private reportGenerator: ReportGenerator;
   private dlq: DeadLetterQueue;
   private stuckDetector: StuckDetector;
   private escalationManager: EscalationManager;
@@ -301,6 +305,15 @@ export class Orchestrator {
     this.sdkServer = new SdkServer();
     this.copilotAuth = new CopilotAuth();
     this.refactorEngine = new RefactorEngine(config.refactor);
+    this.benchmarkRunner = new BenchmarkRunner({
+      providers: Object.keys(config.providers ?? {}),
+      harnessComparison: true,
+      parallel: false,
+      timeoutMs: 600_000,
+      maxCostUsd: 5.0,
+      evaluator: "auto",
+    });
+    this.reportGenerator = new ReportGenerator();
     this.dlq = new DeadLetterQueue();
     this.stuckDetector = new StuckDetector();
     this.escalationManager = new EscalationManager();
@@ -1267,6 +1280,14 @@ export class Orchestrator {
 
   getDeadLetterQueue(): DeadLetterQueue {
     return this.dlq;
+  }
+
+  getBenchmarkRunner(): BenchmarkRunner {
+    return this.benchmarkRunner;
+  }
+
+  getReportGenerator(): ReportGenerator {
+    return this.reportGenerator;
   }
 
   async shutdown(): Promise<void> {
