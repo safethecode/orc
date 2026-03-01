@@ -32,6 +32,7 @@ import { getPhaseModel } from "../core/phase-config.ts";
 import { detectRecurringIssues, DEFAULT_QA_CONFIG } from "../core/qa-loop.ts";
 import type { QAIssue, ExecutionPhase } from "../config/types.ts";
 import * as renderer from "./renderer.ts";
+import { LayoutManager } from "./layout-manager.ts";
 
 export async function startRepl(
   orchestrator: Orchestrator,
@@ -46,6 +47,10 @@ export async function startRepl(
   let currentCancellation: CancellationToken | null = null;
   let hasInteraction = false;
   let pinnedAgent: string | null = null;
+
+  // Split-pane layout manager
+  const layout = new LayoutManager();
+  renderer.setLayoutManager(layout);
 
   // File watcher consumer: track recent external file changes
   const recentFileChanges: string[] = [];
@@ -139,13 +144,16 @@ export async function startRepl(
   process.on("SIGINT", () => {
     if (currentCancellation && !currentCancellation.cancelled) {
       currentCancellation.cancel();
+      renderer.notifyIdle();
       process.stdout.write("\n");
       renderer.info("Generation aborted.");
     } else if (currentStreamer?.isRunning) {
       currentStreamer.abort();
+      renderer.notifyIdle();
       process.stdout.write("\n");
       renderer.info("Generation aborted.");
     } else {
+      layout.deactivate();
       process.stdout.write("\n");
       rl.close();
       process.exit(0);
@@ -233,19 +241,39 @@ export async function startRepl(
   // Prewarm DNS cache while user reads welcome screen
   orchestrator.getPrewarmer().prewarm().catch(() => {});
 
+  // Activate split-pane layout (scroll region + status bar + input area)
+  layout.activate();
+  process.stdout.on("resize", () => layout.handleResize());
+
+  // Delegate keypress events to layout manager when not at readline prompt
+  process.stdin.on("keypress", (str: string | undefined, key: { name?: string; ctrl?: boolean; meta?: boolean; shift?: boolean; sequence?: string }) => {
+    if (!promptActive && layout.isInAgentMode()) {
+      layout.handleKeypress(str, key);
+    }
+  });
+
+  let pendingMessages: string[] = [];
+
   try {
     while (true) {
       let input: string;
-      try {
-        promptActive = true;
-        const prompt = planMode.isActive()
-          ? `\x1b[1m\x1b[33m[plan]\x1b[35m ❯\x1b[0m `
-          : renderer.PROMPT;
-        input = await rl.question(prompt);
-        promptActive = false;
-      } catch {
-        promptActive = false;
-        break;
+
+      // Check for queued messages from split-pane input
+      if (pendingMessages.length > 0) {
+        input = pendingMessages.shift()!;
+        renderer.info(`\x1b[2m→ queued: ${input.length > 60 ? input.slice(0, 60) + "..." : input}\x1b[0m`);
+      } else {
+        try {
+          promptActive = true;
+          const prompt = planMode.isActive()
+            ? `\x1b[1m\x1b[33m[plan]\x1b[35m ❯\x1b[0m `
+            : renderer.PROMPT;
+          input = await rl.question(prompt);
+          promptActive = false;
+        } catch {
+          promptActive = false;
+          break;
+        }
       }
 
       // Multi-line input: backslash continuation (\ at end of line)
@@ -337,21 +365,32 @@ export async function startRepl(
       const cancellation = new CancellationToken();
       currentCancellation = cancellation;
 
-      await handleNaturalInput(
-        resolvedInput,
-        orchestrator,
-        config,
-        conversation,
-        rollout,
-        cancellation,
-        (streamer) => { currentStreamer = streamer; },
-        pinnedAgent,
-        mcpScoutCache,
-        skillScoutCache,
-        planMode,
-        forkManager,
-        recentFileChanges,
-      );
+      // Enter agent mode: enable split-pane input queuing
+      layout.enterAgentMode("agent");
+
+      try {
+        await handleNaturalInput(
+          resolvedInput,
+          orchestrator,
+          config,
+          conversation,
+          rollout,
+          cancellation,
+          (streamer) => { currentStreamer = streamer; },
+          pinnedAgent,
+          mcpScoutCache,
+          skillScoutCache,
+          planMode,
+          forkManager,
+          recentFileChanges,
+          rl,
+        );
+      } finally {
+        // Exit agent mode: collect queued messages
+        const queued = layout.exitAgentMode();
+        pendingMessages.push(...queued);
+        renderer.notifyIdle();
+      }
       hasInteraction = true;
       currentStreamer = null;
       currentCancellation = null;
@@ -374,6 +413,7 @@ export async function startRepl(
       process.stdout.write("\n");
     }
   } finally {
+    layout.deactivate();
     // Auto-save snapshot on exit (only if user actually interacted)
     if (hasInteraction && conversation.length > 0) {
       const snapshot = conversation.toSnapshot();
@@ -428,6 +468,7 @@ async function handleNaturalInput(
   planMode?: PlanMode,
   forkManager?: SessionForkManager,
   recentFileChanges?: string[],
+  rl?: readline.Interface,
 ): Promise<void> {
   let route: RouteResult;
   let agentName: string;
@@ -808,6 +849,8 @@ async function handleNaturalInput(
     onStreamer(streamer);
     let hasContent = false;
     let boxOpen = false;
+    // eslint-disable-next-line prefer-const -- mutated inside event handler
+    let pendingApproval: { command: string; ruleId: string; message: string } | null = null as any;
     const WRITE_TOOLS = new Set(["write", "edit", "create", "patch", "apply_patch"]);
 
     // Real-time streaming: open box on first content, stream into it
@@ -819,6 +862,20 @@ async function handleNaturalInput(
       }
       hasContent = true;
       renderer.text(delta);
+    });
+
+    // Restart spinner between streaming blocks (fills the visual gap)
+    streamer.on("text_complete", () => {
+      if (boxOpen) {
+        renderer.endBox();
+        boxOpen = false;
+      }
+      renderer.startSpinner(agentName, route.model);
+    });
+
+    // Live cost updates for status bar
+    streamer.on("usage", (usage: { costUsd: number }) => {
+      renderer.updateCostLive(usage.costUsd);
     });
 
     streamer.on("tool_use", (tool: ToolUseEvent) => {
@@ -836,6 +893,17 @@ async function handleNaturalInput(
       // ── Harness Enforcer: pre-execution validation ──
       const enforcer = orchestrator.getHarnessEnforcer();
       const enforcement = enforcer.check(tool.name, inp as Record<string, unknown>);
+
+      if (enforcement.askRequired) {
+        // Dangerous command needs user approval — abort immediately to prevent execution
+        const cmd = (inp.command as string) ?? tool.name;
+        const v = enforcement.violations.find(v => v.severity === "ask");
+        pendingApproval = { command: cmd, ruleId: v?.ruleId ?? "command-safety", message: v?.message ?? cmd };
+        renderer.stopSpinner();
+        if (boxOpen) { renderer.endBox(); boxOpen = false; }
+        streamer.abort();
+        return;
+      }
 
       if (!enforcement.allowed) {
         // Blocked violations — show each
@@ -950,6 +1018,65 @@ async function handleNaturalInput(
 
       if (boxOpen) {
         renderer.endBox();
+      }
+
+      // Handle enforcer approval flow (abort-ask-retry)
+      if (pendingApproval) {
+        const { command, message } = pendingApproval;
+        renderer.error(`\x1b[1m⚠ ENFORCER [command-safety]:\x1b[0m ${message}`);
+        renderer.info(`  \x1b[2m${command.slice(0, 200)}\x1b[0m`);
+
+        if (!rl) {
+          // No readline available — deny by default
+          renderer.info("  \x1b[31mDenied.\x1b[0m (no interactive prompt available)");
+          pendingApproval = null;
+          return;
+        }
+
+        // Ask user for approval via readline
+        const answer = await rl.question("  Allow this command? [y/N] ");
+        if (answer.trim().toLowerCase() === "y") {
+          // Approve and retry
+          orchestrator.getHarnessEnforcer().approve(command);
+          renderer.info("  \x1b[32mApproved.\x1b[0m Retrying...");
+          pendingApproval = null;
+          // Re-run with same prompt (recursive call via the retry loop)
+          const retryStreamer = new AgentStreamer();
+          onStreamer(retryStreamer);
+          let retryBox = false;
+          retryStreamer.on("text_delta", (d: string) => {
+            if (!retryBox) { renderer.stopSpinner(); renderer.startBox(route.model); retryBox = true; }
+            renderer.text(d);
+          });
+          retryStreamer.on("text_complete", () => {
+            if (retryBox) { renderer.endBox(); retryBox = false; }
+            renderer.startSpinner(agentName, route.model);
+          });
+          retryStreamer.on("usage", (u: { costUsd: number }) => renderer.updateCostLive(u.costUsd));
+          retryStreamer.on("tool_use", (t: ToolUseEvent) => {
+            const d = (t.input?.file_path as string) ?? (t.input?.command as string) ?? undefined;
+            if (retryBox) renderer.toolUse(t.name, d, true);
+            else renderer.updateSpinner(`${t.name} ${d ? d.split("/").pop() : ""}`.trim());
+          });
+          retryStreamer.on("error", (m: string) => { renderer.stopSpinner(); if (retryBox) renderer.endBox(); renderer.error(m); });
+          renderer.startSpinner(agentName, route.model);
+          const retryResult = await retryStreamer.run(currentCmd, cancellation.signal);
+          renderer.stopSpinner();
+          if (retryBox) renderer.endBox();
+          // Use retry result instead
+          if (retryResult.text) {
+            conversation.add({ role: "assistant", content: retryResult.text, agentName, tier: route.model, timestamp: new Date().toISOString() });
+          }
+          if (retryResult.inputTokens > 0 || retryResult.outputTokens > 0) {
+            renderer.cost(retryResult.costUsd, retryResult.inputTokens, retryResult.outputTokens, Date.now() - startTime);
+          }
+          return;
+        } else {
+          renderer.info("  \x1b[31mDenied.\x1b[0m Command was not executed.");
+          pendingApproval = null;
+          conversation.add({ role: "assistant", content: "(user denied the command — execution aborted)", agentName, tier: route.model, timestamp: new Date().toISOString() });
+          return;
+        }
       }
 
       // Quality gate
@@ -1172,6 +1299,13 @@ async function handleMultiAgent(
         boxOpen = true;
       }
       renderer.text(delta);
+    });
+    streamer.on("text_complete", () => {
+      if (boxOpen) { renderer.endBox(); boxOpen = false; }
+      renderer.startSpinner(agentName, route.model);
+    });
+    streamer.on("usage", (usage: { costUsd: number }) => {
+      renderer.updateCostLive(usage.costUsd);
     });
     streamer.on("tool_use", (tool: ToolUseEvent) => {
       const inp = tool.input ?? {};
@@ -1524,6 +1658,13 @@ async function executeSubtask(
         boxOpen = true;
       }
       renderer.text(delta);
+    });
+    streamer.on("text_complete", () => {
+      if (boxOpen) { renderer.endBox(); boxOpen = false; }
+      renderer.startSpinner(agentName, modelTier);
+    });
+    streamer.on("usage", (usage: { costUsd: number }) => {
+      renderer.updateCostLive(usage.costUsd);
     });
 
     streamer.on("tool_use", (tool: ToolUseEvent) => {
