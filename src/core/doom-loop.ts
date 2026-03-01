@@ -1,6 +1,6 @@
 export interface DoomLoopConfig {
-  maxRepetitions: number;  // default 3
-  windowSize: number;      // track last N calls, default 10
+  maxRepetitions: number;  // default 5
+  windowSize: number;      // track last N calls, default 15
   action: "warn" | "abort"; // default "warn"
 }
 
@@ -20,8 +20,8 @@ export class DoomLoopDetector {
 
   constructor(config?: Partial<DoomLoopConfig>) {
     this.config = {
-      maxRepetitions: 3,
-      windowSize: 10,
+      maxRepetitions: 5,
+      windowSize: 15,
       action: "warn",
       ...config,
     };
