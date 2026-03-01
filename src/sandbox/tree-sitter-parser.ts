@@ -1,4 +1,4 @@
-import Parser from "web-tree-sitter";
+import { Parser } from "web-tree-sitter";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
