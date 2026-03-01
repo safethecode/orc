@@ -324,6 +324,13 @@ export function updateCostLive(usd: number): void {
 
 // ── Multi-Agent Plan Display ────────────────────────────────────────
 
+export function brainstormStatus(count: number, durationMs: number): void {
+  const time = `${(durationMs / 1000).toFixed(1)}s`;
+  process.stdout.write(
+    `  ${DIM}brainstorm: ${count} perspectives  ${GRAY}(${time})${RESET}\n`,
+  );
+}
+
 export function planSummary(subtasks: SubTask[], plan: ExecutionPlan): void {
   process.stdout.write(`\n  ${BOLD}${WHITE}Execution Plan${RESET}  ${DIM}${plan.strategy}${RESET}\n`);
   for (const subtask of subtasks) {
