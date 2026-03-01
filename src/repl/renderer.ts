@@ -1,6 +1,7 @@
 import ora, { type Ora } from "ora";
 import stringWidth from "string-width";
 import type { ModelTier, SubTask, ExecutionPlan } from "../config/types.ts";
+import type { LayoutManager } from "./layout-manager.ts";
 
 // ── ANSI Escape Codes ────────────────────────────────────────────────
 
@@ -21,6 +22,14 @@ const BG_CYAN = "\x1b[46m";
 const BG_GREEN = "\x1b[42m";
 const BG_GRAY = "\x1b[100m";
 const BLACK = "\x1b[30m";
+
+// ── Layout Manager Reference ──────────────────────────────────────
+
+let layoutManager: LayoutManager | null = null;
+
+export function setLayoutManager(lm: LayoutManager): void {
+  layoutManager = lm;
+}
 
 const TIER_COLORS: Record<ModelTier, string> = {
   opus: MAGENTA,
@@ -109,6 +118,7 @@ export function endBox(): void {
 // ── Streaming Text (writes inside box with markdown) ────────────────
 
 export function text(content: string): void {
+  layoutManager?.updateAgentState("streaming");
   for (const ch of content) {
     if (ch === "\n") {
       flushLineBuffer();
@@ -214,6 +224,7 @@ function renderMarkdownLine(line: string): string {
 // ── Tool Use ────────────────────────────────────────────────────────
 
 export function toolUse(name: string, detail?: string, insideBox = false): void {
+  layoutManager?.updateAgentState("tool_use");
   const label = detail ? `${name} ${detail}` : name;
   if (insideBox) {
     const visW = stringWidth(label) + 2; // ▸ + space
@@ -286,6 +297,7 @@ export function startSpinner(agentName: string, tier: ModelTier): void {
     indent: 2,
     stream: process.stdout,
   }).start();
+  layoutManager?.updateAgentState("thinking");
 }
 
 export function updateSpinner(text: string): void {
@@ -300,6 +312,14 @@ export function stopSpinner(): void {
     process.stdout.write("\r\x1b[K");
     spinner = null;
   }
+}
+
+export function notifyIdle(): void {
+  layoutManager?.updateAgentState("idle");
+}
+
+export function updateCostLive(usd: number): void {
+  layoutManager?.updateCost(usd);
 }
 
 // ── Multi-Agent Plan Display ────────────────────────────────────────
