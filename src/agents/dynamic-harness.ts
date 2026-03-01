@@ -8,6 +8,18 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, basename, relative } from "node:path";
 import { buildHarness, type HarnessOptions, type HarnessResult } from "./harness.ts";
 
+// Optional AI SDK import for smart classification (graceful degradation)
+let generateText: typeof import("ai").generateText | null = null;
+let createAnthropic: typeof import("@ai-sdk/anthropic").createAnthropic | null = null;
+try {
+  const ai = await import("ai");
+  const anthropic = await import("@ai-sdk/anthropic");
+  generateText = ai.generateText;
+  createAnthropic = anthropic.createAnthropic;
+} catch {
+  // AI SDK not available — keyword fallback will be used
+}
+
 // ── Types ────────────────────────────────────────────────────────────
 
 export interface DynamicHarnessOptions extends HarnessOptions {
@@ -213,7 +225,64 @@ function formatCodebaseContext(fp: ProjectFingerprint, opts: DynamicHarnessOptio
 
 // ── Layer 7: Task Strategy ───────────────────────────────────────────
 
-function classifyTaskType(prompt: string): TaskType {
+// Cache for AI classifications to avoid duplicate calls
+const classificationCache = new Map<string, TaskType>();
+
+/**
+ * AI-powered task classification using Haiku (~$0.001 per call).
+ * Falls back to keyword matching if AI SDK is unavailable or call fails.
+ */
+async function classifyTaskTypeAI(prompt: string): Promise<TaskType> {
+  // Check cache first (use first 200 chars as key)
+  const cacheKey = prompt.slice(0, 200);
+  if (classificationCache.has(cacheKey)) return classificationCache.get(cacheKey)!;
+
+  // If AI SDK not available, fall back to keywords
+  if (!generateText || !createAnthropic) {
+    return classifyTaskTypeKeyword(prompt);
+  }
+
+  try {
+    const anthropic = createAnthropic();
+    const result = await Promise.race([
+      generateText({
+        model: anthropic("claude-haiku-4-5-20251001"),
+        prompt: `Classify this coding task into exactly one category. Reply with ONLY the category name, nothing else.
+
+Categories:
+- bug_fix (fixing errors, crashes, incorrect behavior)
+- feature (adding new functionality)
+- refactor (restructuring code without changing behavior)
+- test_write (writing or improving tests)
+- review (code review, audit, inspection)
+- debug (investigating root cause of issues)
+- generic (anything else)
+
+Task: ${prompt.slice(0, 500)}
+
+Category:`,
+        maxOutputTokens: 20,
+        temperature: 0,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("CLASSIFY_TIMEOUT")), 3000),
+      ),
+    ]);
+
+    const raw = result.text.trim().toLowerCase().replace(/[^a-z_]/g, "");
+    const valid: TaskType[] = ["bug_fix", "feature", "refactor", "test_write", "review", "debug", "generic"];
+    const classified = valid.includes(raw as TaskType) ? (raw as TaskType) : classifyTaskTypeKeyword(prompt);
+
+    classificationCache.set(cacheKey, classified);
+    return classified;
+  } catch {
+    // AI classification failed — fall back to keywords
+    return classifyTaskTypeKeyword(prompt);
+  }
+}
+
+/** Keyword-based classification (fast fallback, no API call). */
+function classifyTaskTypeKeyword(prompt: string): TaskType {
   const lower = prompt.toLowerCase();
 
   // Use word-boundary regex to avoid substring false positives (e.g., "debug" matching "bug")
@@ -369,7 +438,27 @@ function buildQualityGateBlock(fp: ProjectFingerprint): string {
 
 // ── Main: Build Dynamic Harness ──────────────────────────────────────
 
+/**
+ * Build dynamic harness (sync version — uses keyword classification).
+ * Prefer buildDynamicHarnessAsync() for better classification accuracy.
+ */
 export function buildDynamicHarness(options: DynamicHarnessOptions): HarnessResult {
+  const taskType = classifyTaskTypeKeyword(options.prompt);
+  return assembleDynamicHarness(options, taskType);
+}
+
+/**
+ * Build dynamic harness (async version — uses Haiku AI for task classification).
+ * Falls back to keyword classification if AI SDK is unavailable.
+ * Cost: ~$0.001 per call via Haiku.
+ */
+export async function buildDynamicHarnessAsync(options: DynamicHarnessOptions): Promise<HarnessResult> {
+  const taskType = await classifyTaskTypeAI(options.prompt);
+  return assembleDynamicHarness(options, taskType);
+}
+
+/** Internal: assemble harness from classified task type. */
+function assembleDynamicHarness(options: DynamicHarnessOptions, taskType: TaskType): HarnessResult {
   // Start with static harness (layers 1-5)
   const base = buildHarness(options);
 
@@ -378,7 +467,6 @@ export function buildDynamicHarness(options: DynamicHarnessOptions): HarnessResu
   const codebaseBlock = formatCodebaseContext(fp, options);
 
   // Layer 7: Task strategy
-  const taskType = classifyTaskType(options.prompt);
   const strategyBlock = TASK_STRATEGIES[taskType];
 
   // Layer 8: Failure recovery
@@ -417,7 +505,16 @@ export function getProjectFingerprint(projectDir: string): ProjectFingerprint {
 
 /**
  * Classify a prompt into a task type for external use.
+ * Sync version (keyword-based).
  */
 export function getTaskType(prompt: string): TaskType {
-  return classifyTaskType(prompt);
+  return classifyTaskTypeKeyword(prompt);
+}
+
+/**
+ * Classify a prompt into a task type using AI (Haiku).
+ * Async version with fallback to keywords.
+ */
+export async function getTaskTypeAI(prompt: string): Promise<TaskType> {
+  return classifyTaskTypeAI(prompt);
 }

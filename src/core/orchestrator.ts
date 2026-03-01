@@ -18,7 +18,7 @@ import { AgentRegistry } from "../agents/registry.ts";
 import { SkillIndex } from "../agents/skill-index.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
-import { buildDynamicHarness } from "../agents/dynamic-harness.ts";
+import { buildDynamicHarnessAsync } from "../agents/dynamic-harness.ts";
 import { Logger } from "../logging/logger.ts";
 import { Tracer } from "../logging/tracer.ts";
 import { HealthChecker } from "../logging/health.ts";
@@ -362,7 +362,7 @@ export class Orchestrator {
           const providerConfig = this.config.providers[subtask.provider];
           if (!providerConfig) throw new Error(`Unknown provider: ${subtask.provider}`);
 
-          const harness = buildDynamicHarness({
+          const harness = await buildDynamicHarnessAsync({
             agentName,
             role: subtask.agentRole,
             provider: subtask.provider,
