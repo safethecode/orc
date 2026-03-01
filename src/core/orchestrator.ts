@@ -108,6 +108,7 @@ import { GitHubIntegration } from "./github-integration.ts";
 import { AcpServer } from "./acp.ts";
 import { SdkServer } from "./sdk-server.ts";
 import { CopilotAuth } from "./copilot-auth.ts";
+import { RefactorEngine } from "./refactor-command.ts";
 
 const MAX_AGENT_DEPTH = 5;
 
@@ -201,6 +202,7 @@ export class Orchestrator {
   private acpServer: AcpServer;
   private sdkServer: SdkServer;
   private copilotAuth: CopilotAuth;
+  private refactorEngine: RefactorEngine;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -277,6 +279,7 @@ export class Orchestrator {
     this.acpServer = new AcpServer();
     this.sdkServer = new SdkServer();
     this.copilotAuth = new CopilotAuth();
+    this.refactorEngine = new RefactorEngine(config.refactor);
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -1026,6 +1029,10 @@ export class Orchestrator {
 
   getCopilotAuth(): CopilotAuth {
     return this.copilotAuth;
+  }
+
+  getRefactorEngine(): RefactorEngine {
+    return this.refactorEngine;
   }
 
   async shutdown(): Promise<void> {

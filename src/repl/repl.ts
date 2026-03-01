@@ -765,6 +765,7 @@ async function handleNaturalInput(
   let currentCmd = cmd;
   let lastError: string | null = null;
   let lastSuccessText: string | null = null;
+  let handlerStartTime = Date.now();
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (cancellation.cancelled) break;
@@ -1067,7 +1068,7 @@ async function handleNaturalInput(
   }
 
   // Session notification: notify on completion if agent took >30s
-  if (lastSuccessText && Date.now() - Date.now() > 30_000) {
+  if (lastSuccessText && (Date.now() - handlerStartTime) > 30_000) {
     orchestrator.getNotifier().notify("Task Complete", `Agent ${agentName} finished`);
   }
 }
