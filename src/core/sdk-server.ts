@@ -1,3 +1,5 @@
+export type SdkMessageHandler = (sessionId: string, content: string) => Promise<string>;
+
 export interface SdkServerConfig {
   port?: number;
   host?: string;
@@ -196,6 +198,7 @@ export class SdkServer {
   private sessions: Map<string, SdkSession> = new Map();
   private sseClients: Map<string, SseClient> = new Map();
   private startTime: number = 0;
+  private messageHandler: SdkMessageHandler | null = null;
 
   constructor(config?: SdkServerConfig) {
     this.config = {
@@ -361,11 +364,22 @@ export class SdkServer {
 
           this.broadcastEvent(sessionId, "message:user", userMessage);
 
-          // Stub assistant response (real orchestrator wires in later)
+          let responseContent: string;
+          if (this.messageHandler) {
+            try {
+              responseContent = await this.messageHandler(sessionId, body.content);
+            } catch (err) {
+              const errMsg = err instanceof Error ? err.message : String(err);
+              return this.json({ error: `Agent error: ${errMsg}` }, 500);
+            }
+          } else {
+            return this.json({ error: "No message handler configured" }, 503);
+          }
+
           const assistantTimestamp = new Date().toISOString();
           const assistantMessage = {
             role: "assistant" as const,
-            content: `[stub] Received: ${body.content}`,
+            content: responseContent,
             timestamp: assistantTimestamp,
           };
           session.messages.push(assistantMessage);
@@ -472,6 +486,10 @@ export class SdkServer {
         "Content-Type": "application/json",
       },
     });
+  }
+
+  onMessage(handler: SdkMessageHandler): void {
+    this.messageHandler = handler;
   }
 
   isRunning(): boolean {
