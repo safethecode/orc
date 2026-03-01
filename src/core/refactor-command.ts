@@ -7,6 +7,8 @@ import { join, relative, extname } from "node:path";
 
 // ── Interfaces ───────────────────────────────────────────────────────
 
+export type RefactorExecutor = (plan: string, files: string[]) => Promise<string[]>;
+
 export interface RefactorConfig {
   maxExploreAgents?: number;
   testCommand?: string;
@@ -58,6 +60,7 @@ const IGNORE_DIRS = new Set([
 
 export class RefactorEngine {
   private config: Required<RefactorConfig>;
+  private executor: RefactorExecutor | null = null;
 
   constructor(config?: RefactorConfig) {
     this.config = {
@@ -66,6 +69,10 @@ export class RefactorEngine {
       abortOnTestFail: config?.abortOnTestFail ?? true,
       dryRun: config?.dryRun ?? false,
     };
+  }
+
+  onExecute(executor: RefactorExecutor): void {
+    this.executor = executor;
   }
 
   /** All 6 phases in execution order */
@@ -498,13 +505,55 @@ export class RefactorEngine {
   }
 
   // ── Phase 5: Execute Refactoring ─────────────────────────────────
-  // Placeholder: returns the file list for now.
-  // Actual LLM-driven execution gets wired in later.
 
   private async executeRefactoring(plan: string, files: string[]): Promise<string[]> {
-    // In the future this phase will invoke LLM agents to apply the plan
-    // For now, return the file list as candidates for modification
-    return [...files];
+    if (this.executor) {
+      return this.executor(plan, files);
+    }
+
+    // Fallback: use the default CLI agent to apply the refactoring plan
+    const prompt = [
+      "Apply the following refactoring plan to the codebase.",
+      "Only modify the files listed. Do not create new files unless the plan requires it.",
+      "",
+      plan,
+    ].join("\n");
+
+    const proc = Bun.spawn(["claude", "-p", "--no-input", prompt], {
+      stdout: "pipe",
+      stderr: "pipe",
+      cwd: process.cwd(),
+    });
+
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      throw new Error(`Refactor agent failed (exit ${exitCode}): ${stderr.slice(0, 500)}`);
+    }
+
+    // Determine which files were actually modified via git diff
+    const diffProc = Bun.spawn(["git", "diff", "--name-only"], {
+      stdout: "pipe",
+      stderr: "pipe",
+      cwd: process.cwd(),
+    });
+
+    const diffOutput = await new Response(diffProc.stdout).text();
+    await diffProc.exited;
+
+    const modifiedFiles = diffOutput
+      .trim()
+      .split("\n")
+      .filter((f) => f.length > 0)
+      .map((f) => join(process.cwd(), f));
+
+    // Return intersection of planned files and actually modified files
+    const fileSet = new Set(files);
+    return modifiedFiles.filter((f) => fileSet.has(f));
   }
 
   // ── Phase 6: Regression Verification ─────────────────────────────
