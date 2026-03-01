@@ -20,6 +20,10 @@ export interface AcpSession {
 
 export type AcpMessageHandler = (sessionId: string, content: string) => Promise<string>;
 export type AcpCancelHandler = (sessionId: string) => Promise<boolean>;
+export type AcpDiagnosticsHandler = (filePath: string) => Promise<Array<{line: number; message: string; severity: string}>>;
+export type AcpSymbolsHandler = (filePath: string) => Promise<Array<{name: string; kind: string; line: number}>>;
+export type AcpListHandler = () => Promise<Array<{name: string; description?: string}>>;
+export type AcpSwitchHandler = (name: string) => Promise<boolean>;
 
 export interface AcpServerConfig {
   maxSessions?: number;
@@ -45,6 +49,12 @@ const SUPPORTED_METHODS = [
   "session/list",
   "session/cancel",
   "session/destroy",
+  "file/diagnostics",
+  "file/symbols",
+  "agent/list",
+  "agent/switch",
+  "model/list",
+  "model/switch",
 ] as const;
 
 export class AcpServer {
@@ -55,6 +65,12 @@ export class AcpServer {
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private messageHandler: AcpMessageHandler | null = null;
   private cancelHandler: AcpCancelHandler | null = null;
+  private diagnosticsHandler: AcpDiagnosticsHandler | null = null;
+  private symbolsHandler: AcpSymbolsHandler | null = null;
+  private agentListHandler: AcpListHandler | null = null;
+  private agentSwitchHandler: AcpSwitchHandler | null = null;
+  private modelListHandler: AcpListHandler | null = null;
+  private modelSwitchHandler: AcpSwitchHandler | null = null;
 
   constructor(config?: AcpServerConfig) {
     this.config = {
@@ -126,6 +142,18 @@ export class AcpServer {
         return this.handleSessionCancel(request);
       case "session/destroy":
         return this.handleSessionDestroy(request);
+      case "file/diagnostics":
+        return this.handleFileDiagnostics(request);
+      case "file/symbols":
+        return this.handleFileSymbols(request);
+      case "agent/list":
+        return this.handleAgentList(request);
+      case "agent/switch":
+        return this.handleAgentSwitch(request);
+      case "model/list":
+        return this.handleModelList(request);
+      case "model/switch":
+        return this.handleModelSwitch(request);
       default:
         return {
           jsonrpc: "2.0",
@@ -141,6 +169,30 @@ export class AcpServer {
 
   onCancel(handler: AcpCancelHandler): void {
     this.cancelHandler = handler;
+  }
+
+  onDiagnostics(handler: AcpDiagnosticsHandler): void {
+    this.diagnosticsHandler = handler;
+  }
+
+  onSymbols(handler: AcpSymbolsHandler): void {
+    this.symbolsHandler = handler;
+  }
+
+  onAgentList(handler: AcpListHandler): void {
+    this.agentListHandler = handler;
+  }
+
+  onAgentSwitch(handler: AcpSwitchHandler): void {
+    this.agentSwitchHandler = handler;
+  }
+
+  onModelList(handler: AcpListHandler): void {
+    this.modelListHandler = handler;
+  }
+
+  onModelSwitch(handler: AcpSwitchHandler): void {
+    this.modelSwitchHandler = handler;
   }
 
   isRunning(): boolean {
@@ -330,6 +382,176 @@ export class AcpServer {
       id: request.id,
       result: { sessionId: params.sessionId, destroyed: true },
     };
+  }
+
+  // ------- IDE integration handlers -------
+
+  private async handleFileDiagnostics(request: AcpRequest): Promise<AcpResponse> {
+    const params = request.params;
+    if (!params || typeof params.filePath !== "string") {
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INVALID_PARAMS, message: "Required param: filePath (string)" },
+      };
+    }
+
+    if (!this.diagnosticsHandler) {
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: "No diagnostics handler configured" },
+      };
+    }
+
+    try {
+      const diagnostics = await this.diagnosticsHandler(params.filePath);
+      return { jsonrpc: "2.0", id: request.id, result: { filePath: params.filePath, diagnostics } };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: `Diagnostics error: ${errMsg}` },
+      };
+    }
+  }
+
+  private async handleFileSymbols(request: AcpRequest): Promise<AcpResponse> {
+    const params = request.params;
+    if (!params || typeof params.filePath !== "string") {
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INVALID_PARAMS, message: "Required param: filePath (string)" },
+      };
+    }
+
+    if (!this.symbolsHandler) {
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: "No symbols handler configured" },
+      };
+    }
+
+    try {
+      const symbols = await this.symbolsHandler(params.filePath);
+      return { jsonrpc: "2.0", id: request.id, result: { filePath: params.filePath, symbols } };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: `Symbols error: ${errMsg}` },
+      };
+    }
+  }
+
+  private async handleAgentList(request: AcpRequest): Promise<AcpResponse> {
+    if (!this.agentListHandler) {
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: "No agent list handler configured" },
+      };
+    }
+
+    try {
+      const agents = await this.agentListHandler();
+      return { jsonrpc: "2.0", id: request.id, result: { agents } };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: `Agent list error: ${errMsg}` },
+      };
+    }
+  }
+
+  private async handleAgentSwitch(request: AcpRequest): Promise<AcpResponse> {
+    const params = request.params;
+    if (!params || typeof params.name !== "string") {
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INVALID_PARAMS, message: "Required param: name (string)" },
+      };
+    }
+
+    if (!this.agentSwitchHandler) {
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: "No agent switch handler configured" },
+      };
+    }
+
+    try {
+      const found = await this.agentSwitchHandler(params.name);
+      return { jsonrpc: "2.0", id: request.id, result: { name: params.name, found } };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: `Agent switch error: ${errMsg}` },
+      };
+    }
+  }
+
+  private async handleModelList(request: AcpRequest): Promise<AcpResponse> {
+    if (!this.modelListHandler) {
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: "No model list handler configured" },
+      };
+    }
+
+    try {
+      const models = await this.modelListHandler();
+      return { jsonrpc: "2.0", id: request.id, result: { models } };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: `Model list error: ${errMsg}` },
+      };
+    }
+  }
+
+  private async handleModelSwitch(request: AcpRequest): Promise<AcpResponse> {
+    const params = request.params;
+    if (!params || typeof params.name !== "string") {
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INVALID_PARAMS, message: "Required param: name (string)" },
+      };
+    }
+
+    if (!this.modelSwitchHandler) {
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: "No model switch handler configured" },
+      };
+    }
+
+    try {
+      const found = await this.modelSwitchHandler(params.name);
+      return { jsonrpc: "2.0", id: request.id, result: { name: params.name, found } };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: `Model switch error: ${errMsg}` },
+      };
+    }
   }
 
   // ------- Internal helpers -------

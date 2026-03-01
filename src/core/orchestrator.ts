@@ -89,6 +89,7 @@ import { BackgroundAgentManager } from "./background-agent.ts";
 import { TodoContinuationEnforcer } from "./todo-continuation.ts";
 import { UnstableBabysitter } from "./unstable-babysitter.ts";
 import { UltraworkMode } from "./ultrawork.ts";
+import { UltrathinkMode } from "./ultrathink.ts";
 import { QuestionManager } from "./question-tool.ts";
 import { CodeSearchEngine } from "./code-search.ts";
 import { StatisticsTracker } from "./statistics.ts";
@@ -183,6 +184,7 @@ export class Orchestrator {
   private todoContinuation: TodoContinuationEnforcer;
   private babysitter: UnstableBabysitter;
   private ultrawork: UltraworkMode;
+  private ultrathink: UltrathinkMode;
   private questionTool: QuestionManager;
   private codeSearch: CodeSearchEngine;
   private statistics: StatisticsTracker;
@@ -260,6 +262,7 @@ export class Orchestrator {
     this.todoContinuation = new TodoContinuationEnforcer();
     this.babysitter = new UnstableBabysitter();
     this.ultrawork = new UltraworkMode();
+    this.ultrathink = new UltrathinkMode();
     this.questionTool = new QuestionManager();
     this.codeSearch = new CodeSearchEngine();
     this.statistics = new StatisticsTracker();
@@ -469,6 +472,47 @@ export class Orchestrator {
         }
       }
       return running.length > 0;
+    });
+
+    // Wire ACP IDE integration handlers
+    this.acpServer.onDiagnostics(async (filePath: string) => {
+      const diagnostics = await this.lspManager.getDiagnostics(filePath);
+      return diagnostics.map((d) => ({
+        line: d.line,
+        message: d.message,
+        severity: d.severity,
+      }));
+    });
+
+    this.acpServer.onSymbols(async (filePath: string) => {
+      const symbols = await this.lspManager.documentSymbols(filePath);
+      return symbols.map((s) => ({
+        name: s.name,
+        kind: s.kind,
+        line: s.line,
+      }));
+    });
+
+    this.acpServer.onAgentList(async () => {
+      return this.registry.list().map((p) => ({
+        name: p.name,
+        description: p.role ?? "",
+      }));
+    });
+
+    this.acpServer.onAgentSwitch(async (name: string) => {
+      return this.registry.get(name) !== undefined;
+    });
+
+    this.acpServer.onModelList(async () => {
+      return this.modelRegistry.list().map((m) => ({
+        name: m.id,
+        description: m.provider,
+      }));
+    });
+
+    this.acpServer.onModelSwitch(async (name: string) => {
+      return this.modelRegistry.get(name) !== undefined;
     });
 
     // Wire refactor engine executor
@@ -994,6 +1038,10 @@ export class Orchestrator {
 
   getUltrawork(): UltraworkMode {
     return this.ultrawork;
+  }
+
+  getUltrathink(): UltrathinkMode {
+    return this.ultrathink;
   }
 
   getQuestionTool(): QuestionManager {
