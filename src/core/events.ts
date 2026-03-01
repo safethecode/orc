@@ -111,7 +111,10 @@ export type OrcEvent =
   | { type: "trace:start"; traceId: string; operation: string; service: string }
   | { type: "trace:span_start"; traceId: string; spanId: string; operation: string; service: string }
   | { type: "trace:span_end"; traceId: string; spanId: string; durationMs: number; status: string }
-  | { type: "trace:end"; traceId: string; durationMs: number; spanCount: number; status: string };
+  | { type: "trace:end"; traceId: string; durationMs: number; spanCount: number; status: string }
+  | { type: "enforcer:violation"; ruleId: string; severity: string; message: string; toolName: string }
+  | { type: "enforcer:block"; ruleId: string; toolName: string; agentName: string }
+  | { type: "enforcer:inject"; ruleId: string; toolName: string; agentName: string };
 
 export class OrcEventBus extends EventEmitter {
   publish(event: OrcEvent): void {

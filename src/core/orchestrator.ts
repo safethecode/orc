@@ -120,6 +120,7 @@ import { DeadLetterQueue } from "./dead-letter-queue.ts";
 import { StuckDetector } from "./stuck-detector.ts";
 import { EscalationManager } from "./escalation-manager.ts";
 import { DistributedTracer } from "./distributed-trace.ts";
+import { HarnessEnforcer } from "./harness-enforcer.ts";
 
 const MAX_AGENT_DEPTH = 5;
 
@@ -224,6 +225,7 @@ export class Orchestrator {
   private stuckDetector: StuckDetector;
   private escalationManager: EscalationManager;
   private distributedTracer: DistributedTracer;
+  private harnessEnforcer: HarnessEnforcer;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -318,6 +320,7 @@ export class Orchestrator {
     this.stuckDetector = new StuckDetector();
     this.escalationManager = new EscalationManager();
     this.distributedTracer = new DistributedTracer();
+    this.harnessEnforcer = new HarnessEnforcer("coder");
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -1288,6 +1291,10 @@ export class Orchestrator {
 
   getReportGenerator(): ReportGenerator {
     return this.reportGenerator;
+  }
+
+  getHarnessEnforcer(): HarnessEnforcer {
+    return this.harnessEnforcer;
   }
 
   async shutdown(): Promise<void> {

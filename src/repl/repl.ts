@@ -833,15 +833,35 @@ async function handleNaturalInput(
         renderer.info(`\x1b[33m⚠ UNCONFIRMED:\x1b[0m ${tool.name} ${detail ?? ""} — requires approval`);
       }
 
-      // Write guard: block writes to files not yet read
-      if ((tool.name === "write" || tool.name === "edit") && inp.file_path) {
-        const writeResult = orchestrator.getWriteGuard().checkWrite(inp.file_path as string);
-        if (writeResult === "block") {
-          renderer.info(`\x1b[33m⚠ write-guard:\x1b[0m ${(inp.file_path as string).split("/").pop()} — file not yet read in this session`);
+      // ── Harness Enforcer: pre-execution validation ──
+      const enforcer = orchestrator.getHarnessEnforcer();
+      const enforcement = enforcer.check(tool.name, inp as Record<string, unknown>);
+
+      if (!enforcement.allowed) {
+        // Blocked violations — show each
+        for (const v of enforcement.violations.filter(v => v.severity === "block")) {
+          renderer.error(`\x1b[1m⛔ ENFORCER [${v.ruleId}]:\x1b[0m ${v.message}`);
+          if (v.suggestion) renderer.info(`  → ${v.suggestion}`);
         }
       }
 
-      // Track reads for write guard
+      // Warn-level violations
+      for (const v of enforcement.violations.filter(v => v.severity === "warn")) {
+        renderer.info(`\x1b[33m⚠ ${v.ruleId}:\x1b[0m ${v.message}`);
+      }
+
+      // Inject-level violations (correction prompts queued)
+      if (enforcement.injection) {
+        renderer.info(`\x1b[2m↩ enforcer injection queued (${enforcement.violations.filter(v => v.severity === "inject").length} rules)\x1b[0m`);
+      }
+
+      // Post-execution: record tool call for state tracking
+      enforcer.record(tool.name, inp as Record<string, unknown>);
+
+      // Legacy write guard (kept for backward compat — enforcer also checks)
+      if ((tool.name === "write" || tool.name === "edit") && inp.file_path) {
+        orchestrator.getWriteGuard().checkWrite(inp.file_path as string);
+      }
       if (tool.name === "read" && inp.file_path) {
         orchestrator.getWriteGuard().markRead(inp.file_path as string);
       }
@@ -859,7 +879,7 @@ async function handleNaturalInput(
         }
       }
 
-      // Plan mode enforcement: warn on disallowed tool use
+      // Plan mode enforcement
       if (planMode?.isActive()) {
         const allowed = planMode.isToolAllowed(tool.name, tool.input ?? {});
         if (!allowed) {
@@ -867,7 +887,7 @@ async function handleNaturalInput(
         }
       }
 
-      // Doom loop detection
+      // Doom loop detection (legacy — enforcer also checks)
       const doomResult = orchestrator.getDoomLoop().record(tool.name, detail ?? "");
       if (doomResult.triggered) {
         renderer.error(`doom loop detected: ${tool.name} called ${doomResult.count}x — agent may be stuck`);

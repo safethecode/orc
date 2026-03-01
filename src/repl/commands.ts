@@ -28,7 +28,7 @@ export const COMMANDS = [
   "/doctor", "/stats", "/worktree", "/background", "/stash",
   "/question", "/search", "/tasks", "/handoff", "/refactor",
   "/variants", "/fastwork", "/ultrathink", "/github",
-  "/queue", "/cancel", "/dlq",
+  "/queue", "/cancel", "/dlq", "/enforce",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/benchmark", "/help", "/quit",
 ];
@@ -1274,6 +1274,66 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "enforce": {
+      const enforcer = ctx.orchestrator.getHarnessEnforcer();
+      const sub = parts[1]?.toLowerCase();
+
+      if (!sub || sub === "status") {
+        const state = enforcer.getState();
+        renderer.info(`\x1b[1m── Harness Enforcer ──\x1b[0m`);
+        renderer.info(`  enabled:     ${enforcer.isEnabled() ? "\x1b[32myes\x1b[0m" : "\x1b[31mno\x1b[0m"}`);
+        renderer.info(`  role:        ${state.activeRules.length > 0 ? "active" : "none"}`);
+        renderer.info(`  rules:       ${state.activeRules.join(", ")}`);
+        renderer.info(`  tool calls:  ${state.totalToolCalls}`);
+        renderer.info(`  violations:  ${state.violationCount}`);
+        renderer.info(`  files read:  ${state.filesRead}`);
+        renderer.info(`  files mod:   ${state.filesWritten + state.filesEdited}`);
+        renderer.info(`  src modified: ${state.sourceFilesModified} (tests run: ${state.testRunSinceLastModify ? "yes" : "no"})`);
+        return "continue";
+      }
+
+      if (sub === "on") {
+        enforcer.setEnabled(true);
+        renderer.info("harness enforcer \x1b[32menabled\x1b[0m");
+        return "continue";
+      }
+
+      if (sub === "off") {
+        enforcer.setEnabled(false);
+        renderer.info("harness enforcer \x1b[31mdisabled\x1b[0m");
+        return "continue";
+      }
+
+      if (sub === "violations" || sub === "v") {
+        const violations = enforcer.getViolations();
+        if (violations.length === 0) {
+          renderer.info("no violations recorded");
+          return "continue";
+        }
+        renderer.info(`\x1b[1m── Violations (${violations.length}) ──\x1b[0m`);
+        for (const v of violations.slice(-20)) {
+          const icon = v.severity === "block" ? "\x1b[31mX\x1b[0m" : v.severity === "warn" ? "\x1b[33m!\x1b[0m" : "\x1b[36m~\x1b[0m";
+          renderer.info(`  [${icon}] \x1b[1m${v.ruleId}\x1b[0m ${v.toolName}: ${v.message}`);
+        }
+        if (violations.length > 20) renderer.info(`\x1b[2m  ... and ${violations.length - 20} more\x1b[0m`);
+        return "continue";
+      }
+
+      if (sub === "report") {
+        renderer.info(enforcer.formatReport());
+        return "continue";
+      }
+
+      if (sub === "reset") {
+        enforcer.reset();
+        renderer.info("enforcer state reset");
+        return "continue";
+      }
+
+      renderer.error("usage: /enforce [status|on|off|violations|report|reset]");
+      return "continue";
+    }
+
     case "diff": {
       const ghostSha = ctx.orchestrator.getGhostSha();
       if (!ghostSha) {
@@ -2298,6 +2358,11 @@ export async function handleCommand(
       renderer.info("\x1b[1m/dlq discard\x1b[0m \x1b[2m<id>     discard a dead letter");
       renderer.info("\x1b[1m/dlq stats\x1b[0m\x1b[2m           show DLQ statistics");
       renderer.info("\x1b[1m/dlq clear\x1b[0m\x1b[2m           discard all resolved/discarded entries");
+      renderer.info("\x1b[1m/enforce\x1b[0m\x1b[2m             harness enforcer status");
+      renderer.info("\x1b[1m/enforce on|off\x1b[0m\x1b[2m      enable/disable enforcement");
+      renderer.info("\x1b[1m/enforce violations\x1b[0m\x1b[2m  show recorded violations");
+      renderer.info("\x1b[1m/enforce report\x1b[0m\x1b[2m      violation summary report");
+      renderer.info("\x1b[1m/enforce reset\x1b[0m\x1b[2m       reset enforcer state");
       renderer.info("\x1b[1m/benchmark\x1b[0m\x1b[2m           benchmark runner info");
       renderer.info("\x1b[1m/benchmark run\x1b[0m\x1b[2m       run full benchmark suite (all providers)");
       renderer.info("\x1b[1m/benchmark run\x1b[0m \x1b[2m<p>  run benchmarks for one provider");
