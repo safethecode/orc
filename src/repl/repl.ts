@@ -802,17 +802,21 @@ async function handleNaturalInput(
     }
   }
 
-  // Parallel brainstorm: spawn lightweight agents to analyze the problem
+  // Deliberation protocol: Sonnet ×3 → Opus review → Sonnet rebuttal
   if (shouldBrainstorm(input, route.tier) && !cancellation.cancelled) {
-    renderer.updateSpinner("brainstorming (3 agents)...");
+    renderer.updateSpinner("deliberation round 1: sonnet ×3 analyzing...");
     try {
-      const bsResult = await brainstorm(input, providerConfig, profile, cancellation.signal);
+      const bsResult = await brainstorm(input, providerConfig, profile, cancellation.signal, (round, label) => {
+        renderer.updateSpinner(`deliberation round ${round}: ${label}...`);
+      });
       if (bsResult.synthesized) {
         systemPrompt += "\n\n" + bsResult.synthesized;
-        renderer.info(`\x1b[2mbrainstorm: ${bsResult.perspectives.length} perspectives in ${(bsResult.durationMs / 1000).toFixed(1)}s\x1b[0m`);
+        renderer.stopSpinner();
+        renderer.info(`\x1b[2mdeliberation: 3 rounds (sonnet→opus→sonnet) in ${(bsResult.durationMs / 1000).toFixed(1)}s\x1b[0m`);
+        renderer.startSpinner(agentName, route.model);
       }
     } catch {
-      // Brainstorm failure is non-fatal — continue without insights
+      // Deliberation failure is non-fatal — continue without insights
     }
   }
 
