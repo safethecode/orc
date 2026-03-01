@@ -798,6 +798,7 @@ async function handleNaturalInput(
     onStreamer(streamer);
     let hasContent = false;
     let boxOpen = false;
+    const WRITE_TOOLS = new Set(["write", "edit", "create", "patch", "apply_patch"]);
 
     // Real-time streaming: open box on first content, stream into it
     streamer.on("text_delta", (delta: string) => {
@@ -862,18 +863,21 @@ async function handleNaturalInput(
         renderer.error(`doom loop detected: ${tool.name} called ${doomResult.count}x — agent may be stuck`);
       }
 
-      // Auto-format after write/edit tool use
-      if ((tool.name === "write" || tool.name === "edit") && inp.file_path) {
-        orchestrator.getFormatter().format(inp.file_path as string).catch(() => {});
+      // Auto-format after file write tool use
+      const filePath = (inp.file_path ?? inp.path) as string | undefined;
+      if (WRITE_TOOLS.has(tool.name) && filePath) {
+        orchestrator.getFormatter().format(filePath).then((formatted) => {
+          if (formatted) renderer.info(`\x1b[2mformatted ${filePath.split("/").pop()}\x1b[0m`);
+        }).catch(() => {});
         // Comment checker: warn about AI-generated comment patterns (fire-and-forget)
         (async () => {
           try {
-            const file = Bun.file(inp.file_path as string);
+            const file = Bun.file(filePath);
             if (await file.exists()) {
               const content = await file.text();
-              const checkResult = orchestrator.getCommentChecker().check(inp.file_path as string, content);
+              const checkResult = orchestrator.getCommentChecker().check(filePath, content);
               if (checkResult.issues.length > 0) {
-                renderer.info(`\x1b[2mcomment check: ${checkResult.issues.length} AI-pattern issues in ${(inp.file_path as string).split("/").pop()}\x1b[0m`);
+                renderer.info(`\x1b[2mcomment check: ${checkResult.issues.length} AI-pattern issues in ${filePath.split("/").pop()}\x1b[0m`);
               }
             }
           } catch { /* ignore comment check errors */ }
