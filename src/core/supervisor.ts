@@ -375,6 +375,16 @@ export class Supervisor {
     decomposition: DecompositionResult,
     parentCtx?: TraceContext | null,
   ): Promise<void> {
+    // Start a worker span if tracing is active
+    const workerSpanCtx = (parentCtx && this.tracer)
+      ? this.tracer.startSpan(parentCtx, "worker.run", "worker-pool", {
+          subtaskId: subtask.id,
+          provider: subtask.provider,
+          model: subtask.model,
+          role: subtask.agentRole,
+        })
+      : null;
+
     eventBus.publish({
       type: "supervisor:dispatch",
       taskId: subtask.parentTaskId,
@@ -405,10 +415,25 @@ export class Supervisor {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         // 4. Spawn worker via deps callback
+        const spawnCtx = (workerSpanCtx && this.tracer)
+          ? this.tracer.startSpan(workerSpanCtx, "session.spawn", "session-manager", {
+              subtaskId: subtask.id,
+              attempt,
+            })
+          : null;
+
         const { agentName } = await this.deps.spawnWorker(subtask, maxTurns, enrichedPrompt);
+
+        if (spawnCtx && this.tracer) {
+          this.tracer.endSpan(spawnCtx.spanId, "ok");
+        }
 
         // 5. Track in pool with maxTurns
         const worker = this.pool.spawn(subtask, agentName, maxTurns);
+        // Attach trace context to worker state
+        if (workerSpanCtx) {
+          worker.traceContext = { traceId: workerSpanCtx.traceId, spanId: workerSpanCtx.spanId };
+        }
         this.pool.markRunning(worker.id);
 
         // 6. Register worker in bus for sibling communication
@@ -473,7 +498,19 @@ export class Supervisor {
           // 10. Quality gate (if enabled)
           const feedbackConfig = this.deps.config.supervisor?.feedback;
           if (feedbackConfig?.qualityGateOnComplete) {
+            const qgCtx = (workerSpanCtx && this.tracer)
+              ? this.tracer.startSpan(workerSpanCtx, "quality.gate", "feedback-loop", {
+                  subtaskId: subtask.id,
+                })
+              : null;
+
             const critique = await this.feedbackLoop.runQualityGate(subtask, outcome.result);
+
+            if (qgCtx && this.tracer) {
+              this.tracer.addTags(qgCtx.spanId, { passed: critique.passes, issues: critique.issues.length });
+              this.tracer.endSpan(qgCtx.spanId, critique.passes ? "ok" : "error");
+            }
+
             if (!critique.passes && feedbackConfig?.qaLoopOnFail) {
               await this.feedbackLoop.runQALoop(subtask, critique);
             }
@@ -489,9 +526,33 @@ export class Supervisor {
             });
           }
 
-          // 12. Cleanup worker registration
+          // 12. Collect result
+          const collectCtx = (workerSpanCtx && this.tracer)
+            ? this.tracer.startSpan(workerSpanCtx, "result.collect", "result-collector", {
+                subtaskId: subtask.id,
+              })
+            : null;
+          if (collectCtx && this.tracer) {
+            this.tracer.addTags(collectCtx.spanId, {
+              tokenUsage: outcome.tokenUsage,
+              costUsd: outcome.costUsd,
+            });
+            this.tracer.endSpan(collectCtx.spanId, "ok");
+          }
+
+          // 13. Cleanup worker registration
           this.workerBus.unregisterWorker(agentName);
           await this.deps.stopWorker(agentName).catch(() => {});
+
+          // End worker span successfully
+          if (workerSpanCtx && this.tracer) {
+            this.tracer.addTags(workerSpanCtx.spanId, {
+              tokenUsage: outcome.tokenUsage,
+              costUsd: outcome.costUsd,
+              agentName,
+            });
+            this.tracer.endSpan(workerSpanCtx.spanId, "ok");
+          }
           return; // Success
         }
 
@@ -544,6 +605,11 @@ export class Supervisor {
     const failedStatus: TaskStatus = "failed";
     subtask.status = failedStatus;
     subtask.result = lastError;
+
+    // End worker span with error
+    if (workerSpanCtx && this.tracer) {
+      this.tracer.endSpan(workerSpanCtx.spanId, "error", lastError ?? "All attempts failed");
+    }
   }
 
   private analyzePhaseConflicts(subtasks: SubTask[], collector: ResultCollector): void {
@@ -577,6 +643,7 @@ export class Supervisor {
   private async executeSingleFallback(
     taskId: string,
     decomposition: DecompositionResult,
+    parentCtx?: TraceContext | null,
   ): Promise<AggregatedResult> {
     const subtask = decomposition.subtasks[0];
     if (!subtask) {
@@ -588,7 +655,7 @@ export class Supervisor {
 
     this.assignProviders([subtask]);
     const collector = new ResultCollector(taskId);
-    await this.executeSubtask(subtask, collector, decomposition);
+    await this.executeSubtask(subtask, collector, decomposition, parentCtx);
 
     const result = collector.aggregate();
     this.pool.clear();
