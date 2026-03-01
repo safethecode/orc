@@ -115,6 +115,9 @@ import { SdkServer } from "./sdk-server.ts";
 import { CopilotAuth } from "./copilot-auth.ts";
 import { RefactorEngine } from "./refactor-command.ts";
 import { DeadLetterQueue } from "./dead-letter-queue.ts";
+import { StuckDetector } from "./stuck-detector.ts";
+import { EscalationManager } from "./escalation-manager.ts";
+import { DistributedTracer } from "./distributed-trace.ts";
 
 const MAX_AGENT_DEPTH = 5;
 
@@ -214,6 +217,9 @@ export class Orchestrator {
   private copilotAuth: CopilotAuth;
   private refactorEngine: RefactorEngine;
   private dlq: DeadLetterQueue;
+  private stuckDetector: StuckDetector;
+  private escalationManager: EscalationManager;
+  private distributedTracer: DistributedTracer;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -296,6 +302,9 @@ export class Orchestrator {
     this.copilotAuth = new CopilotAuth();
     this.refactorEngine = new RefactorEngine(config.refactor);
     this.dlq = new DeadLetterQueue();
+    this.stuckDetector = new StuckDetector();
+    this.escalationManager = new EscalationManager();
+    this.distributedTracer = new DistributedTracer();
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -399,6 +408,75 @@ export class Orchestrator {
         preferredProviders: this.config.supervisor?.preferredProviders ?? ["claude", "codex", "gemini", "kiro"],
       },
     );
+
+    // Wire stuck detection human escalation to terminal notifications
+    this.escalationManager.onHumanEscalation((event, actions) => {
+      const title = "Orc: Worker Stuck";
+      const body = `Worker ${event.workerId} stuck (${event.reason}) for ${Math.round(event.staleDurationMs / 1000)}s. ${event.suggestedAction}`;
+      this.notifier.notify(title, body);
+      // Terminal bell for immediate attention
+      process.stdout.write("\x07");
+    });
+
+    // Wire DLQ: capture failed workers that have exhausted retries
+    eventBus.on("worker:fail", (event) => {
+      if (event.type !== "worker:fail") return;
+      const pool = this.supervisor.getWorkerPool();
+      const worker = pool.get(event.workerId);
+      if (worker && !pool.canRetry(event.workerId)) {
+        this.dlq.enqueue({
+          taskId: worker.subtaskId,
+          subtaskId: worker.subtaskId,
+          workerId: worker.id,
+          agentName: worker.agentName,
+          provider: worker.provider,
+          model: worker.model,
+          prompt: "",
+          error: event.error,
+          reason: "max_retries_exceeded",
+          attempts: worker.maxTurns,
+          metadata: {
+            tokenUsage: worker.tokenUsage,
+            costUsd: worker.costUsd,
+            turnHistory: worker.turnHistory.map(
+              (t) => `turn ${t.currentTurn}: ${t.lastToolUse ?? "no tool"}`,
+            ),
+            corrections: worker.corrections,
+            intermediateResults: worker.intermediateResults,
+          },
+        });
+      }
+    });
+
+    // Wire DLQ: capture timeout events
+    eventBus.on("worker:timeout", (event) => {
+      if (event.type !== "worker:timeout") return;
+      const pool = this.supervisor.getWorkerPool();
+      const worker = pool.get(event.workerId);
+      if (worker) {
+        this.dlq.enqueue({
+          taskId: worker.subtaskId,
+          subtaskId: worker.subtaskId,
+          workerId: worker.id,
+          agentName: worker.agentName,
+          provider: worker.provider,
+          model: worker.model,
+          prompt: "",
+          error: worker.error ?? `Timed out after ${event.elapsedMs}ms`,
+          reason: "timeout_exhausted",
+          attempts: worker.currentTurn,
+          metadata: {
+            tokenUsage: worker.tokenUsage,
+            costUsd: worker.costUsd,
+            turnHistory: worker.turnHistory.map(
+              (t) => `turn ${t.currentTurn}: ${t.lastToolUse ?? "no tool"}`,
+            ),
+            corrections: worker.corrections,
+            intermediateResults: worker.intermediateResults,
+          },
+        });
+      }
+    });
 
     // Recover from any previous crash
     await this.crashRecovery.recoverFromCrash();
@@ -1170,6 +1248,22 @@ export class Orchestrator {
 
   getRefactorEngine(): RefactorEngine {
     return this.refactorEngine;
+  }
+
+  getStuckDetector(): StuckDetector {
+    return this.stuckDetector;
+  }
+
+  getEscalationManager(): EscalationManager {
+    return this.escalationManager;
+  }
+
+  getDistributedTracer(): DistributedTracer {
+    return this.distributedTracer;
+  }
+
+  getDeadLetterQueue(): DeadLetterQueue {
+    return this.dlq;
   }
 
   async shutdown(): Promise<void> {

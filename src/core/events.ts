@@ -107,7 +107,11 @@ export type OrcEvent =
   | { type: "dlq:enqueue"; id: string; taskId: string; reason: string; error: string }
   | { type: "dlq:retry"; id: string; taskId: string }
   | { type: "dlq:resolved"; id: string; taskId: string }
-  | { type: "dlq:discarded"; id: string; taskId: string };
+  | { type: "dlq:discarded"; id: string; taskId: string }
+  | { type: "trace:start"; traceId: string; operation: string; service: string }
+  | { type: "trace:span_start"; traceId: string; spanId: string; operation: string; service: string }
+  | { type: "trace:span_end"; traceId: string; spanId: string; durationMs: number; status: string }
+  | { type: "trace:end"; traceId: string; durationMs: number; spanCount: number; status: string };
 
 export class OrcEventBus extends EventEmitter {
   publish(event: OrcEvent): void {

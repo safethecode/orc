@@ -20,6 +20,8 @@ import type { RecoveryManager } from "./recovery.ts";
 import type { Store } from "../db/store.ts";
 import { buildCritiquePrompt, parseCritiqueResponse } from "./critique.ts";
 import { eventBus } from "./events.ts";
+import { StuckDetector } from "./stuck-detector.ts";
+import { EscalationManager } from "./escalation-manager.ts";
 
 const DEFAULT_CONFIG: Required<FeedbackLoopConfig> = {
   enabled: true,
@@ -35,6 +37,8 @@ export class FeedbackLoop {
   private correctionCounts: Map<string, number> = new Map();
   private timers: Map<string, ReturnType<typeof setInterval>> = new Map();
   private processedMarkers: Map<string, Set<string>> = new Map();
+  private stuckDetector: StuckDetector;
+  private escalationManager: EscalationManager;
 
   constructor(
     config: Partial<FeedbackLoopConfig> | undefined,
@@ -45,8 +49,20 @@ export class FeedbackLoop {
     private store: Store,
     private workerBus?: WorkerBus,
     private providerConfig?: ProviderConfig,
+    stuckDetector?: StuckDetector,
+    escalationManager?: EscalationManager,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.stuckDetector = stuckDetector ?? new StuckDetector();
+    this.escalationManager = escalationManager ?? new EscalationManager();
+  }
+
+  getStuckDetector(): StuckDetector {
+    return this.stuckDetector;
+  }
+
+  getEscalationManager(): EscalationManager {
+    return this.escalationManager;
   }
 
   startMonitoring(workerId: string, subtask: SubTask): void {
@@ -66,11 +82,13 @@ export class FeedbackLoop {
       this.timers.delete(workerId);
     }
     this.processedMarkers.delete(workerId);
+    this.stuckDetector.cleanup(workerId);
+    this.escalationManager.cleanup(workerId);
   }
 
   private async inspect(workerId: string, subtask: SubTask): Promise<void> {
     const worker = this.pool.get(workerId);
-    if (!worker || worker.status === "completed" || worker.status === "failed") {
+    if (!worker || worker.status === "completed" || worker.status === "failed" || worker.status === "cancelled") {
       this.stopMonitoring(workerId);
       return;
     }
@@ -185,6 +203,41 @@ export class FeedbackLoop {
           reason: decision.reason,
         });
         break;
+      }
+    }
+
+    // Stuck detection — runs after existing assessment logic
+    const stuckEvent = this.stuckDetector.analyze(worker, capturedOutput);
+    if (stuckEvent) {
+      const policy = this.escalationManager.escalate(stuckEvent);
+
+      for (const action of policy.actions) {
+        switch (action.type) {
+          case "log":
+            // Already published via eventBus in escalation manager
+            break;
+          case "nudge":
+            await this.sendCorrection(action.workerId, action.message);
+            break;
+          case "restart":
+          case "reassign":
+            // Signal abort so Supervisor can retry with fallback provider
+            this.pool.markFailed(action.workerId, `Stuck: ${stuckEvent.details}`);
+            this.stopMonitoring(action.workerId);
+            break;
+          case "abort":
+            this.pool.markFailed(action.workerId, action.reason);
+            eventBus.publish({
+              type: "feedback:abort",
+              workerId: action.workerId,
+              reason: action.reason,
+            });
+            this.stopMonitoring(action.workerId);
+            break;
+          case "human":
+            // human escalation callbacks already invoked by EscalationManager
+            break;
+        }
       }
     }
   }
