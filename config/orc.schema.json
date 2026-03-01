@@ -1,0 +1,565 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Orchestrator Configuration",
+  "description": "Configuration schema for the Orc orchestrator",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for IDE autocompletion"
+    },
+    "orchestrator": {
+      "type": "object",
+      "description": "Core orchestrator settings",
+      "properties": {
+        "sessionPrefix": {
+          "type": "string",
+          "default": "orc-",
+          "description": "Prefix for session names"
+        },
+        "maxConcurrentAgents": {
+          "type": "number",
+          "default": 3,
+          "description": "Maximum number of agents running concurrently"
+        },
+        "dataDir": {
+          "type": "string",
+          "default": "~/.orchestrator",
+          "description": "Base data directory (supports ~ for homedir)"
+        },
+        "db": {
+          "type": "string",
+          "description": "Path to the SQLite database file"
+        },
+        "logDir": {
+          "type": "string",
+          "description": "Path to the log directory"
+        },
+        "budgetEnabled": {
+          "type": "boolean",
+          "description": "Whether budget tracking is enabled"
+        }
+      },
+      "required": ["sessionPrefix", "maxConcurrentAgents", "dataDir", "db", "logDir"]
+    },
+    "budget": {
+      "type": "object",
+      "description": "Budget configuration for task cost limits",
+      "properties": {
+        "defaultMaxPerTask": {
+          "type": "number",
+          "default": 0.5,
+          "description": "Default maximum budget (USD) per task"
+        }
+      },
+      "required": ["defaultMaxPerTask"]
+    },
+    "providers": {
+      "type": "object",
+      "description": "AI provider configurations (claude, codex, gemini, kiro)",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "CLI command to invoke the provider"
+          },
+          "subcommand": {
+            "type": "string",
+            "description": "Optional subcommand (e.g., 'exec' for codex)"
+          },
+          "defaultModel": {
+            "type": ["string", "null"],
+            "enum": ["haiku", "sonnet", "opus", null],
+            "description": "Default model tier for this provider"
+          },
+          "flags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "CLI flags passed to the provider command"
+          },
+          "capabilities": {
+            "type": "object",
+            "description": "Provider capability metadata",
+            "properties": {
+              "models": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Available model names"
+              },
+              "strengths": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Task types this provider excels at"
+              },
+              "weaknesses": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Task types this provider is weak at"
+              },
+              "maxContextTokens": {
+                "type": "number",
+                "description": "Maximum context window in tokens"
+              },
+              "supportsStreaming": {
+                "type": "boolean",
+                "description": "Whether the provider supports streaming output"
+              },
+              "supportsToolUse": {
+                "type": "boolean",
+                "description": "Whether the provider supports tool/function calling"
+              },
+              "costTier": {
+                "type": "string",
+                "enum": ["low", "medium", "high"],
+                "description": "Relative cost tier of the provider"
+              }
+            }
+          }
+        },
+        "required": ["command", "flags"]
+      }
+    },
+    "routing": {
+      "type": "object",
+      "description": "Task routing configuration by complexity tier",
+      "properties": {
+        "tiers": {
+          "type": "object",
+          "properties": {
+            "simple": {
+              "$ref": "#/definitions/routingTier"
+            },
+            "medium": {
+              "$ref": "#/definitions/routingTier"
+            },
+            "complex": {
+              "$ref": "#/definitions/routingTier"
+            }
+          },
+          "required": ["simple", "medium", "complex"]
+        }
+      },
+      "required": ["tiers"]
+    },
+    "supervisor": {
+      "type": "object",
+      "description": "Supervisor agent configuration for multi-agent orchestration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the supervisor is enabled"
+        },
+        "workerTimeout": {
+          "type": "number",
+          "default": 300000,
+          "description": "Worker timeout in milliseconds"
+        },
+        "maxRetries": {
+          "type": "number",
+          "default": 2,
+          "description": "Maximum retry attempts for failed workers"
+        },
+        "costAware": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to factor cost into provider selection"
+        },
+        "preferredProviders": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["claude", "codex", "gemini", "kiro"]
+          },
+          "description": "Ordered list of preferred providers"
+        },
+        "multiTurn": {
+          "type": "object",
+          "description": "Multi-turn worker configuration",
+          "properties": {
+            "defaultMaxTurns": {
+              "type": "number",
+              "default": 25,
+              "description": "Default maximum turns for a worker"
+            },
+            "simpleMaxTurns": {
+              "type": "number",
+              "default": 5,
+              "description": "Max turns for simple tasks"
+            },
+            "standardMaxTurns": {
+              "type": "number",
+              "default": 15,
+              "description": "Max turns for standard tasks"
+            },
+            "complexMaxTurns": {
+              "type": "number",
+              "default": 50,
+              "description": "Max turns for complex tasks"
+            },
+            "checkpointIntervalTurns": {
+              "type": "number",
+              "default": 5,
+              "description": "Create a checkpoint every N turns"
+            },
+            "progressPollIntervalMs": {
+              "type": "number",
+              "default": 3000,
+              "description": "Interval for polling worker progress (ms)"
+            },
+            "idleTimeoutMs": {
+              "type": "number",
+              "default": 120000,
+              "description": "Timeout for idle workers (ms)"
+            }
+          }
+        },
+        "feedback": {
+          "type": "object",
+          "description": "Feedback loop configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether the feedback loop is enabled"
+            },
+            "checkIntervalMs": {
+              "type": "number",
+              "default": 30000,
+              "description": "Interval for checking worker progress (ms)"
+            },
+            "maxCorrections": {
+              "type": "number",
+              "default": 3,
+              "description": "Maximum corrections before escalation"
+            },
+            "qualityGateOnComplete": {
+              "type": "boolean",
+              "default": true,
+              "description": "Run quality gate when worker completes"
+            },
+            "qaLoopOnFail": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enter QA loop on quality gate failure"
+            }
+          }
+        },
+        "workerBus": {
+          "type": "object",
+          "description": "Inter-worker communication bus",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether the worker bus is enabled"
+            },
+            "broadcastArtifacts": {
+              "type": "boolean",
+              "default": true,
+              "description": "Broadcast artifacts to sibling workers"
+            }
+          }
+        },
+        "contextPropagation": {
+          "type": "object",
+          "description": "Context propagation to workers",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether context propagation is enabled"
+            },
+            "includeCodebaseMap": {
+              "type": "boolean",
+              "default": true,
+              "description": "Include codebase map in worker context"
+            },
+            "includeMemory": {
+              "type": "boolean",
+              "default": true,
+              "description": "Include memory/insights in worker context"
+            },
+            "maxContextTokens": {
+              "type": "number",
+              "default": 4000,
+              "description": "Maximum tokens for propagated context"
+            },
+            "summarizeSiblingResults": {
+              "type": "boolean",
+              "default": true,
+              "description": "Summarize completed sibling results"
+            }
+          }
+        }
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "description": "Model Context Protocol server configuration",
+      "properties": {
+        "servers": {
+          "type": "object",
+          "description": "Named MCP server definitions",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "Command to start the MCP server"
+              },
+              "args": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Arguments passed to the server command"
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": { "type": "string" },
+                "description": "Environment variables for the server process"
+              }
+            },
+            "required": ["command"]
+          }
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "description": "Permission and security configuration"
+    },
+    "theme": {
+      "type": "string",
+      "description": "UI theme name"
+    },
+    "categories": {
+      "type": "object",
+      "description": "Task category definitions with model/tier overrides",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Model override for this category"
+          },
+          "tier": {
+            "type": "string",
+            "enum": ["haiku", "sonnet", "opus"],
+            "description": "Model tier for this category"
+          },
+          "temperature": {
+            "type": "number",
+            "description": "Temperature override for this category"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the category"
+          }
+        }
+      }
+    },
+    "worktree": {
+      "type": "object",
+      "description": "Git worktree isolation configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether worktree isolation is enabled"
+        },
+        "baseDir": {
+          "type": "string",
+          "description": "Base directory for worktrees"
+        },
+        "autoCleanup": {
+          "type": "boolean",
+          "description": "Automatically clean up worktrees after use"
+        }
+      }
+    },
+    "backgroundAgent": {
+      "type": "object",
+      "description": "Background agent configuration",
+      "properties": {
+        "maxConcurrent": {
+          "type": "number",
+          "description": "Maximum concurrent background agents"
+        },
+        "defaultProvider": {
+          "type": "string",
+          "enum": ["claude", "codex", "gemini", "kiro"],
+          "description": "Default provider for background agents"
+        },
+        "defaultModel": {
+          "type": "string",
+          "description": "Default model for background agents"
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "Timeout for background agents (ms)"
+        }
+      }
+    },
+    "ultrawork": {
+      "type": "object",
+      "description": "Ultrawork mode configuration for intensive tasks",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether ultrawork mode is enabled"
+        },
+        "defaultModel": {
+          "type": "string",
+          "description": "Default model for ultrawork mode"
+        },
+        "maxTurns": {
+          "type": "number",
+          "description": "Maximum turns in ultrawork mode"
+        },
+        "forceMultiAgent": {
+          "type": "boolean",
+          "description": "Force multi-agent execution"
+        },
+        "forcePlanning": {
+          "type": "boolean",
+          "description": "Force planning phase"
+        }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "description": "Statistics tracking configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether statistics tracking is enabled"
+        },
+        "persistPath": {
+          "type": "string",
+          "description": "Path to persist statistics data"
+        },
+        "maxEntries": {
+          "type": "number",
+          "description": "Maximum number of statistic entries to retain"
+        }
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "description": "Session recovery configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether session recovery is enabled"
+        },
+        "maxAttemptsPerStrategy": {
+          "type": "number",
+          "description": "Maximum recovery attempts per strategy"
+        },
+        "strategies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ordered list of recovery strategies to try"
+        }
+      }
+    },
+    "acp": {
+      "type": "object",
+      "description": "ACP server configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether ACP server is enabled"
+        },
+        "maxSessions": {
+          "type": "number",
+          "description": "Maximum concurrent ACP sessions"
+        },
+        "sessionTimeoutMs": {
+          "type": "number",
+          "description": "ACP session timeout (ms)"
+        }
+      }
+    },
+    "sdkServer": {
+      "type": "object",
+      "description": "SDK server configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether SDK server is enabled"
+        },
+        "port": {
+          "type": "number",
+          "description": "Port for the SDK server"
+        },
+        "host": {
+          "type": "string",
+          "description": "Host address for the SDK server"
+        },
+        "authToken": {
+          "type": "string",
+          "description": "Authentication token for SDK server access"
+        }
+      }
+    },
+    "webInterface": {
+      "type": "object",
+      "description": "Web interface configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether web interface is enabled"
+        },
+        "port": {
+          "type": "number",
+          "description": "Port for the web interface"
+        },
+        "host": {
+          "type": "string",
+          "description": "Host address for the web interface"
+        },
+        "authEnabled": {
+          "type": "boolean",
+          "description": "Whether authentication is required"
+        }
+      }
+    },
+    "refactor": {
+      "type": "object",
+      "description": "Refactoring engine configuration",
+      "properties": {
+        "testCommand": {
+          "type": "string",
+          "description": "Command to run tests during refactoring"
+        },
+        "maxExploreAgents": {
+          "type": "number",
+          "description": "Maximum agents for exploration phase"
+        },
+        "abortOnTestFail": {
+          "type": "boolean",
+          "description": "Abort refactoring if tests fail"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "routingTier": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "enum": ["haiku", "sonnet", "opus"],
+          "description": "Model tier for this routing level"
+        },
+        "keywords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keywords that trigger routing to this tier"
+        }
+      },
+      "required": ["model", "keywords"]
+    }
+  }
+}

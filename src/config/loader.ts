@@ -1,11 +1,34 @@
 import { parse as parseYaml } from "yaml";
+import { parse as parseJsonc } from "jsonc-parser";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { homedir } from "os";
 import type { OrchestratorConfig } from "./types.ts";
 
 const DEFAULT_CONFIG_PATH = new URL("../../config/default.yml", import.meta.url).pathname;
-const USER_CONFIG_PATH = resolve(homedir(), ".orchestrator", "config.yml");
+
+const USER_CONFIG_DIR = resolve(homedir(), ".orchestrator");
+const USER_CONFIG_CANDIDATES = [
+  resolve(USER_CONFIG_DIR, "config.yml"),
+  resolve(USER_CONFIG_DIR, "config.yaml"),
+  resolve(USER_CONFIG_DIR, "config.json"),
+  resolve(USER_CONFIG_DIR, "config.jsonc"),
+];
+
+function parseConfigFile(filePath: string): Record<string, unknown> {
+  const raw = readFileSync(filePath, "utf-8");
+  if (filePath.endsWith(".json") || filePath.endsWith(".jsonc")) {
+    return parseJsonc(raw) as Record<string, unknown>;
+  }
+  return parseYaml(raw) as Record<string, unknown>;
+}
+
+function findUserConfig(): string | null {
+  for (const candidate of USER_CONFIG_CANDIDATES) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
 
 export function loadConfig(overridePath?: string): OrchestratorConfig {
   if (!existsSync(DEFAULT_CONFIG_PATH)) {
@@ -18,15 +41,14 @@ export function loadConfig(overridePath?: string): OrchestratorConfig {
   if (overridePath) {
     const resolved = resolvePath(overridePath);
     if (existsSync(resolved)) {
-      const overrideRaw = readFileSync(resolved, "utf-8");
-      const overrideConfig = parseYaml(overrideRaw) as Record<string, unknown>;
+      const overrideConfig = parseConfigFile(resolved);
       config = deepMerge(config, overrideConfig);
     }
   }
 
-  if (existsSync(USER_CONFIG_PATH)) {
-    const userRaw = readFileSync(USER_CONFIG_PATH, "utf-8");
-    const userConfig = parseYaml(userRaw) as Record<string, unknown>;
+  const userConfigPath = findUserConfig();
+  if (userConfigPath) {
+    const userConfig = parseConfigFile(userConfigPath);
     config = deepMerge(config, userConfig);
   }
 
