@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { homedir } from "node:os";
 import type {
   OrchestratorConfig,
@@ -445,6 +445,47 @@ export class Orchestrator {
     if (this.consolidator.shouldConsolidate()) {
       this.consolidator.consolidate().catch(() => {});
     }
+
+    // Wire SDK server message handler
+    this.sdkServer.onMessage(async (_sessionId: string, content: string) => {
+      const task = await this.handoff("coder", content, { waitForCompletion: true, timeout: 120_000 });
+      return task.result ?? "Task completed without output.";
+    });
+
+    // Wire ACP server message handler
+    this.acpServer.onMessage(async (_sessionId: string, content: string) => {
+      const task = await this.handoff("coder", content, { waitForCompletion: true, timeout: 120_000 });
+      return task.result ?? "Task completed without output.";
+    });
+
+    // Wire ACP cancel handler
+    this.acpServer.onCancel(async (_sessionId: string) => {
+      // Cancel all running tasks for this session
+      const running = this.store.listTasks({ status: "running" });
+      for (const task of running) {
+        if (task.agentName) {
+          await this.stopAgent(task.agentName).catch(() => {});
+          this.store.updateTask(task.id, { status: "failed", result: "Cancelled by user" });
+        }
+      }
+      return running.length > 0;
+    });
+
+    // Wire refactor engine executor
+    this.refactorEngine.onExecute(async (plan: string, files: string[]) => {
+      const fileList = files.map((f) => relative(process.cwd(), f)).join(", ");
+      const prompt = [
+        "Apply the following refactoring plan. Only modify these files:",
+        fileList,
+        "",
+        plan,
+      ].join("\n");
+      const task = await this.handoff("coder", prompt, { waitForCompletion: true, timeout: 300_000 });
+      if (task.status === "failed") {
+        throw new Error(task.result ?? "Refactoring execution failed");
+      }
+      return files;
+    });
   }
 
   async spawnAgent(profileName: string): Promise<SessionInfo> {
