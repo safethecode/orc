@@ -1,5 +1,5 @@
 // ── Parallel Brainstorm ─────────────────────────────────────────────
-// Spawns multiple lightweight Haiku agents in parallel to analyze a problem
+// Spawns multiple Sonnet agents in parallel to analyze a problem
 // from different perspectives. Their insights are synthesized into context
 // for the main executing agent.
 
@@ -73,7 +73,7 @@ export function shouldBrainstorm(input: string, tier: string): boolean {
 }
 
 /**
- * Run parallel brainstorm: spawn 3 Haiku agents simultaneously
+ * Run parallel brainstorm: spawn 3 Sonnet agents simultaneously
  * to analyze the problem from different perspectives.
  */
 export async function brainstorm(
@@ -90,7 +90,7 @@ export async function brainstorm(
 
     const cmd = buildCommand(providerConfig, profile, {
       prompt,
-      model: "haiku",
+      model: "sonnet",
       systemPrompt: perspective.systemPrompt,
       maxTurns: 1,
     });
