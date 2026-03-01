@@ -400,21 +400,21 @@
         }
       }
     },
-    "ultrawork": {
+    "fastwork": {
       "type": "object",
-      "description": "Ultrawork mode configuration for intensive tasks",
+      "description": "Fastwork mode configuration for maximum performance tasks",
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Whether ultrawork mode is enabled"
+          "description": "Whether fastwork mode is enabled"
         },
         "defaultModel": {
           "type": "string",
-          "description": "Default model for ultrawork mode"
+          "description": "Default model for fastwork mode"
         },
         "maxTurns": {
           "type": "number",
-          "description": "Maximum turns in ultrawork mode"
+          "description": "Maximum turns in fastwork mode"
         },
         "forceMultiAgent": {
           "type": "boolean",

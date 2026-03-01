@@ -704,11 +704,11 @@ async function handleNaturalInput(
     }
   }
 
-  // Inject ultrawork mode: maximum performance mode
-  const ultrawork = orchestrator.getUltrawork();
-  if (ultrawork.detect(input)) {
-    const overrides = ultrawork.getOverrides();
-    systemPrompt += "\n\n" + ultrawork.buildSystemPromptAddition();
+  // Inject fastwork mode: maximum performance mode
+  const fastwork = orchestrator.getFastwork();
+  if (fastwork.detect(input)) {
+    const overrides = fastwork.getOverrides();
+    systemPrompt += "\n\n" + fastwork.buildSystemPromptAddition();
   }
 
   // Inject ultrathink mode: deep reasoning mode

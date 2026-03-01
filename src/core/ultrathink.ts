@@ -2,8 +2,8 @@
 // Deep reasoning agent mode for maximum analytical depth.
 // Detects ultrathink keywords at the start of input, strips them,
 // and returns configuration overrides that push reasoning to its deepest.
-// Unlike ultrawork (speed/parallelism), ultrathink focuses on
-// single-agent deep analysis with verified, incremental implementation.
+// Combines deep analysis with maximum performance — the single mode
+// for pushing agent reasoning and execution to their limits.
 
 export interface UltrathinkOverrides {
   model: string;

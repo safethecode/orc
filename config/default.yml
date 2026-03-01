@@ -105,6 +105,13 @@ supervisor:
     maxContextTokens: 4000
     summarizeSiblingResults: true
 
+fastwork:
+  enabled: true
+  defaultModel: opus
+  maxTurns: 50
+  forceMultiAgent: true
+  forcePlanning: true
+
 ultrathink:
   enabled: true
   defaultModel: opus

@@ -93,7 +93,7 @@ export interface OrchestratorConfig {
   categories?: Record<string, { model?: string; tier?: import("./types.ts").ModelTier; temperature?: number; description?: string }>;
   worktree?: GitWorktreeConfig;
   backgroundAgent?: BackgroundAgentConfig;
-  ultrawork?: UltraworkConfig;
+  fastwork?: FastworkConfig;
   ultrathink?: UltrathinkConfig;
   statistics?: StatisticsConfig;
   recovery?: SessionRecoveryConfig;
@@ -805,8 +805,8 @@ export interface BackgroundAgentConfig {
   timeoutMs?: number;
 }
 
-// ── Ultrawork Mode ──────────────────────────────────────────────────
-export interface UltraworkConfig {
+// ── Fastwork Mode ───────────────────────────────────────────────────
+export interface FastworkConfig {
   enabled?: boolean;
   defaultModel?: string;
   maxTurns?: number;

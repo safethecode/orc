@@ -23,7 +23,7 @@ export const COMMANDS = [
   "/oauth", "/category",
   "/doctor", "/stats", "/worktree", "/background", "/stash",
   "/question", "/search", "/tasks", "/handoff", "/refactor",
-  "/variants", "/ultrawork", "/ultrathink", "/github",
+  "/variants", "/fastwork", "/ultrathink", "/github",
   "/diff", "/compact", "/trust", "/consolidate",
   "/checkpoint", "/spec", "/ideate", "/help", "/quit",
 ];
@@ -1492,10 +1492,10 @@ export async function handleCommand(
       return "continue";
     }
 
-    case "ultrawork": {
-      const uw = ctx.orchestrator.getUltrawork();
-      const overrides = uw.getOverrides();
-      renderer.info(`\x1b[1multrawork mode\x1b[0m: model=${overrides.model}, maxTurns=${overrides.maxTurns}, forceMultiAgent=${overrides.forceMultiAgent}`);
+    case "fastwork": {
+      const fw = ctx.orchestrator.getFastwork();
+      const overrides = fw.getOverrides();
+      renderer.info(`\x1b[1mfastwork mode\x1b[0m: model=${overrides.model}, maxTurns=${overrides.maxTurns}, forceMultiAgent=${overrides.forceMultiAgent}`);
       return "continue";
     }
 
@@ -1628,7 +1628,7 @@ export async function handleCommand(
       renderer.info("\x1b[1m/refactor\x1b[0m \x1b[2m<goal>      run automated refactor");
       renderer.info("\x1b[1m/variants\x1b[0m\x1b[2m            list model variants");
       renderer.info("\x1b[1m/variants set\x1b[0m \x1b[2m<name>  set model variant");
-      renderer.info("\x1b[1m/ultrawork\x1b[0m\x1b[2m           show ultrawork mode config");
+      renderer.info("\x1b[1m/fastwork\x1b[0m\x1b[2m            show fastwork mode config");
       renderer.info("\x1b[1m/ultrathink\x1b[0m\x1b[2m          show ultrathink mode config");
       renderer.info("\x1b[1m/github branch\x1b[0m \x1b[2m<name> create branch");
       renderer.info("\x1b[1m/github pr\x1b[0m \x1b[2m<title>    create pull request");

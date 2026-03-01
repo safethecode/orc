@@ -88,7 +88,7 @@ import { SessionRecoveryManager } from "./session-recovery.ts";
 import { BackgroundAgentManager } from "./background-agent.ts";
 import { TodoContinuationEnforcer } from "./todo-continuation.ts";
 import { UnstableBabysitter } from "./unstable-babysitter.ts";
-import { UltraworkMode } from "./ultrawork.ts";
+import { FastworkMode } from "./fastwork.ts";
 import { UltrathinkMode } from "./ultrathink.ts";
 import { QuestionManager } from "./question-tool.ts";
 import { CodeSearchEngine } from "./code-search.ts";
@@ -183,7 +183,7 @@ export class Orchestrator {
   private backgroundAgent: BackgroundAgentManager;
   private todoContinuation: TodoContinuationEnforcer;
   private babysitter: UnstableBabysitter;
-  private ultrawork: UltraworkMode;
+  private fastwork: FastworkMode;
   private ultrathink: UltrathinkMode;
   private questionTool: QuestionManager;
   private codeSearch: CodeSearchEngine;
@@ -261,7 +261,7 @@ export class Orchestrator {
     this.backgroundAgent = new BackgroundAgentManager();
     this.todoContinuation = new TodoContinuationEnforcer();
     this.babysitter = new UnstableBabysitter();
-    this.ultrawork = new UltraworkMode();
+    this.fastwork = new FastworkMode();
     this.ultrathink = new UltrathinkMode();
     this.questionTool = new QuestionManager();
     this.codeSearch = new CodeSearchEngine();
@@ -1036,8 +1036,8 @@ export class Orchestrator {
     return this.babysitter;
   }
 
-  getUltrawork(): UltraworkMode {
-    return this.ultrawork;
+  getFastwork(): FastworkMode {
+    return this.fastwork;
   }
 
   getUltrathink(): UltrathinkMode {
