@@ -203,6 +203,11 @@ export class AgentStreamer extends EventEmitter {
       if (msg.message.usage) {
         result.inputTokens += msg.message.usage.input_tokens ?? 0;
         result.outputTokens += msg.message.usage.output_tokens ?? 0;
+        this.emit("usage", {
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          costUsd: result.costUsd,
+        });
       }
       return;
     }
@@ -222,6 +227,11 @@ export class AgentStreamer extends EventEmitter {
         result.inputTokens = msg.usage.input_tokens ?? result.inputTokens;
         result.outputTokens = msg.usage.output_tokens ?? result.outputTokens;
       }
+      this.emit("usage", {
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        costUsd: result.costUsd,
+      });
       return;
     }
   }
