@@ -15,6 +15,18 @@ const RETRYABLE_MESSAGES = ["socket hang up"];
 const RATE_LIMIT_PATTERNS = ["rate limit", "too many requests"];
 const OVERLOAD_PATTERNS = ["overloaded"];
 
+// CLI-specific rate limit patterns
+const CLI_RATE_LIMIT_PATTERNS = [
+  "session limit",
+  "concurrent session",
+  "max sessions",
+  "try again in",
+  "please wait",
+  "capacity",
+  "quota exceeded",
+  "billing limit",
+];
+
 const NON_RETRYABLE_PATTERNS = ["context length", "content filter", "invalid"];
 
 function getStatusCode(error: Error): number | null {
@@ -133,6 +145,13 @@ export class RetryWithBackoff {
       }
     }
 
+    // Check CLI-specific rate limit patterns
+    for (const pattern of CLI_RATE_LIMIT_PATTERNS) {
+      if (msg.includes(pattern)) {
+        return "rate_limit";
+      }
+    }
+
     // Check overload by status
     if (status === 503 || status === 529) {
       return "overload";
@@ -174,11 +193,37 @@ export class RetryWithBackoff {
       return parseInt(secMatch[1], 10) * 1000;
     }
 
+    // "try again in 5 minutes" / "wait 5 minutes" / "retry in 5 min"
+    const minMatch = errorMessage.match(/(?:try again|wait|retry)\s+(?:in\s+)?(\d+)\s*min/i);
+    if (minMatch) {
+      return parseInt(minMatch[1], 10) * 60_000;
+    }
+
+    // "try again in 30 seconds" / "wait 30 sec"
+    const secMatch2 = errorMessage.match(/(?:try again|wait|retry)\s+(?:in\s+)?(\d+)\s*sec/i);
+    if (secMatch2) {
+      return parseInt(secMatch2[1], 10) * 1000;
+    }
+
+    // "available at HH:MM" / "resets at HH:MM" / "ready at HH:MM"
+    const timeMatch = errorMessage.match(/(?:available|resets?|ready)\s+(?:at\s+)?(\d{1,2}):(\d{2})/i);
+    if (timeMatch) {
+      const target = new Date();
+      target.setHours(parseInt(timeMatch[1], 10), parseInt(timeMatch[2], 10), 0, 0);
+      if (target.getTime() <= Date.now()) {
+        target.setDate(target.getDate() + 1);
+      }
+      return target.getTime() - Date.now();
+    }
+
     return null;
   }
 
   calculateDelay(attempt: number, opts: Required<RetryOpts>): number {
     const raw = opts.initialDelayMs * Math.pow(opts.backoffMultiplier, attempt);
-    return Math.min(raw, opts.maxDelayMs);
+    const capped = Math.min(raw, opts.maxDelayMs);
+    // Add ±15% jitter to avoid thundering herd
+    const jitter = capped * (0.85 + Math.random() * 0.3);
+    return Math.round(jitter);
   }
 }

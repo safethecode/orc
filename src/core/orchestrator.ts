@@ -213,6 +213,7 @@ export class Orchestrator {
   private sdkServer: SdkServer;
   private copilotAuth: CopilotAuth;
   private refactorEngine: RefactorEngine;
+  private dlq: DeadLetterQueue;
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private config: OrchestratorConfig;
@@ -294,6 +295,7 @@ export class Orchestrator {
     this.sdkServer = new SdkServer();
     this.copilotAuth = new CopilotAuth();
     this.refactorEngine = new RefactorEngine(config.refactor);
+    this.dlq = new DeadLetterQueue();
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -900,6 +902,22 @@ export class Orchestrator {
 
   getSupervisor(): Supervisor {
     return this.supervisor;
+  }
+
+  /**
+   * Cancel a running worker by its worker ID (supports partial ID matching).
+   * Stops monitoring, kills the session, and marks as cancelled.
+   */
+  async cancelWorker(workerId: string, reason: string): Promise<boolean> {
+    return this.supervisor.cancelWorker(workerId, reason);
+  }
+
+  /**
+   * Cancel all active workers.
+   * Returns the number of workers cancelled.
+   */
+  async cancelAllWorkers(reason: string): Promise<number> {
+    return this.supervisor.cancelAll(reason);
   }
 
   getWorkerBus(): WorkerBus {
