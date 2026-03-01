@@ -1,4 +1,5 @@
 import type { AgentRole, ProviderName } from "../config/types.ts";
+import { loadProviderPrompt } from "./prompts/loader.ts";
 
 export interface HarnessOptions {
   agentName: string;
@@ -68,9 +69,10 @@ export function buildHarness(options: HarnessOptions): HarnessResult {
     ? `\n\n## Constraints\n${ROLE_CONSTRAINTS[role]}`
     : "";
 
-  // Layer 4 — Provider hints
-  const hint = PROVIDER_HINTS[provider];
-  const providerSection = hint ? `\n\n## Provider\n${hint}` : "";
+  // Layer 4 — Provider guidelines (file-based, with inline fallback)
+  const providerPrompt = loadProviderPrompt(provider);
+  const providerContent = providerPrompt || PROVIDER_HINTS[provider] || "";
+  const providerSection = providerContent ? `\n\n## Provider Guidelines\n${providerContent}` : "";
 
   const systemPrompt = `${identity}${protocol}${constraints}${providerSection}`;
 
