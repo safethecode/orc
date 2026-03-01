@@ -147,17 +147,108 @@ export async function handleCommand(
     }
 
     case "trace": {
-      const tracer = ctx.orchestrator.getTracer();
-      const active = tracer.getActiveSpans();
-      if (active.length === 0) {
-        renderer.info("no active traces");
+      const dtracer = ctx.orchestrator.getDistributedTracer();
+      const sub = args[0];
+
+      if (!sub) {
+        // Show recent traces (last 10)
+        const recent = dtracer.getRecentTraces(10);
+        if (recent.length === 0) {
+          renderer.info("no traces recorded");
+        } else {
+          process.stdout.write("\n");
+          for (const t of recent) {
+            const dur = t.durationMs !== null ? `${t.durationMs}ms` : "in progress";
+            const statusColor = t.status === "ok"
+              ? "\x1b[32m"
+              : t.status === "error"
+                ? "\x1b[31m"
+                : t.status === "in_progress"
+                  ? "\x1b[33m"
+                  : "\x1b[90m";
+            renderer.info(
+              `${statusColor}${t.status}\x1b[0m  ${t.traceId.slice(0, 12)}  ${t.rootOperation} \x1b[2m(${dur}, ${t.spanCount} spans, ${t.services.join(",")})\x1b[0m`,
+            );
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "active") {
+        const active = dtracer.getActiveSpans();
+        if (active.length === 0) {
+          renderer.info("no active spans");
+        } else {
+          process.stdout.write("\n");
+          for (const span of active) {
+            const elapsed = Date.now() - span.startTime;
+            renderer.info(
+              `\x1b[33m${span.spanId.slice(0, 12)}\x1b[0m  ${span.operationName} [\x1b[36m${span.serviceName}\x1b[0m] \x1b[2m${elapsed}ms elapsed\x1b[0m`,
+            );
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "search") {
+        const query = args.slice(1).join(" ");
+        if (!query) {
+          renderer.error("usage: /trace search <operation-name>");
+          return "continue";
+        }
+        const results = dtracer.search({ operationName: query });
+        if (results.length === 0) {
+          renderer.info("no matching spans");
+        } else {
+          process.stdout.write("\n");
+          for (const span of results.slice(0, 20)) {
+            const dur = span.durationMs !== null ? `${span.durationMs}ms` : "...";
+            const statusColor = span.status === "ok" ? "\x1b[32m" : span.status === "error" ? "\x1b[31m" : "\x1b[90m";
+            renderer.info(
+              `${statusColor}${span.status}\x1b[0m  ${span.operationName} [\x1b[36m${span.serviceName}\x1b[0m] ${dur} \x1b[2mtrace:${span.traceId.slice(0, 8)}\x1b[0m`,
+            );
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      if (sub === "slow") {
+        const recent = dtracer.getRecentTraces(50);
+        const completed = recent.filter(t => t.durationMs !== null);
+        completed.sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0));
+        const top = completed.slice(0, 10);
+        if (top.length === 0) {
+          renderer.info("no completed traces");
+        } else {
+          process.stdout.write("\n");
+          renderer.info("\x1b[1mSlowest traces:\x1b[0m");
+          for (const t of top) {
+            renderer.info(
+              `  ${t.durationMs}ms  ${t.traceId.slice(0, 12)}  ${t.rootOperation} \x1b[2m(${t.spanCount} spans)\x1b[0m`,
+            );
+          }
+          process.stdout.write("\n");
+        }
+        return "continue";
+      }
+
+      // Treat sub as a trace ID — show full trace timeline
+      const traceId = sub;
+      // Find matching trace (partial ID match)
+      const allRecent = dtracer.getRecentTraces(50);
+      const match = allRecent.find(t => t.traceId.startsWith(traceId));
+      if (match) {
+        process.stdout.write("\n" + dtracer.formatTrace(match.traceId) + "\n\n");
       } else {
-        const seen = new Set<string>();
-        for (const span of active) {
-          if (seen.has(span.traceId)) continue;
-          seen.add(span.traceId);
-          const timeline = tracer.toTimeline(span.traceId);
-          process.stdout.write(timeline + "\n");
+        // Try direct lookup
+        const spans = dtracer.getTrace(traceId);
+        if (spans && spans.length > 0) {
+          process.stdout.write("\n" + dtracer.formatTrace(traceId) + "\n\n");
+        } else {
+          renderer.error(`trace not found: ${traceId}`);
         }
       }
       return "continue";
@@ -1043,6 +1134,143 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "dlq": {
+      const dlq = ctx.orchestrator.getDeadLetterQueue();
+      const sub = args[0];
+
+      if (!sub) {
+        // Default: show DLQ summary
+        const dlqStats = dlq.stats();
+        process.stdout.write("\n");
+        renderer.info(`\x1b[1mDead Letter Queue\x1b[0m`);
+        renderer.info(`  pending: \x1b[33m${dlqStats.pending}\x1b[0m  retrying: \x1b[36m${dlqStats.retrying}\x1b[0m  resolved: \x1b[32m${dlqStats.resolved}\x1b[0m  discarded: \x1b[90m${dlqStats.discarded}\x1b[0m`);
+        if (dlqStats.totalCostWasted > 0) {
+          renderer.info(`  wasted: \x1b[31m$${dlqStats.totalCostWasted < 0.01 ? dlqStats.totalCostWasted.toFixed(4) : dlqStats.totalCostWasted.toFixed(2)}\x1b[0m`);
+        }
+        if (dlqStats.topErrors.length > 0) {
+          renderer.info(`  \x1b[1mtop errors:\x1b[0m`);
+          for (const err of dlqStats.topErrors.slice(0, 3)) {
+            renderer.info(`    ${err.count}x  ${err.error.slice(0, 70)}`);
+          }
+        }
+        if (dlqStats.total === 0) {
+          renderer.info(`  \x1b[2m(empty)\x1b[0m`);
+        }
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      if (sub === "list") {
+        const pending = dlq.list("pending");
+        if (pending.length === 0) {
+          renderer.info("no pending dead letters");
+          return "continue";
+        }
+        process.stdout.write("\n");
+        renderer.info(`\x1b[1mDead Letter Queue\x1b[0m (${pending.length} pending):`);
+        for (let i = 0; i < pending.length; i++) {
+          const letter = pending[i];
+          const ago = formatTimeAgo(letter.enqueuedAt);
+          renderer.info(`  ${i + 1}. \x1b[1m${letter.id.slice(0, 12)}\x1b[0m  \x1b[33m[${letter.reason}]\x1b[0m  ${ago}`);
+          renderer.info(`     \x1b[2m"${letter.prompt.slice(0, 50) || letter.agentName}" — ${letter.error.slice(0, 60)}\x1b[0m`);
+        }
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      if (sub === "show") {
+        const id = args[1];
+        if (!id) { renderer.error("usage: /dlq show <id>"); return "continue"; }
+        const letter = dlq.get(id);
+        if (!letter) { renderer.error(`dead letter not found: ${id}`); return "continue"; }
+        process.stdout.write("\n");
+        renderer.info(`\x1b[1m${letter.id}\x1b[0m`);
+        renderer.info(`  status:    ${letter.status}`);
+        renderer.info(`  reason:    ${letter.reason}`);
+        renderer.info(`  task:      ${letter.taskId}`);
+        renderer.info(`  subtask:   ${letter.subtaskId}`);
+        renderer.info(`  worker:    ${letter.workerId}`);
+        renderer.info(`  agent:     ${letter.agentName}`);
+        renderer.info(`  provider:  ${letter.provider}/${letter.model}`);
+        renderer.info(`  attempts:  ${letter.attempts}`);
+        renderer.info(`  enqueued:  ${letter.enqueuedAt}`);
+        renderer.info(`  error:     \x1b[31m${letter.error}\x1b[0m`);
+        if (letter.prompt) {
+          renderer.info(`  prompt:    ${letter.prompt.slice(0, 200)}`);
+        }
+        renderer.info(`  tokens:    ${letter.metadata.tokenUsage.toLocaleString()}`);
+        renderer.info(`  cost:      $${letter.metadata.costUsd < 0.01 ? letter.metadata.costUsd.toFixed(4) : letter.metadata.costUsd.toFixed(2)}`);
+        if (letter.metadata.corrections.length > 0) {
+          renderer.info(`  corrections:`);
+          for (const c of letter.metadata.corrections) {
+            renderer.info(`    - ${c.slice(0, 100)}`);
+          }
+        }
+        if (letter.metadata.turnHistory.length > 0) {
+          renderer.info(`  turn history:`);
+          for (const t of letter.metadata.turnHistory.slice(-5)) {
+            renderer.info(`    - ${t.slice(0, 100)}`);
+          }
+        }
+        if (letter.metadata.intermediateResults.length > 0) {
+          renderer.info(`  intermediate results: ${letter.metadata.intermediateResults.length}`);
+        }
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      if (sub === "retry") {
+        const id = args[1];
+        if (!id) { renderer.error("usage: /dlq retry <id>"); return "continue"; }
+        const payload = dlq.getRetryPayload(id);
+        if (!payload) { renderer.error(`dead letter not found: ${id}`); return "continue"; }
+        const marked = dlq.markRetrying(id);
+        if (!marked) { renderer.error(`cannot retry: letter is not in pending state`); return "continue"; }
+        process.stdout.write("\n");
+        renderer.info(`retrying dead letter ${id} (attempt ${payload.previousAttempts + 1})`);
+        renderer.info(`\x1b[2merror context injected: ${payload.errorContext.split("\n").length} lines\x1b[0m`);
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      if (sub === "discard") {
+        const id = args[1];
+        if (!id) { renderer.error("usage: /dlq discard <id>"); return "continue"; }
+        const ok = dlq.discard(id);
+        renderer.info(ok ? `discarded ${id}` : `dead letter not found: ${id}`);
+        return "continue";
+      }
+
+      if (sub === "stats") {
+        const dlqStats = dlq.stats();
+        process.stdout.write("\n");
+        renderer.info(`\x1b[1mDLQ Statistics\x1b[0m`);
+        renderer.info(`  total:     ${dlqStats.total}`);
+        renderer.info(`  pending:   \x1b[33m${dlqStats.pending}\x1b[0m`);
+        renderer.info(`  retrying:  \x1b[36m${dlqStats.retrying}\x1b[0m`);
+        renderer.info(`  resolved:  \x1b[32m${dlqStats.resolved}\x1b[0m`);
+        renderer.info(`  discarded: \x1b[90m${dlqStats.discarded}\x1b[0m`);
+        renderer.info(`  cost wasted: \x1b[31m$${dlqStats.totalCostWasted < 0.01 ? dlqStats.totalCostWasted.toFixed(4) : dlqStats.totalCostWasted.toFixed(2)}\x1b[0m`);
+        if (dlqStats.topErrors.length > 0) {
+          renderer.info(`\n  \x1b[1mTop Errors:\x1b[0m`);
+          for (const err of dlqStats.topErrors) {
+            renderer.info(`    ${err.count}x  ${err.error}`);
+          }
+        }
+        process.stdout.write("\n");
+        return "continue";
+      }
+
+      if (sub === "clear") {
+        dlq.clear();
+        renderer.info("cleared resolved/discarded entries from DLQ");
+        return "continue";
+      }
+
+      renderer.error("usage: /dlq [list|show|retry|discard|stats|clear]");
+      return "continue";
+    }
+
     case "diff": {
       const ghostSha = ctx.orchestrator.getGhostSha();
       if (!ghostSha) {
@@ -1808,7 +2036,11 @@ export async function handleCommand(
       renderer.info("\x1b[1m/spawn\x1b[0m \x1b[2m<agent>       spawn an agent");
       renderer.info("\x1b[1m/task\x1b[0m \x1b[2m<agent> <msg>   assign task to agent");
       renderer.info("\x1b[1m/budget\x1b[0m\x1b[2m              budget usage");
-      renderer.info("\x1b[1m/trace\x1b[0m\x1b[2m               active traces");
+      renderer.info("\x1b[1m/trace\x1b[0m\x1b[2m               show recent traces (last 10)");
+      renderer.info("\x1b[1m/trace\x1b[0m \x1b[2m<id>          show full trace timeline");
+      renderer.info("\x1b[1m/trace active\x1b[0m\x1b[2m        show currently active spans");
+      renderer.info("\x1b[1m/trace search\x1b[0m \x1b[2m<q>    search traces by operation name");
+      renderer.info("\x1b[1m/trace slow\x1b[0m\x1b[2m          show slowest traces (by duration)");
       renderer.info("\x1b[1m/agents\x1b[0m\x1b[2m              agent profiles & health");
       renderer.info("\x1b[1m/agents select\x1b[0m \x1b[2m<name> pin to a specific agent");
       renderer.info("\x1b[1m/agents auto\x1b[0m\x1b[2m         restore auto routing");
@@ -1903,6 +2135,13 @@ export async function handleCommand(
       renderer.info("\x1b[1m/cancel\x1b[0m \x1b[2m<worker-id>    cancel a specific running worker");
       renderer.info("\x1b[1m/cancel all\x1b[0m\x1b[2m          cancel all running workers");
       renderer.info("\x1b[1m/cancel queue\x1b[0m \x1b[2m<id>   remove task from scheduler queue");
+      renderer.info("\x1b[1m/dlq\x1b[0m\x1b[2m                 DLQ summary (pending count, top errors)");
+      renderer.info("\x1b[1m/dlq list\x1b[0m\x1b[2m            list all pending dead letters");
+      renderer.info("\x1b[1m/dlq show\x1b[0m \x1b[2m<id>        show full details of a dead letter");
+      renderer.info("\x1b[1m/dlq retry\x1b[0m \x1b[2m<id>       re-execute a dead letter (with error context)");
+      renderer.info("\x1b[1m/dlq discard\x1b[0m \x1b[2m<id>     discard a dead letter");
+      renderer.info("\x1b[1m/dlq stats\x1b[0m\x1b[2m           show DLQ statistics");
+      renderer.info("\x1b[1m/dlq clear\x1b[0m\x1b[2m           discard all resolved/discarded entries");
       renderer.info("\x1b[1m/clear\x1b[0m\x1b[2m               clear conversation");
       renderer.info("\x1b[1m/lang\x1b[0m \x1b[2m<language>      set response language");
       renderer.info("\x1b[1m/help\x1b[0m\x1b[2m                this help");
@@ -1937,6 +2176,18 @@ function formatDuration(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+}
+
+function formatTimeAgo(isoTimestamp: string): string {
+  const diffMs = Date.now() - new Date(isoTimestamp).getTime();
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 function findTaskById(

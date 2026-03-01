@@ -409,6 +409,9 @@ export class Orchestrator {
       },
     );
 
+    // Wire distributed tracer into supervisor
+    this.supervisor.setTracer(this.distributedTracer);
+
     // Wire stuck detection human escalation to terminal notifications
     this.escalationManager.onHumanEscalation((event, actions) => {
       const title = "Orc: Worker Stuck";
