@@ -428,6 +428,14 @@ export class LayoutManager {
     return this.messageQueue.length;
   }
 
+  /** Drain all queued messages without exiting agent mode */
+  drainQueue(): string[] {
+    const msgs = [...this.messageQueue];
+    this.messageQueue = [];
+    this.renderInputArea();
+    return msgs;
+  }
+
   getLayout(): LayoutState {
     return { ...this.state };
   }

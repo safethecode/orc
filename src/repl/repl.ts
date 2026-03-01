@@ -33,6 +33,7 @@ import { detectRecurringIssues, DEFAULT_QA_CONFIG } from "../core/qa-loop.ts";
 import type { QAIssue, ExecutionPhase } from "../config/types.ts";
 import * as renderer from "./renderer.ts";
 import { LayoutManager } from "./layout-manager.ts";
+import { shouldBrainstorm, brainstorm } from "../core/brainstorm.ts";
 
 export async function startRepl(
   orchestrator: Orchestrator,
@@ -384,6 +385,7 @@ export async function startRepl(
           forkManager,
           recentFileChanges,
           rl,
+          layout,
         );
       } finally {
         // Exit agent mode: collect queued messages
@@ -469,6 +471,7 @@ async function handleNaturalInput(
   forkManager?: SessionForkManager,
   recentFileChanges?: string[],
   rl?: readline.Interface,
+  layout?: LayoutManager,
 ): Promise<void> {
   let route: RouteResult;
   let agentName: string;
@@ -799,6 +802,20 @@ async function handleNaturalInput(
     }
   }
 
+  // Parallel brainstorm: spawn lightweight agents to analyze the problem
+  if (shouldBrainstorm(input, route.tier) && !cancellation.cancelled) {
+    renderer.updateSpinner("brainstorming (3 agents)...");
+    try {
+      const bsResult = await brainstorm(input, providerConfig, profile, cancellation.signal);
+      if (bsResult.synthesized) {
+        systemPrompt += "\n\n" + bsResult.synthesized;
+        renderer.info(`\x1b[2mbrainstorm: ${bsResult.perspectives.length} perspectives in ${(bsResult.durationMs / 1000).toFixed(1)}s\x1b[0m`);
+      }
+    } catch {
+      // Brainstorm failure is non-fatal — continue without insights
+    }
+  }
+
   const cmd = buildCommand(providerConfig, profile, {
     prompt: fullPrompt,
     model: route.model,
@@ -817,6 +834,8 @@ async function handleNaturalInput(
   let lastError: string | null = null;
   let lastSuccessText: string | null = null;
   let handlerStartTime = Date.now();
+  let midTurnDrains = 0;
+  const MAX_MID_TURN_DRAINS = 5; // Prevent infinite queue drain loops
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (cancellation.cancelled) break;
@@ -851,6 +870,7 @@ async function handleNaturalInput(
     let boxOpen = false;
     // eslint-disable-next-line prefer-const -- mutated inside event handler
     let pendingApproval: { command: string; ruleId: string; message: string } | null = null as any;
+    let queueDrainAbort = false;
     const WRITE_TOOLS = new Set(["write", "edit", "create", "patch", "apply_patch"]);
 
     // Real-time streaming: open box on first content, stream into it
@@ -899,6 +919,15 @@ async function handleNaturalInput(
         const cmd = (inp.command as string) ?? tool.name;
         const v = enforcement.violations.find(v => v.severity === "ask");
         pendingApproval = { command: cmd, ruleId: v?.ruleId ?? "command-safety", message: v?.message ?? cmd };
+        renderer.stopSpinner();
+        if (boxOpen) { renderer.endBox(); boxOpen = false; }
+        streamer.abort();
+        return;
+      }
+
+      // Mid-turn queue drain: if user typed a message while agent is working, abort immediately
+      if (layout && layout.getQueuedCount() > 0) {
+        queueDrainAbort = true;
         renderer.stopSpinner();
         if (boxOpen) { renderer.endBox(); boxOpen = false; }
         streamer.abort();
@@ -1018,6 +1047,39 @@ async function handleNaturalInput(
 
       if (boxOpen) {
         renderer.endBox();
+      }
+
+      // Handle mid-turn queue drain: user sent a message while agent was working
+      if (queueDrainAbort && layout && midTurnDrains < MAX_MID_TURN_DRAINS) {
+        midTurnDrains++;
+        const drained = layout.drainQueue();
+        const userMsg = drained.join("\n");
+        renderer.info(`\x1b[2m⚡ mid-turn interjection (${midTurnDrains}/${MAX_MID_TURN_DRAINS}): ${userMsg.length > 60 ? userMsg.slice(0, 60) + "..." : userMsg}\x1b[0m`);
+
+        // Save partial agent response
+        if (result.text) {
+          conversation.add({ role: "assistant", content: result.text, agentName, tier: route.model, timestamp: new Date().toISOString() });
+        }
+
+        // Add user's interjected message
+        const interjectedTurn = { role: "user" as const, content: userMsg, timestamp: new Date().toISOString() };
+        conversation.add(interjectedTurn);
+        forkManager?.addTurn(interjectedTurn);
+
+        // Rebuild prompt with new context and re-run
+        conversation.setTokenBudget(TIER_BUDGETS[route.model] ?? TIER_BUDGETS.sonnet);
+        const newPrompt = conversation.buildPrompt(userMsg);
+        currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+          prompt: newPrompt,
+          model: route.model,
+          systemPrompt,
+          maxTurns: currentProfile.maxTurns,
+          mcpConfig: mcpConfigPath,
+        });
+        renderer.startSpinner(agentName, route.model);
+        queueDrainAbort = false;
+        attempt = -1; // Will increment to 0 at loop top
+        continue;
       }
 
       // Handle enforcer approval flow (abort-ask-retry)
