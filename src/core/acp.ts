@@ -18,6 +18,9 @@ export interface AcpSession {
   messages: Array<{ role: "user" | "assistant"; content: string; timestamp: string }>;
 }
 
+export type AcpMessageHandler = (sessionId: string, content: string) => Promise<string>;
+export type AcpCancelHandler = (sessionId: string) => Promise<boolean>;
+
 export interface AcpServerConfig {
   maxSessions?: number;
   sessionTimeoutMs?: number;
@@ -50,6 +53,8 @@ export class AcpServer {
   private running = false;
   private buffer = "";
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private messageHandler: AcpMessageHandler | null = null;
+  private cancelHandler: AcpCancelHandler | null = null;
 
   constructor(config?: AcpServerConfig) {
     this.config = {
@@ -130,6 +135,14 @@ export class AcpServer {
     }
   }
 
+  onMessage(handler: AcpMessageHandler): void {
+    this.messageHandler = handler;
+  }
+
+  onCancel(handler: AcpCancelHandler): void {
+    this.cancelHandler = handler;
+  }
+
   isRunning(): boolean {
     return this.running;
   }
@@ -180,7 +193,7 @@ export class AcpServer {
     };
   }
 
-  private handleSessionMessage(request: AcpRequest): AcpResponse {
+  private async handleSessionMessage(request: AcpRequest): Promise<AcpResponse> {
     const params = request.params;
     if (!params || typeof params.sessionId !== "string" || typeof params.content !== "string") {
       return {
@@ -207,9 +220,28 @@ export class AcpServer {
     // Store the user message
     session.messages.push({ role: "user", content: params.content, timestamp: now });
 
-    // Placeholder assistant response — real orchestrator integration wired later
-    const assistantContent = `[ACP placeholder] Received: ${params.content.slice(0, 100)}`;
-    session.messages.push({ role: "assistant", content: assistantContent, timestamp: now });
+    if (!this.messageHandler) {
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: "No message handler configured" },
+      };
+    }
+
+    let assistantContent: string;
+    try {
+      assistantContent = await this.messageHandler(params.sessionId, params.content);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: INTERNAL_ERROR, message: `Agent error: ${errMsg}` },
+      };
+    }
+
+    const responseTimestamp = new Date().toISOString();
+    session.messages.push({ role: "assistant", content: assistantContent, timestamp: responseTimestamp });
 
     return {
       jsonrpc: "2.0",
@@ -235,7 +267,7 @@ export class AcpServer {
     };
   }
 
-  private handleSessionCancel(request: AcpRequest): AcpResponse {
+  private async handleSessionCancel(request: AcpRequest): Promise<AcpResponse> {
     const params = request.params;
     if (!params || typeof params.sessionId !== "string") {
       return {
@@ -254,13 +286,21 @@ export class AcpServer {
       };
     }
 
-    // No active generation to cancel yet (placeholder)
     this.log(`Session cancel requested: ${params.sessionId}`);
+
+    let cancelled = false;
+    if (this.cancelHandler) {
+      try {
+        cancelled = await this.cancelHandler(params.sessionId);
+      } catch {
+        cancelled = false;
+      }
+    }
 
     return {
       jsonrpc: "2.0",
       id: request.id,
-      result: { sessionId: params.sessionId, cancelled: true },
+      result: { sessionId: params.sessionId, cancelled },
     };
   }
 
