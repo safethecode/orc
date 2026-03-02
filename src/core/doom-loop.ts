@@ -22,8 +22,8 @@ export class DoomLoopDetector {
   constructor(config?: Partial<DoomLoopConfig>) {
     this.config = {
       enabled: true,
-      maxRepetitions: 5,
-      windowSize: 15,
+      maxRepetitions: 10,
+      windowSize: 30,
       action: "warn",
       ...config,
     };

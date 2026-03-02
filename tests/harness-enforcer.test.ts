@@ -139,13 +139,13 @@ describe("HarnessEnforcer", () => {
   });
 
   describe("doom-loop-block", () => {
-    it("blocks after 3 identical tool calls", () => {
+    it("blocks after 8 identical tool calls", () => {
       const input = { file_path: "/src/foo.ts", content: "same" };
-      // Record 3 identical calls
-      enforcer.record("write", input);
-      enforcer.record("write", input);
-      enforcer.record("write", input);
-      // 4th should be blocked
+      // Record 8 identical calls
+      for (let i = 0; i < 8; i++) {
+        enforcer.record("write", input);
+      }
+      // 9th should be blocked
       const result = enforcer.check("write", input);
       expect(result.allowed).toBe(false);
       expect(result.violations.some(v => v.ruleId === "doom-loop-block")).toBe(true);

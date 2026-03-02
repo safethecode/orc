@@ -315,7 +315,7 @@ const RULES: EnforcementRule[] = [
       const hash = hashToolCall(tool.toolName, inputStr);
 
       const count = state.toolCallHashes.get(hash) ?? 0;
-      if (count >= 3) {
+      if (count >= 8) {
         return {
           ruleId: "doom-loop-block",
           severity: "block",
