@@ -1991,6 +1991,15 @@ async function handleOptimizeCommand(
       const m = output.match(metricPattern);
       if (m) renderer.updateCostLive(parseFloat(m[1]) || 0);
     },
+    onResearchStart: (round) => {
+      renderer.researchStart(round);
+    },
+    onResearchProgress: (phase, detail) => {
+      renderer.researchProgress(phase, detail);
+    },
+    onResearchComplete: (_round, durationMs) => {
+      renderer.researchComplete(durationMs);
+    },
   };
 
   const cancellation = new CancellationToken();

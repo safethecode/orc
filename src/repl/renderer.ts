@@ -414,3 +414,23 @@ export function riskAssessment(risks: string[]): void {
     process.stdout.write(`  ${YELLOW}△${RESET} ${DIM}${r}${RESET}\n`);
   }
 }
+
+// ── Research Status ────────────────────────────────────────────────
+
+export function researchStart(round: number): void {
+  process.stdout.write(
+    `\n  ${BLUE}${BOLD}◎${RESET} ${WHITE}researcher activated${RESET}  ${DIM}plateau detected at round ${round}${RESET}\n`,
+  );
+}
+
+export function researchProgress(phase: string, detail?: string): void {
+  const label = detail ? `${phase}: ${detail}` : phase;
+  process.stdout.write(`  ${DIM}${BLUE}▸${RESET} ${DIM}${label}${RESET}\n`);
+}
+
+export function researchComplete(durationMs: number): void {
+  const time = `${(durationMs / 1000).toFixed(1)}s`;
+  process.stdout.write(
+    `  ${GREEN}✓${RESET} ${DIM}research complete  ${GRAY}(${time})${RESET}\n\n`,
+  );
+}

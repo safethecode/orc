@@ -17,6 +17,7 @@ import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
 import type { ProviderConfig, AgentProfile, ModelTier } from "../config/types.ts";
 import { brainstorm, shouldBrainstorm } from "./brainstorm.ts";
+import { research, detectPlateau, type StallContext } from "./researcher.ts";
 import { randomUUID } from "crypto";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -72,6 +73,9 @@ export interface OptimizationCallbacks {
   onAgentStream?: (path: number, delta: string) => void;
   onAgentTool?: (path: number, tool: ToolUseEvent) => void;
   onTestRun?: (path: number, output: string) => void;
+  onResearchStart?: (round: number) => void;
+  onResearchProgress?: (phase: string, detail?: string) => void;
+  onResearchComplete?: (round: number, durationMs: number) => void;
 }
 
 // ── Default Config ─────────────────────────────────────────────────
@@ -556,10 +560,38 @@ export async function runOptimization(
 
     // Re-deliberate with knowledge of what worked for next round
     if (round < fullConfig.maxRounds - 1 && allHistory.length > 0) {
+      // Check if we've hit a plateau — if so, activate researcher
+      let researchInsights = "";
+      if (detectPlateau(allHistory)) {
+        callbacks.onResearchStart?.(round);
+        try {
+          const currentCode = bestCode ?? "";
+          const stallCtx: StallContext = {
+            task,
+            currentCode,
+            bestMetric,
+            target: fullConfig.target,
+            history: allHistory,
+            roundNumber: round,
+          };
+          const researchResult = await research(
+            stallCtx, providerConfig, profile, signal,
+            (phase, detail) => callbacks.onResearchProgress?.(phase, detail),
+          );
+          researchInsights = researchResult.synthesis;
+          callbacks.onResearchComplete?.(round, researchResult.durationMs);
+        } catch { /* research is non-fatal */ }
+      }
+
       const historyContext = allHistory.slice(-15).map(s =>
         `iter ${s.iteration}: ${s.metric ?? "N/A"} cycles, ${s.action}${s.improved ? " (improved!)" : ""}`
       ).join("\n");
-      const reDelibTask = `${task}\n\n## Previous Optimization Attempts\nBest so far: ${bestMetric} cycles (target: ${fullConfig.target})\n${historyContext}\n\nPropose the NEXT optimization strategy based on what worked and what didn't.`;
+
+      const researchBlock = researchInsights
+        ? `\n\n## Research Insights (from web research)\n${researchInsights}`
+        : "";
+
+      const reDelibTask = `${task}\n\n## Previous Optimization Attempts\nBest so far: ${bestMetric} cycles (target: ${fullConfig.target})\n${historyContext}${researchBlock}\n\nPropose the NEXT optimization strategy based on what worked, what didn't, and the research insights.`;
       try {
         const bsResult = await brainstorm(reDelibTask, providerConfig, profile, signal);
         deliberation = bsResult.synthesized || deliberation;
