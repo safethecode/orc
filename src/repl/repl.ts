@@ -1957,6 +1957,7 @@ async function handleOptimizeCommand(
     targetFile,
     explorerModel,
     contextFiles: contextFiles.length > 0 ? contextFiles : undefined,
+    goldenDir: `${workdir}/.orc-golden`,
   };
 
   // Get provider config
@@ -1982,6 +1983,7 @@ async function handleOptimizeCommand(
   if (contextFiles.length > 0) {
     renderer.info(`  study:  ${contextFiles.join(", ")}`);
   }
+  renderer.info(`  golden: ${workdir}/.orc-golden`);
   renderer.separator();
 
   layout.enterAgentMode("optimize");
@@ -2017,6 +2019,15 @@ async function handleOptimizeCommand(
     },
     onResearchComplete: (_round, durationMs) => {
       renderer.researchComplete(durationMs);
+    },
+    onVerification: (path, valid, issue) => {
+      renderer.verificationResult(path, valid, issue);
+    },
+    onGoldenLoaded: (count) => {
+      renderer.goldenLoaded(count);
+    },
+    onGoldenSaved: (metric) => {
+      renderer.goldenSaved(metric);
     },
   };
 

@@ -430,6 +430,28 @@ export function studyComplete(durationMs: number): void {
   );
 }
 
+// ── Verification & Golden Solutions ───────────────────────────────
+
+export function verificationResult(path: number, valid: boolean, issue?: string): void {
+  if (valid) {
+    process.stdout.write(`  ${GREEN}✓${RESET} ${DIM}path ${path} ISA check passed${RESET}\n`);
+  } else {
+    process.stdout.write(`  ${RED}✗${RESET} ${YELLOW}path ${path} ISA violation:${RESET} ${issue || "unknown"}\n`);
+  }
+}
+
+export function goldenLoaded(count: number): void {
+  process.stdout.write(
+    `  ${CYAN}◈${RESET} ${DIM}loaded ${count} golden solution${count !== 1 ? "s" : ""} from previous runs${RESET}\n`,
+  );
+}
+
+export function goldenSaved(metric: number): void {
+  process.stdout.write(
+    `  ${GREEN}◈${RESET} ${DIM}saved golden solution — ${metric} cycles${RESET}\n`,
+  );
+}
+
 // ── Research Status ────────────────────────────────────────────────
 
 export function researchStart(round: number): void {

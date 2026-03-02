@@ -10,6 +10,8 @@
 // Phase 5: Micro — cycle-level bundle auditing + slot filling (Opus)
 //
 // Quality boosters:
+// - Golden solution injection: reference code from past runs injected as structural examples
+// - ISA verifier: Haiku pre-flight check catches ISA violations before expensive testing
 // - Path diversity: each parallel path gets a different "personality"
 // - Success/failure pattern tracking: proven techniques & anti-patterns
 // - Phase transition injection: winning code from phase N → phase N+1
@@ -40,6 +42,8 @@ export interface OptimizationConfig {
   explorerModel: ModelTier;
   /** Additional source files to feed the agent for deep understanding */
   contextFiles?: string[];
+  /** Directory for golden solution persistence (default: ${workdir}/.orc-golden) */
+  goldenDir?: string;
 }
 
 export interface OptimizationStep {
@@ -73,6 +77,9 @@ export interface OptimizationCallbacks {
   onResearchProgress?: (phase: string, detail?: string) => void;
   onResearchComplete?: (round: number, durationMs: number) => void;
   onStudyComplete?: (durationMs: number) => void;
+  onVerification?: (path: number, valid: boolean, issue?: string) => void;
+  onGoldenLoaded?: (count: number) => void;
+  onGoldenSaved?: (metric: number) => void;
 }
 
 // ── Path Diversity ──────────────────────────────────────────────────
@@ -123,6 +130,125 @@ MANDATORY SELF-CHECK before submitting your code change:
 5. vload/vstore addresses must be contiguous — NOT for scatter/gather
 If any check fails, fix it before proceeding.`;
 
+// ── Golden Solution Persistence ─────────────────────────────────────
+// Saves winning code from each phase to disk. Future runs load these
+// as structural reference examples, showing agents what optimized code
+// looks like at each performance level.
+
+async function loadGoldenSolutions(goldenDir: string): Promise<Map<number, string>> {
+  const solutions = new Map<number, string>();
+  try {
+    const proc = Bun.spawn(["ls", goldenDir], { stdout: "pipe", stderr: "pipe" });
+    const output = (await new Response(proc.stdout).text()).trim();
+    if ((await proc.exited) !== 0 || !output) return solutions;
+    for (const filename of output.split("\n")) {
+      const match = filename.match(/^golden_(\d+)\.\w+$/);
+      if (match) {
+        try {
+          const content = await Bun.file(`${goldenDir}/${filename}`).text();
+          solutions.set(parseInt(match[1]), content);
+        } catch { /* skip unreadable */ }
+      }
+    }
+  } catch { /* no golden dir */ }
+  return solutions;
+}
+
+async function saveGoldenSolution(goldenDir: string, metric: number, code: string): Promise<void> {
+  try {
+    const mkdirProc = Bun.spawn(["mkdir", "-p", goldenDir], { stdout: "pipe", stderr: "pipe" });
+    await mkdirProc.exited;
+    await Bun.write(`${goldenDir}/golden_${Math.round(metric)}.py`, code);
+  } catch { /* non-fatal */ }
+}
+
+function findBestGolden(
+  goldenSolutions: Map<number, string>,
+  phaseTarget: number,
+  currentMetric: number,
+  lowerIsBetter: boolean,
+): { metric: number; code: string } | undefined {
+  // Find the golden solution with the best metric that's at or better than phaseTarget
+  let best: { metric: number; code: string } | undefined;
+  for (const [metric, code] of goldenSolutions) {
+    if (lowerIsBetter) {
+      // Want golden with metric <= phaseTarget (already achieved target)
+      // Among those, prefer the one closest to phaseTarget (most relevant)
+      if (metric <= phaseTarget) {
+        if (!best || metric > best.metric) {
+          best = { metric, code };
+        }
+      }
+    } else {
+      if (metric >= phaseTarget) {
+        if (!best || metric < best.metric) {
+          best = { metric, code };
+        }
+      }
+    }
+  }
+  return best;
+}
+
+// ── ISA Verifier (Haiku Pre-Flight Check) ───────────────────────────
+// Fast Haiku agent checks code for ISA violations before expensive testing.
+// Only runs in opus phases where each wasted iteration is costly.
+
+async function verifyIsaCompliance(
+  workdir: string,
+  targetFile: string,
+  isaReference: string,
+  providerConfig: ProviderConfig,
+  profile: AgentProfile,
+  signal?: AbortSignal,
+): Promise<{ valid: boolean; issue?: string }> {
+  let code: string;
+  try {
+    code = await Bun.file(`${workdir}/${targetFile}`).text();
+  } catch {
+    return { valid: true }; // can't read → skip verification
+  }
+
+  // Truncate long ISA references for Haiku (keep it fast)
+  const shortIsa = isaReference.length > 2000 ? isaReference.slice(0, 2000) : isaReference;
+  const shortCode = code.length > 6000 ? code.slice(0, 6000) : code;
+
+  const prompt = `Check this VLIW SIMD code for ISA violations. Output ONLY one of:
+- "VALID" if no issues found
+- "INVALID: <one-line description of the most critical issue>"
+
+Check these rules:
+1. INSTRUCTION NAMES: Valid ops — alu/valu: +,-,*,^,|,&,~,<<,>>,==,!=,<,>,<=,>=,min,max | load: load,vload,const,load_offset | store: store,vstore | flow: select,vselect,cond_jump,cond_jump_rel,jump,add_imm,vbroadcast
+2. SLOT LIMITS per bundle: alu≤12, valu≤6, load≤2, store≤2, flow≤1
+3. RAW HAZARDS: Cannot read a value written in the same bundle (end-of-cycle writes)
+4. vload/vstore need SCALAR address for VLEN contiguous locations
+5. alloc_scratch must be called before using scratch registers
+
+${shortIsa}
+
+\`\`\`python
+${shortCode}
+\`\`\``;
+
+  const streamer = new AgentStreamer();
+  const cmd = buildCommand(providerConfig, profile, {
+    prompt,
+    model: "haiku",
+    systemPrompt: "You are an ISA compliance checker. Be precise. Only flag CLEAR violations, not style issues.",
+    maxTurns: 1,
+  });
+
+  try {
+    const result = await streamer.run(cmd, signal);
+    const text = result.text.trim();
+    if (text.toUpperCase().startsWith("VALID")) return { valid: true };
+    const issueMatch = text.match(/INVALID:\s*(.+)/i);
+    return { valid: false, issue: issueMatch?.[1]?.slice(0, 200) ?? text.slice(0, 200) };
+  } catch {
+    return { valid: true }; // verifier failure → proceed normally
+  }
+}
+
 // ── Phase Definition ──────────────────────────────────────────────
 
 interface OptimizationPhase {
@@ -139,7 +265,6 @@ interface OptimizationPhase {
 function buildPhases(finalTarget: number, initialMetric: number): OptimizationPhase[] {
   const phases: OptimizationPhase[] = [];
 
-  // Phase 1: Foundation — loops + basic VLIW packing
   if (initialMetric > 18000) {
     phases.push({
       name: "foundation",
@@ -159,7 +284,6 @@ KEY TECHNIQUES:
     });
   }
 
-  // Phase 2: Vectorization — SIMD
   if (finalTarget < 18000) {
     phases.push({
       name: "vectorization",
@@ -191,7 +315,6 @@ EXAMPLE PATTERN — vectorized XOR over batch:
     });
   }
 
-  // Phase 3: Advanced — scatter emulation + dependency hiding
   if (finalTarget < 4000) {
     phases.push({
       name: "advanced",
@@ -227,7 +350,6 @@ EXAMPLE PATTERN — scatter gather with scalar loads:
     });
   }
 
-  // Phase 4: Extreme — software pipelining + structural optimization
   if (finalTarget < 2000) {
     phases.push({
       name: "extreme",
@@ -269,7 +391,6 @@ ${SELF_CHECK}`,
     });
   }
 
-  // Phase 5: Micro — cycle-level bundle auditing + slot filling
   if (finalTarget < 1500) {
     phases.push({
       name: "micro",
@@ -491,6 +612,7 @@ function buildPhaseSystemPrompt(
   config: OptimizationConfig,
   personality?: string,
   prevPhaseCode?: string,
+  goldenCode?: { metric: number; code: string },
 ): string {
   const parts: string[] = [];
 
@@ -504,6 +626,16 @@ ${phase.focus}`);
 
   if (personality) {
     parts.push(`\n## Your Optimization Style\n${personality}`);
+  }
+
+  if (goldenCode) {
+    const truncGolden = goldenCode.code.length > 4000 ? goldenCode.code.slice(0, 4000) + "\n# ... (truncated)" : goldenCode.code;
+    parts.push(`\n## Reference Solution (achieved ${goldenCode.metric} cycles in a previous run)
+Study this code's STRUCTURE carefully. It shows optimization patterns that work at this performance level.
+Do NOT copy it verbatim — understand WHY it achieves this performance, then apply those principles to your approach.
+\`\`\`python
+${truncGolden}
+\`\`\``);
   }
 
   if (prevPhaseCode) {
@@ -612,6 +744,7 @@ async function runExplorationPath(
   prevPhaseCode?: string,
   inheritedSuccess?: SuccessPattern[],
   inheritedFailure?: FailurePattern[],
+  goldenCode?: { metric: number; code: string },
 ): Promise<PathResult> {
   const history: OptimizationStep[] = [];
   let bestMetric = initialMetric;
@@ -619,9 +752,10 @@ async function runExplorationPath(
   let lastTestOutput: string | undefined;
   const successPatterns: SuccessPattern[] = [...(inheritedSuccess ?? [])];
   const failurePatterns: FailurePattern[] = [...(inheritedFailure ?? [])];
+  const useVerifier = phase.model === "opus";
 
   const pathConfig = { ...config, workdir: pathWorkdir };
-  const systemPrompt = buildPhaseSystemPrompt(phase, isaReference, pathConfig, personality, prevPhaseCode);
+  const systemPrompt = buildPhaseSystemPrompt(phase, isaReference, pathConfig, personality, prevPhaseCode, goldenCode);
 
   for (let iter = 0; iter < phase.maxIterations; iter++) {
     if (signal?.aborted) break;
@@ -655,6 +789,28 @@ async function runExplorationPath(
     }
 
     const strategy = extractStrategy(agentText);
+
+    // ISA verifier pre-flight check (opus phases only)
+    if (useVerifier) {
+      const verification = await verifyIsaCompliance(
+        pathWorkdir, config.targetFile, isaReference,
+        providerConfig, profile, signal,
+      );
+      callbacks.onVerification?.(pathIndex, verification.valid, verification.issue);
+      if (!verification.valid) {
+        const issue = verification.issue ?? "ISA violation";
+        failurePatterns.push({ technique: strategy, reason: `ISA violation: ${issue}` });
+        const step: OptimizationStep = {
+          iteration: iter, metric: null, correct: false, improved: false,
+          action: "rollback", strategy: `${strategy} [ISA: ${issue}]`,
+        };
+        history.push(step);
+        callbacks.onIterationComplete?.(pathIndex, step);
+        if (bestCode) await restoreFile(pathWorkdir, config.targetFile, bestCode);
+        continue;
+      }
+    }
+
     const testResult = await runTest(config.testCommand, pathWorkdir);
     callbacks.onTestRun?.(pathIndex, testResult.output);
     lastTestOutput = testResult.output;
@@ -711,7 +867,6 @@ async function setupWorktrees(
   return paths;
 }
 
-/** Set up worktrees seeded from multiple starting codes (top-K tournament) */
 async function setupWorktreesMultiSeed(
   repoDir: string,
   seeds: Array<{ code: string | null; count: number }>,
@@ -765,14 +920,12 @@ async function runPhase(
   prevPhaseCode?: string,
   initialSuccess?: SuccessPattern[],
   initialFailure?: FailurePattern[],
+  goldenCode?: { metric: number; code: string },
 ): Promise<{ bestMetric: number; bestCode: string | null; successPatterns: SuccessPattern[]; failurePatterns: FailurePattern[] }> {
   let phaseSuccess: SuccessPattern[] = [...(initialSuccess ?? [])];
   let phaseFailure: FailurePattern[] = [...(initialFailure ?? [])];
-
-  // Top-2 codes for tournament seeding (runner-up gets 40% of paths)
   let runnerUpCode: string | null = null;
 
-  // Deliberation for this phase
   let deliberation: string | undefined;
   const delibTask = `${task}\n\nCurrent metric: ${bestMetric} cycles. Phase goal: ${phase.targetMetric} cycles.\n\n${phase.focus}`;
   if (shouldBrainstorm(delibTask, "complex")) {
@@ -793,7 +946,7 @@ async function runPhase(
       const result = await runExplorationPath(
         0, phase, config, config.workdir, isaReference,
         providerConfig, profile, bestMetric, deliberation, callbacks, signal,
-        "", prevPhaseCode, phaseSuccess, phaseFailure,
+        "", prevPhaseCode, phaseSuccess, phaseFailure, goldenCode,
       );
       allHistory.push(...result.history);
       phaseSuccess = result.successPatterns;
@@ -803,7 +956,6 @@ async function runPhase(
         bestCode = result.bestCode;
       }
     } else {
-      // Top-2 seeding: first round uses bestCode only, subsequent rounds use winner + runner-up
       let worktrees: string[];
       if (round > 0 && runnerUpCode && runnerUpCode !== bestCode) {
         const primaryCount = Math.ceil(phase.parallelPaths * 0.6);
@@ -823,34 +975,24 @@ async function runPhase(
               p, phase, config, wtPath, isaReference,
               providerConfig, profile, bestMetric, deliberation, callbacks, signal,
               PATH_PERSONALITIES[p % PATH_PERSONALITIES.length],
-              prevPhaseCode,
-              phaseSuccess,
-              phaseFailure,
+              prevPhaseCode, phaseSuccess, phaseFailure, goldenCode,
             ),
           ),
         );
 
         for (const result of pathResults) allHistory.push(...result.history);
 
-        // Merge patterns from all paths (cross-pollination)
         const seenSuccess = new Set(phaseSuccess.map(s => s.technique));
         const seenFailure = new Set(phaseFailure.map(f => f.technique));
         for (const result of pathResults) {
           for (const sp of result.successPatterns) {
-            if (!seenSuccess.has(sp.technique)) {
-              phaseSuccess.push(sp);
-              seenSuccess.add(sp.technique);
-            }
+            if (!seenSuccess.has(sp.technique)) { phaseSuccess.push(sp); seenSuccess.add(sp.technique); }
           }
           for (const fp of result.failurePatterns) {
-            if (!seenFailure.has(fp.technique)) {
-              phaseFailure.push(fp);
-              seenFailure.add(fp.technique);
-            }
+            if (!seenFailure.has(fp.technique)) { phaseFailure.push(fp); seenFailure.add(fp.technique); }
           }
         }
 
-        // Top-2 tournament: pick winner AND runner-up
         const sorted = [...pathResults]
           .map((r, i) => ({ ...r, idx: i }))
           .sort((a, b) => config.lowerIsBetter ? a.bestMetric - b.bestMetric : b.bestMetric - a.bestMetric);
@@ -860,7 +1002,6 @@ async function runPhase(
           bestCode = sorted[0].bestCode;
           callbacks.onTournamentResult?.(round, bestMetric, sorted[0].idx);
         }
-        // Runner-up for next round's seeding
         if (sorted.length > 1 && sorted[1].bestCode) {
           runnerUpCode = sorted[1].bestCode;
         }
@@ -871,7 +1012,6 @@ async function runPhase(
 
     if (bestCode) await restoreFile(config.workdir, config.targetFile, bestCode);
 
-    // Phase target reached?
     if (isTargetReached(bestMetric, phase.targetMetric, config.lowerIsBetter)) {
       return { bestMetric, bestCode, successPatterns: phaseSuccess, failurePatterns: phaseFailure };
     }
@@ -904,11 +1044,9 @@ async function runPhase(
       const failureBlock = phaseFailure.length > 0
         ? `\n## What Failed (don't repeat)\n${phaseFailure.slice(-5).map(f => `- ${f.technique}: ${f.reason}`).join("\n")}`
         : "";
-
       const historyContext = allHistory.slice(-15).map(s =>
         `iter ${s.iteration}: ${s.metric ?? "N/A"}, ${s.action}${s.improved ? " (improved)" : ""}`
       ).join("\n");
-
       const researchBlock = researchInsights ? `\n\n## Research Insights\n${researchInsights}` : "";
       const reDelibTask = `${task}\n\nPhase: ${phase.name}, target: ${phase.targetMetric}\nBest: ${bestMetric}\n${historyContext}${successBlock}${failureBlock}${researchBlock}\n\n${phase.focus}\n\nPropose the NEXT strategy. Do NOT repeat failed approaches.`;
       try {
@@ -935,8 +1073,15 @@ export async function runOptimization(
   const fullConfig = { ...DEFAULT_CONFIG, ...config } as OptimizationConfig;
   const allHistory: OptimizationStep[] = [];
   const gitRoot = await findGitRoot(fullConfig.workdir);
+  const goldenDir = fullConfig.goldenDir ?? `${fullConfig.workdir}/.orc-golden`;
 
-  // 1. Initial metric
+  // 1. Load golden solutions from past runs
+  const goldenSolutions = await loadGoldenSolutions(goldenDir);
+  if (goldenSolutions.size > 0) {
+    callbacks.onGoldenLoaded?.(goldenSolutions.size);
+  }
+
+  // 2. Initial metric
   const initialTest = await runTest(fullConfig.testCommand, fullConfig.workdir);
   const initialMetric = parseMetric(initialTest.output, fullConfig.metricPattern);
   if (initialMetric === null) {
@@ -946,7 +1091,7 @@ export async function runOptimization(
   let bestMetric = initialMetric;
   let bestCode = await saveFile(fullConfig.workdir, fullConfig.targetFile);
 
-  // 2. Deep Study Phase — agent reads all source files, produces ISA reference
+  // 3. Deep Study Phase
   let isaReference = "";
   const contextFiles = fullConfig.contextFiles ?? [];
   if (contextFiles.length > 0) {
@@ -957,17 +1102,16 @@ export async function runOptimization(
         providerConfig, profile, signal,
       );
       callbacks.onStudyComplete?.(Date.now() - studyStart);
-    } catch { /* study is non-fatal, proceed without ISA reference */ }
+    } catch { /* non-fatal */ }
   }
 
-  // 3. Build optimization phases
+  // 4. Build optimization phases
   const phases = buildPhases(fullConfig.target, initialMetric);
-
   if (phases.length === 0) {
     return { bestMetric, initialMetric, totalIterations: 0, totalRounds: 0, history: allHistory, durationMs: Date.now() - startTime, reason: "target_reached" };
   }
 
-  // 4. Execute phases sequentially, carrying winning code + patterns forward
+  // 5. Execute phases sequentially
   let totalRounds = 0;
   let prevPhaseCode: string | undefined;
   let carrySuccess: SuccessPattern[] = [];
@@ -980,10 +1124,14 @@ export async function runOptimization(
 
     callbacks.onPhaseStart?.(phases.indexOf(phase), phase.name, phase.targetMetric);
 
+    // Find best golden solution for this phase
+    const golden = findBestGolden(goldenSolutions, phase.targetMetric, bestMetric, fullConfig.lowerIsBetter);
+
     const phaseResult = await runPhase(
       phase, task, fullConfig, gitRoot, isaReference,
       providerConfig, profile, bestMetric, bestCode,
       allHistory, callbacks, signal, prevPhaseCode,
+      undefined, undefined, golden,
     );
 
     bestMetric = phaseResult.bestMetric;
@@ -993,20 +1141,27 @@ export async function runOptimization(
     carryFailure = phaseResult.failurePatterns;
     prevPhaseCode = bestCode ?? undefined;
 
-    // Final target reached?
+    // Save golden solution after each phase
+    if (bestCode && isImproved(bestMetric, initialMetric, fullConfig.lowerIsBetter)) {
+      await saveGoldenSolution(goldenDir, bestMetric, bestCode);
+      callbacks.onGoldenSaved?.(bestMetric);
+    }
+
     if (isTargetReached(bestMetric, fullConfig.target, fullConfig.lowerIsBetter)) {
       if (bestCode) await restoreFile(fullConfig.workdir, fullConfig.targetFile, bestCode);
       return { bestMetric, initialMetric, totalIterations: allHistory.length, totalRounds, history: allHistory, durationMs: Date.now() - startTime, reason: "target_reached" };
     }
   }
 
-  // 5. Final push — if within 15% of target, retry with accumulated knowledge
+  // 6. Final push — if within 15% of target, retry with accumulated knowledge
   const closeEnough = fullConfig.lowerIsBetter
     ? bestMetric <= fullConfig.target * 1.15
     : bestMetric >= fullConfig.target * 0.85;
 
   if (closeEnough && !signal?.aborted) {
     callbacks.onPhaseStart?.(phases.length, "final_push", fullConfig.target);
+
+    const golden = findBestGolden(goldenSolutions, fullConfig.target, bestMetric, fullConfig.lowerIsBetter);
 
     const pushPhase: OptimizationPhase = {
       name: "final_push",
@@ -1034,12 +1189,17 @@ ${SELF_CHECK}`,
       pushPhase, task, fullConfig, gitRoot, isaReference,
       providerConfig, profile, bestMetric, bestCode,
       allHistory, callbacks, signal, prevPhaseCode,
-      carrySuccess, carryFailure,
+      carrySuccess, carryFailure, golden,
     );
 
     bestMetric = pushResult.bestMetric;
     bestCode = pushResult.bestCode;
     totalRounds += pushPhase.maxRounds;
+
+    if (bestCode && isImproved(bestMetric, initialMetric, fullConfig.lowerIsBetter)) {
+      await saveGoldenSolution(goldenDir, bestMetric, bestCode);
+      callbacks.onGoldenSaved?.(bestMetric);
+    }
   }
 
   if (bestCode) await restoreFile(fullConfig.workdir, fullConfig.targetFile, bestCode);
