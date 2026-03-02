@@ -131,7 +131,7 @@ export class FilePicker {
         ? `  \x1b[7m ${displayPath} \x1b[0m`
         : `   \x1b[2m${displayPath}\x1b[0m`;
 
-      buf += `\x1b[2K${line}`; // clear line + write
+      buf += `\r\x1b[2K${line}`; // col 1 + clear line + write
       if (i < numResults - 1) buf += "\x1b[B"; // move down (except last)
     }
 
@@ -152,7 +152,7 @@ export class FilePicker {
 
     // Clear each line
     for (let i = 0; i < numLines; i++) {
-      buf += "\x1b[2K"; // clear line
+      buf += "\r\x1b[2K"; // col 1 + clear line
       if (i < numLines - 1) buf += "\x1b[B"; // move down
     }
 
