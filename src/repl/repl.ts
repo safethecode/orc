@@ -258,21 +258,15 @@ export async function startRepl(
     else _pickerAction = null;
   });
 
-  // Ctrl+C handling: abort running generation via cancellation token
+  // Ctrl+C handling: always exit terminal
   process.on("SIGINT", () => {
     if (currentCancellation && !currentCancellation.cancelled) {
       currentCancellation.cancel();
-      renderer.notifyIdle();
-      process.stdout.write("\n");
-      renderer.info("Generation aborted.");
-    } else if (currentStreamer?.isRunning) {
-      currentStreamer.abort();
-      renderer.notifyIdle();
-      process.stdout.write("\n");
-      renderer.info("Generation aborted.");
-    } else {
-      rl.close();
     }
+    if (currentStreamer?.isRunning) {
+      currentStreamer.abort();
+    }
+    rl.close();
   });
 
   // Clear screen and move cursor to top
@@ -1017,6 +1011,17 @@ async function handleNaturalInput(
 
     // Real-time streaming: open box on first content, stream into it
     streamer.on("text_delta", (delta: string) => {
+      // ESC abort during text streaming
+      if (layout && layout.getEscapePressed()) {
+        layout.clearEscapePressed();
+        renderer.stopSpinner();
+        if (boxOpen) { renderer.endBox(); boxOpen = false; }
+        streamer.abort();
+        renderer.notifyIdle();
+        process.stdout.write("\n");
+        renderer.info("Generation aborted.");
+        return;
+      }
       if (!boxOpen) {
         renderer.stopSpinner();
         renderer.startBox(route.model);
@@ -1064,6 +1069,18 @@ async function handleNaturalInput(
         renderer.stopSpinner();
         if (boxOpen) { renderer.endBox(); boxOpen = false; }
         streamer.abort();
+        return;
+      }
+
+      // ESC abort: if user pressed ESC while agent is working, abort immediately
+      if (layout && layout.getEscapePressed()) {
+        layout.clearEscapePressed();
+        renderer.stopSpinner();
+        if (boxOpen) { renderer.endBox(); boxOpen = false; }
+        streamer.abort();
+        renderer.notifyIdle();
+        process.stdout.write("\n");
+        renderer.info("Generation aborted.");
         return;
       }
 
