@@ -60,7 +60,7 @@ function isConversational(prompt: string): boolean {
   return false;
 }
 
-const CLASSIFY_TIMEOUT_MS = 10_000; // 10s max — kill if stuck
+const CLASSIFY_TIMEOUT_MS = 15_000; // 15s — CLI spawn + haiku API needs headroom
 
 /**
  * Use Sam (haiku) to classify a prompt via LLM with timeout.
