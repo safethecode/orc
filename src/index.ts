@@ -119,10 +119,17 @@ async function main() {
       const agentName = positional[1] === "--agent" ? positional[2] : undefined;
       const actualPrompt = agentName ? positional.slice(3).join(" ") : prompt;
 
-      // Use router to determine best agent if not specified
-      const { routeTask, suggestAgent } = await import("./core/router.ts");
+      // Use Sam (haiku) to classify, then route
+      const { routeTask, classifyWithSam } = await import("./core/router.ts");
       const route = routeTask(actualPrompt, config.routing);
-      const targetAgent = agentName ?? suggestAgent(route.tier, actualPrompt);
+      let targetAgent: string;
+      if (agentName) {
+        targetAgent = agentName;
+      } else {
+        const classification = await classifyWithSam(actualPrompt);
+        targetAgent = classification.agent;
+        console.log(`Sam: ${classification.reason}`);
+      }
 
       console.log(`Routing: ${route.tier} → ${route.model} (${route.reason})`);
       console.log(`Agent: ${targetAgent}`);

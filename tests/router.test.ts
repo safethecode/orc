@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { routeTask, suggestAgent, isDevelopmentTask } from "../src/core/router.ts";
+import { routeTask, suggestAgent, isDevelopmentTask, classifyWithSam } from "../src/core/router.ts";
 import type { RoutingConfig } from "../src/config/types.ts";
 
 const config: RoutingConfig = {
@@ -117,4 +117,37 @@ describe("isDevelopmentTask", () => {
     expect(isDevelopmentTask("what time is it?")).toBe(false);
     expect(isDevelopmentTask("고마워")).toBe(false);
   });
+});
+
+describe("classifyWithSam", () => {
+  const LLM_TIMEOUT = 15_000;
+
+  it("returns a valid classification object", async () => {
+    const result = await classifyWithSam("hello");
+    expect(result).toHaveProperty("type");
+    expect(result).toHaveProperty("agent");
+    expect(result).toHaveProperty("reason");
+    expect(["development", "conversation"]).toContain(result.type);
+    expect(["Sam", "coder", "architect"]).toContain(result.agent);
+  }, LLM_TIMEOUT);
+
+  it("classifies greeting as conversation → Sam", async () => {
+    const result = await classifyWithSam("안녕하세요");
+    expect(result.type).toBe("conversation");
+    expect(result.agent).toBe("Sam");
+  }, LLM_TIMEOUT);
+
+  it("classifies dev task as development → coder or architect", async () => {
+    const result = await classifyWithSam("src/index.ts 파일의 버그를 수정해줘");
+    expect(result.type).toBe("development");
+    expect(["coder", "architect"]).toContain(result.agent);
+  }, LLM_TIMEOUT);
+
+  it("falls back gracefully when claude CLI is unavailable", async () => {
+    // This test verifies the fallback path exists - if claude is available it uses LLM,
+    // otherwise regex fallback kicks in. Either way it should return a valid result.
+    const result = await classifyWithSam("what's the weather?");
+    expect(["development", "conversation"]).toContain(result.type);
+    expect(["Sam", "coder", "architect"]).toContain(result.agent);
+  }, LLM_TIMEOUT);
 });

@@ -11,6 +11,12 @@ export interface RouteOptions {
   costEstimate?: CostEstimate;
 }
 
+export interface Classification {
+  type: "development" | "conversation";
+  agent: string;
+  reason: string;
+}
+
 const MULTI_AGENT_KEYWORDS = [
   "and then",
   "after that",
@@ -46,13 +52,60 @@ export function isDevelopmentTask(prompt: string): boolean {
 }
 
 /**
- * Detect whether a prompt is clearly conversational.
+ * Detect whether a prompt is clearly conversational (regex fallback).
  */
 function isConversational(prompt: string): boolean {
   if (CHAT_PATTERNS.some((p) => p.test(prompt))) return true;
-  // If no dev signals and prompt is reasonably short, treat as chat
   if (!isDevelopmentTask(prompt) && prompt.length < 80) return true;
   return false;
+}
+
+/**
+ * Use Sam (haiku) to classify a prompt as development or conversation.
+ * Falls back to regex-based classification on failure.
+ */
+export async function classifyWithSam(prompt: string): Promise<Classification> {
+  const classifyPrompt = [
+    `Classify this user prompt. Reply with ONLY a JSON object, nothing else.`,
+    `{"type":"development"|"conversation","agent":"Sam"|"coder"|"architect"}`,
+    `Rules:`,
+    `- "conversation" → greetings, questions, status, explanations, general chat → agent "Sam"`,
+    `- "development" standard → code changes, bugs, tests, refactor, implement → agent "coder"`,
+    `- "development" complex → architecture, system design, security audit, migration → agent "architect"`,
+    ``,
+    `User prompt: ${prompt}`,
+  ].join("\n");
+
+  try {
+    const proc = Bun.spawn(
+      ["claude", "-p", classifyPrompt, "--model", "haiku", "--output-format", "text"],
+      { stdout: "pipe", stderr: "pipe", stdin: "ignore" },
+    );
+
+    const output = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) throw new Error("non-zero exit");
+
+    const jsonMatch = output.match(/\{[^}]+\}/);
+    if (!jsonMatch) throw new Error("no JSON in output");
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const type = parsed.type === "development" ? "development" : "conversation";
+    let agent: string;
+    if (type === "conversation") {
+      agent = "Sam";
+    } else {
+      agent = parsed.agent === "architect" ? "architect" : "coder";
+    }
+
+    return { type, agent, reason: `Sam classified: ${type} → ${agent}` };
+  } catch {
+    // Fallback to regex
+    if (isConversational(prompt)) {
+      return { type: "conversation", agent: "Sam", reason: "fallback: regex → conversation" };
+    }
+    return { type: "development", agent: "coder", reason: "fallback: regex → development" };
+  }
 }
 
 export function routeTask(

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import type { Orchestrator } from "../core/orchestrator.ts";
 import type { OrchestratorConfig, AgentProfile, ModelTier, SubTask, ProviderName, DecompositionResult } from "../config/types.ts";
-import { routeTask, suggestAgent, type RouteResult } from "../core/router.ts";
+import { routeTask, suggestAgent, classifyWithSam, type RouteResult, type Classification } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
 import { AgentStreamer, type ToolUseEvent, type StreamResult } from "./streamer.ts";
@@ -715,7 +715,16 @@ async function handleNaturalInput(
       );
     }
 
-    agentName = suggestAgent(route.tier, input);
+    // Sam (haiku) classifies: development vs conversation
+    renderer.info(`\x1b[2m🏷 Sam is classifying...\x1b[0m`);
+    const classification = await classifyWithSam(input);
+    agentName = classification.agent;
+    renderer.info(`\x1b[36m🏷 ${classification.reason}\x1b[0m`);
+
+    // If Sam classified as conversation, override route to skip multi-agent
+    if (classification.type === "conversation") {
+      route.multiAgent = false;
+    }
   }
 
   if (route.multiAgent) {
