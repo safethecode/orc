@@ -82,18 +82,8 @@ export async function startRepl(
     output: process.stdout,
     terminal: true,
     completer: (line: string): [string[], string] => {
-      // @ file completion (fallback when picker handles Tab directly)
-      const lastAt = line.lastIndexOf("@");
-      if (lastAt >= 0 && (lastAt === 0 || /\s/.test(line[lastAt - 1]))) {
-        const query = line.slice(lastAt + 1);
-        if (!/\s/.test(query) && query.length > 0) {
-          const results = fileRef.searchSync(query, 5);
-          if (results.length > 0) {
-            const completions = results.map(r => line.slice(0, lastAt) + "@" + r.path);
-            return [completions, line];
-          }
-        }
-      }
+      // When file picker is active, return empty to prevent readline Tab behavior
+      if (filePicker?.isActive()) return [[], line];
       if (line.startsWith("/lang ")) {
         const partial = line.slice(6).toLowerCase();
         const hits = LANGUAGES.filter((l) => l.startsWith(partial));
@@ -133,8 +123,48 @@ export async function startRepl(
 
       // ── File picker logic ──────────────────────────────────────
       if (filePicker.isActive()) {
+        const action = _pickerAction;
+        _pickerAction = null;
+
+        // Tab → accept selected file
+        if (action === "tab") {
+          // Restore line (readline's completer returned empty, but undo any side-effects)
+          (rl as any).line = _pickerSavedLine;
+          (rl as any).cursor = _pickerSavedCursor;
+
+          const selected = filePicker.getSelected();
+          if (selected) {
+            const atIdx = filePicker.getAtIndex();
+            const before = _pickerSavedLine.slice(0, atIdx);
+            const after = _pickerSavedLine.slice(_pickerSavedCursor);
+            (rl as any).line = before + "@" + selected.path + " " + after;
+            (rl as any).cursor = atIdx + 1 + selected.path.length + 1;
+          }
+          (rl as any)._refreshLine?.();
+          filePicker.clearRender();
+          filePicker.deactivate();
+          return;
+        }
+
+        // Up/Down → move selection (undo readline history navigation)
+        if (action === "up" || action === "down") {
+          (rl as any).line = _pickerSavedLine;
+          (rl as any).cursor = _pickerSavedCursor;
+          (rl as any)._refreshLine?.();
+          filePicker.moveSelection(action === "up" ? -1 : 1);
+          filePicker.render();
+          return;
+        }
+
+        // Escape → cancel picker
+        if (action === "escape") {
+          filePicker.clearRender();
+          filePicker.deactivate();
+          return;
+        }
+
+        // Normal key (typing) → update query
         const atIdx = filePicker.getAtIndex();
-        // User backspaced past @ or deleted it
         if (cursor <= atIdx || line[atIdx] !== "@") {
           filePicker.clearRender();
           filePicker.deactivate();
@@ -193,69 +223,26 @@ export async function startRepl(
     });
   });
 
-  // ── _ttyWrite override: intercept keys when file picker is active ──
-  const origTtyWrite = (rl as any)._ttyWrite;
-  if (origTtyWrite) {
-    (rl as any)._ttyWrite = function(s: string, key: any) {
-      if (filePicker.isActive() && promptActive) {
-        if (key?.name === "up") {
-          filePicker.moveSelection(-1);
-          filePicker.render();
-          return;
-        }
-        if (key?.name === "down") {
-          filePicker.moveSelection(1);
-          filePicker.render();
-          return;
-        }
-        if (key?.name === "tab") {
-          const resultCount = filePicker.getResultCount();
-          if (resultCount <= 1) {
-            // Single result (or none): accept immediately
-            const selected = filePicker.getSelected();
-            if (selected) {
-              const atIdx = filePicker.getAtIndex();
-              const before = (rl as any).line.slice(0, atIdx);
-              const after = (rl as any).line.slice((rl as any).cursor);
-              const newLine = before + "@" + selected.path + " " + after;
-              (rl as any).line = newLine;
-              (rl as any).cursor = atIdx + 1 + selected.path.length + 1;
-              (rl as any)._refreshLine();
-            }
-            filePicker.clearRender();
-            filePicker.deactivate();
-          } else {
-            // Multiple results: cycle selection down
-            filePicker.moveSelection(1);
-            filePicker.render();
-          }
-          return;
-        }
-        if (key?.name === "return" || key?.name === "enter") {
-          // Enter accepts current selection
-          const selected = filePicker.getSelected();
-          if (selected) {
-            const atIdx = filePicker.getAtIndex();
-            const before = (rl as any).line.slice(0, atIdx);
-            const after = (rl as any).line.slice((rl as any).cursor);
-            const newLine = before + "@" + selected.path + " " + after;
-            (rl as any).line = newLine;
-            (rl as any).cursor = atIdx + 1 + selected.path.length + 1;
-            (rl as any)._refreshLine();
-          }
-          filePicker.clearRender();
-          filePicker.deactivate();
-          return; // swallow Enter — don't submit the line
-        }
-        if (key?.name === "escape") {
-          filePicker.clearRender();
-          filePicker.deactivate();
-          return;
-        }
-      }
-      origTtyWrite.call(rl, s, key);
-    };
-  }
+  // ── Picker key interception via prependListener ────────────────────
+  // Bun's readline lacks _ttyWrite, so we save state BEFORE readline
+  // processes the key (prependListener), then undo + apply in setImmediate.
+  let _pickerSavedLine = "";
+  let _pickerSavedCursor = 0;
+  let _pickerAction: "tab" | "up" | "down" | "escape" | null = null;
+
+  process.stdin.prependListener("keypress", (_str: string | undefined, key: { name?: string }) => {
+    if (!promptActive || !filePicker.isActive()) return;
+
+    // Snapshot readline state before it processes this key
+    _pickerSavedLine = rl.line;
+    _pickerSavedCursor = rl.cursor;
+
+    if (key?.name === "tab") _pickerAction = "tab";
+    else if (key?.name === "up") _pickerAction = "up";
+    else if (key?.name === "down") _pickerAction = "down";
+    else if (key?.name === "escape") _pickerAction = "escape";
+    else _pickerAction = null;
+  });
 
   // Ctrl+C handling: abort running generation via cancellation token
   process.on("SIGINT", () => {
