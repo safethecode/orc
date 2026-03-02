@@ -84,7 +84,7 @@ export class LayoutManager {
 
   // Multi-agent HUD tracking
   private projectPath = process.cwd();
-  private activeWorkers: Map<string, { state: AgentState; model: string; startedAt: number }> = new Map();
+  private activeWorkers: Map<string, { state: AgentState; model: string; startedAt: number; lastTool: string }> = new Map();
   private completedCount = 0;
   private totalSubtasks = 0;
 
@@ -260,13 +260,17 @@ export class LayoutManager {
   }
 
   workerStarted(name: string, model: string): void {
-    this.activeWorkers.set(name, { state: "thinking", model, startedAt: Date.now() });
+    this.activeWorkers.set(name, { state: "thinking", model, startedAt: Date.now(), lastTool: "" });
     this.renderHUD();
   }
 
-  workerUpdate(name: string, state: AgentState): void {
+  workerUpdate(name: string, state: AgentState, tool?: string): void {
     const w = this.activeWorkers.get(name);
-    if (w) { w.state = state; this.renderHUD(); }
+    if (w) {
+      w.state = state;
+      if (tool) w.lastTool = tool;
+      this.renderHUD();
+    }
   }
 
   workerDone(name: string): void {
@@ -357,10 +361,11 @@ export class LayoutManager {
         const icon = w.state === "thinking" ? "◉" : w.state === "streaming" ? "▸" : w.state === "tool_use" ? "⚡" : "○";
         const color = w.state === "thinking" ? FG_YELLOW : w.state === "streaming" ? FG_GREEN : FG_CYAN;
         const elapsed = Math.round((Date.now() - w.startedAt) / 1000);
-        const part = `${color}${icon} ${name}${RESET}${FG_DIM}(${w.model}) ${elapsed}s${RESET}`;
-        const partW = 2 + name.length + 1 + w.model.length + 2 + String(elapsed).length + 1;
+        const activity = w.lastTool ? ` ${w.lastTool}` : "";
+        const part = `${color}${icon} ${name}${RESET}${FG_DIM}(${w.model})${activity} ${elapsed}s${RESET}`;
+        const partW = 2 + name.length + 1 + w.model.length + 1 + activity.length + 1 + String(elapsed).length + 1;
         parts.push(part);
-        partsW += partW + 3; // " │ " separator
+        partsW += partW + 3;
       }
       middle = `  │  ${parts.join(`${FG_DIM} │ ${RESET}`)}`;
       middleW = 5 + partsW;

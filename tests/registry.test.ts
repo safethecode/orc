@@ -106,7 +106,7 @@ describe("AgentRegistry", () => {
 
     const coder = registry.get("coder")!;
     expect(coder.provider).toBe("claude");
-    expect(coder.model).toBe("opus");
+    expect(coder.model).toBe("sonnet");
     expect(coder.role).toBe("Software Engineer");
 
     // All profiles have required fields

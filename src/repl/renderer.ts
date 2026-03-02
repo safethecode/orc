@@ -266,6 +266,27 @@ export function toolUse(name: string, detail?: string, insideBox = false): void 
   }
 }
 
+// ── Worker Activity (multi-agent visibility) ─────────────────────────
+
+const TOOL_ICONS: Record<string, string> = {
+  Read: "📖", Edit: "✏️", Write: "📝", Bash: "⚡", Grep: "🔍",
+  Glob: "📁", WebFetch: "🌐", WebSearch: "🌐", Task: "🤖",
+};
+
+export function workerToolUse(agentName: string, toolName: string, detail?: string): void {
+  const icon = TOOL_ICONS[toolName] ?? "▸";
+  const file = detail?.split("/").pop() ?? "";
+  const label = file ? `${toolName} ${file}` : toolName;
+  writeInScrollRegion(`  ${DIM}${CYAN}${agentName}${RESET} ${icon} ${DIM}${label}${RESET}`);
+  layoutManager?.workerUpdate(agentName, "tool_use");
+}
+
+export function workerFileChange(agentName: string, action: string, filePath: string): void {
+  const file = filePath.split("/").pop() ?? filePath;
+  const color = action === "Edit" ? YELLOW : action === "Write" ? GREEN : WHITE;
+  writeInScrollRegion(`  ${DIM}${CYAN}${agentName}${RESET} ${color}${action}${RESET} ${BOLD}${file}${RESET}`);
+}
+
 // ── Cost / Stats ─────────────────────────────────────────────────────
 
 export function cost(usd: number, inputTokens: number, outputTokens: number, durationMs?: number): void {

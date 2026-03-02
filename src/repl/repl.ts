@@ -1997,6 +1997,7 @@ async function executeSubtask(
     streamer.on("text_complete", () => {
       if (boxOpen) { renderer.endBox(); boxOpen = false; }
       renderer.startSpinner(agentName, modelTier);
+      lm?.workerUpdate(agentName, "thinking");
     });
     streamer.on("usage", (usage: { costUsd: number }) => {
       renderer.updateCostLive(usage.costUsd);
@@ -2007,11 +2008,16 @@ async function executeSubtask(
         ?? (tool.input?.command as string)
         ?? (tool.input?.pattern as string)
         ?? undefined;
+      // Always show agent-prefixed activity line for multi-agent visibility
+      renderer.workerToolUse(agentName, tool.name, detail);
+      // Highlight file modifications
+      if ((tool.name === "Edit" || tool.name === "Write") && tool.input?.file_path) {
+        renderer.workerFileChange(agentName, tool.name, tool.input.file_path as string);
+      }
       if (boxOpen) {
         renderer.toolUse(tool.name, detail, true);
-      } else {
-        renderer.updateSpinner(`${tool.name} ${detail ? detail.split("/").pop() : ""}`.trim());
       }
+      lm?.workerUpdate(agentName, "tool_use", tool.name);
     });
 
     streamer.on("error", (msg: string) => {
