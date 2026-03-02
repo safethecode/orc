@@ -60,9 +60,10 @@ function isConversational(prompt: string): boolean {
   return false;
 }
 
+const CLASSIFY_TIMEOUT_MS = 10_000; // 10s max — kill if stuck
+
 /**
- * Use Sam (haiku) to classify a prompt as development or conversation.
- * Falls back to regex-based classification on failure.
+ * Use Sam (haiku) to classify a prompt via LLM with timeout.
  */
 export async function classifyWithSam(prompt: string): Promise<Classification> {
   const classifyPrompt = [
@@ -82,12 +83,21 @@ export async function classifyWithSam(prompt: string): Promise<Classification> {
       { stdout: "pipe", stderr: "pipe", stdin: "ignore" },
     );
 
-    const output = await new Response(proc.stdout).text();
-    const exitCode = await proc.exited;
-    if (exitCode !== 0) throw new Error("non-zero exit");
+    // Race: LLM response vs timeout (both stdout AND exited inside the race)
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        try { proc.kill(); } catch {}
+        reject(new Error(`classify timeout (${CLASSIFY_TIMEOUT_MS}ms)`));
+      }, CLASSIFY_TIMEOUT_MS),
+    );
+
+    const output = await Promise.race([
+      new Response(proc.stdout).text(),
+      timeout,
+    ]);
 
     const jsonMatch = output.match(/\{[^}]+\}/);
-    if (!jsonMatch) throw new Error("no JSON in output");
+    if (!jsonMatch) throw new Error(`no JSON in output: ${output.slice(0, 100)}`);
 
     const parsed = JSON.parse(jsonMatch[0]);
     const type = parsed.type === "development" ? "development" : "conversation";
@@ -98,13 +108,14 @@ export async function classifyWithSam(prompt: string): Promise<Classification> {
       agent = parsed.agent === "architect" ? "architect" : "coder";
     }
 
-    return { type, agent, reason: `Sam classified: ${type} → ${agent}` };
-  } catch {
-    // Fallback to regex
-    if (isConversational(prompt)) {
-      return { type: "conversation", agent: "Sam", reason: "fallback: regex → conversation" };
+    return { type, agent, reason: `Sam: ${type} → ${agent}` };
+  } catch (e) {
+    const errMsg = (e as Error).message;
+    // Fallback: short prompts → chat, long → coder
+    if (prompt.length < 80) {
+      return { type: "conversation", agent: "Sam", reason: `fallback (${errMsg})` };
     }
-    return { type: "development", agent: "coder", reason: "fallback: regex → development" };
+    return { type: "development", agent: "coder", reason: `fallback (${errMsg})` };
   }
 }
 
