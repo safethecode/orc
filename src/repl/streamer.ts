@@ -133,6 +133,12 @@ export class AgentStreamer extends EventEmitter {
       reader.releaseLock();
     }
 
+    // If aborted, proc is already killed and nulled — skip stderr/exit handling
+    if (this.aborted || !this.proc) {
+      this.emit("exit", result);
+      return result;
+    }
+
     // Capture stderr for error reporting (stderr gets 2/3 of budget)
     const rawStderr = await new Response(this.proc.stderr as ReadableStream<Uint8Array>).text();
     const stderrText = truncateOutput(rawStderr, Math.floor(MAX_OUTPUT_BYTES * 0.67));
