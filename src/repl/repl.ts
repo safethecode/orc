@@ -6,6 +6,7 @@ import type { OrchestratorConfig, AgentProfile, ModelTier, SubTask, ProviderName
 import { routeTask, suggestAgent, classifyWithSam, type RouteResult, type Classification } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
+import { buildDynamicHarnessAsync } from "../agents/dynamic-harness.ts";
 import { AgentStreamer, type ToolUseEvent, type StreamResult } from "./streamer.ts";
 import { Conversation } from "./conversation.ts";
 import { isCommand, handleCommand, COMMANDS, LANGUAGES } from "./commands.ts";
@@ -1756,7 +1757,58 @@ async function handleMultiAgent(
     }
   }
 
-  // 7. QA recurring issue detection
+  // 7. QA Agent — final verification phase
+  if (decomposition.subtasks.length > 1 && !cancellation.cancelled) {
+    const allResults = collector.getAllResults();
+    const resultSections = allResults.map(r =>
+      `### ${r.agentName} (${r.role})\n${r.result}`
+    ).join("\n\n---\n\n");
+
+    const qaPrompt = [
+      `## Original User Request`,
+      input,
+      ``,
+      `## Completed Phase Results`,
+      resultSections,
+      ``,
+      `Verify the original request was fully achieved. Read actual files, run commands/tests. End with [QA:PASS] or [QA:FAIL reason="..."].`,
+    ].join("\n");
+
+    const qaSubtask: SubTask = {
+      id: `st-qa-${Date.now().toString(36)}`,
+      prompt: qaPrompt,
+      parentTaskId: decomposition.subtasks[0].parentTaskId,
+      dependencies: decomposition.subtasks.map(st => st.id),
+      provider: "claude",
+      model: "sonnet",
+      agentRole: "qa",
+      priority: 999,
+      status: "queued",
+      result: null,
+      estimatedTokens: 20000,
+      actualTokens: 0,
+      startedAt: null,
+      completedAt: null,
+    };
+
+    renderer.phaseHeader("qa", 1, false);
+    await executeSubtask(qaSubtask, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator);
+
+    // Check QA verdict
+    const qaResult = collector.getAllResults().find(r => r.role === "qa");
+    if (qaResult) {
+      const passed = /\[QA:PASS\]/.test(qaResult.result);
+      const failMatch = qaResult.result.match(/\[QA:FAIL\s+reason="([^"]+)"\]/);
+      if (passed) {
+        renderer.info("\x1b[32m[QA:PASS]\x1b[0m All requirements verified.");
+      } else {
+        const reason = failMatch?.[1] ?? "Requirements not met";
+        renderer.info(`\x1b[31m[QA:FAIL]\x1b[0m ${reason}`);
+      }
+    }
+  }
+
+  // 7b. QA recurring issue detection
   const recurring = detectRecurringIssues(qaHistory, DEFAULT_QA_CONFIG.recurringIssueThreshold);
   if (recurring.length > 0) {
     renderer.riskAssessment(recurring.map(r => `recurring: [${r.severity}] ${r.description}`));
@@ -1890,13 +1942,15 @@ async function executeSubtask(
     enrichedPrompt = subtask.prompt;
   }
 
-  // System prompt from harness
-  const harness = buildHarness({
+  // System prompt from dynamic harness (role-aware task type + project context)
+  const harness = await buildDynamicHarnessAsync({
     agentName,
     role: subtask.agentRole as import("../config/types.ts").AgentRole,
     provider: subtask.provider as import("../config/types.ts").ProviderName,
     parentTaskId: subtask.parentTaskId,
     isWorker: true,
+    projectDir: process.cwd(),
+    prompt: enrichedPrompt,
   });
   let systemPrompt = harness.systemPrompt;
   systemPrompt += `\n\nYou are working in the project at: ${process.cwd()}`;
@@ -1979,6 +2033,7 @@ async function executeSubtask(
       model: currentModel,
       systemPrompt,
       mcpConfig: mcpConfigPath,
+      workdir: process.cwd(),
     });
 
     const streamer = new AgentStreamer();

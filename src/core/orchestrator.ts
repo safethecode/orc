@@ -685,6 +685,7 @@ export class Orchestrator {
       model: profile.model,
       systemPrompt: profile.systemPrompt,
       maxTurns: profile.maxTurns,
+      workdir: process.cwd(),
     });
 
     const session = await this.sessionManager.spawnSession(profile, command.join(" "));

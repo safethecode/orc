@@ -82,7 +82,7 @@ export function buildCommand(
   }
 
   if (options.workdir) {
-    cmd = ["sh", "-c", `cd ${options.workdir} && ${cmd.join(" ")}`];
+    cmd = ["sh", "-c", `cd '${options.workdir.replace(/'/g, "'\\''")}' && ${cmd.join(" ")}`];
   }
 
   return cmd;
