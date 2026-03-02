@@ -45,7 +45,6 @@ export async function startRepl(
   const planMode = new PlanMode();
   const fileRef = new FileRefResolver(process.cwd());
   fileRef.warmCache().catch(() => {});
-  const filePicker = new FilePicker(fileRef);
   const forkManager = new SessionForkManager();
   const inputHandler = orchestrator.getInputHandler();
   let currentStreamer: AgentStreamer | null = null;
@@ -108,16 +107,13 @@ export async function startRepl(
     },
   });
 
+  const filePicker = new FilePicker(fileRef, rl);
+
   // ── Inline ghost hint for / commands ─────────────────────────────
   // Writes dim text AFTER the cursor on the SAME line. No \n ever.
   // Truncated to terminal width so it never wraps.
   let promptActive = false;
   const PROMPT_VIS = 2; // visible width of "❯ "
-
-  const getPickerLayout = () => {
-    const ls = layout.getLayout();
-    return ls.scrollBottom > 0 ? { scrollBottom: ls.scrollBottom, cols: ls.cols } : null;
-  };
 
   process.stdin.on("keypress", (_str: string | undefined, key: { name?: string }) => {
     if (!promptActive) return;
@@ -125,7 +121,7 @@ export async function startRepl(
     // On enter: clean up picker if active
     if (key?.name === "return" || key?.name === "enter") {
       if (filePicker.isActive()) {
-        filePicker.clearRender(getPickerLayout);
+        filePicker.clearRender();
         filePicker.deactivate();
       }
       return;
@@ -140,12 +136,12 @@ export async function startRepl(
         const atIdx = filePicker.getAtIndex();
         // User backspaced past @ or deleted it
         if (cursor <= atIdx || line[atIdx] !== "@") {
-          filePicker.clearRender(getPickerLayout);
+          filePicker.clearRender();
           filePicker.deactivate();
         } else {
           const query = line.slice(atIdx + 1, cursor);
           filePicker.updateQuery(query);
-          filePicker.render(getPickerLayout);
+          filePicker.render();
         }
         return; // Skip ghost hint when picker active
       }
@@ -158,7 +154,7 @@ export async function startRepl(
         if (!/\s/.test(query)) {
           filePicker.activate(lastAt);
           filePicker.updateQuery(query);
-          filePicker.render(getPickerLayout);
+          filePicker.render();
           return; // Skip ghost hint
         }
       }
@@ -204,12 +200,12 @@ export async function startRepl(
       if (filePicker.isActive() && promptActive) {
         if (key?.name === "up") {
           filePicker.moveSelection(-1);
-          filePicker.render(getPickerLayout);
+          filePicker.render();
           return;
         }
         if (key?.name === "down") {
           filePicker.moveSelection(1);
-          filePicker.render(getPickerLayout);
+          filePicker.render();
           return;
         }
         if (key?.name === "tab") {
@@ -223,12 +219,12 @@ export async function startRepl(
             (rl as any).cursor = atIdx + 1 + selected.path.length + 1;
             (rl as any)._refreshLine();
           }
-          filePicker.clearRender(getPickerLayout);
+          filePicker.clearRender();
           filePicker.deactivate();
           return;
         }
         if (key?.name === "escape") {
-          filePicker.clearRender(getPickerLayout);
+          filePicker.clearRender();
           filePicker.deactivate();
           return;
         }
@@ -369,14 +365,14 @@ export async function startRepl(
           promptActive = false;
           renderer.setPromptActive(false);
           if (filePicker.isActive()) {
-            filePicker.clearRender(getPickerLayout);
+            filePicker.clearRender();
             filePicker.deactivate();
           }
         } catch {
           promptActive = false;
           renderer.setPromptActive(false);
           if (filePicker.isActive()) {
-            filePicker.clearRender(getPickerLayout);
+            filePicker.clearRender();
             filePicker.deactivate();
           }
           break;

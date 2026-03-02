@@ -9,18 +9,15 @@ interface PickerState {
   renderedLines: number;
 }
 
-interface LayoutInfo {
-  scrollBottom: number;
-  cols: number;
-}
-
 export class FilePicker {
   private state: PickerState;
   private resolver: FileRefResolver;
   private maxResults = 5;
+  private rl: any; // readline interface, for _refreshLine after clear
 
-  constructor(resolver: FileRefResolver) {
+  constructor(resolver: FileRefResolver, rl?: any) {
     this.resolver = resolver;
+    this.rl = rl;
     this.state = {
       active: false,
       query: "",
@@ -62,7 +59,6 @@ export class FilePicker {
       return;
     }
     this.state.results = this.resolver.searchSync(query, this.maxResults);
-    // Keep selection in bounds
     if (this.state.selected >= this.state.results.length) {
       this.state.selected = Math.max(0, this.state.results.length - 1);
     }
@@ -79,32 +75,52 @@ export class FilePicker {
     return this.state.results[this.state.selected];
   }
 
-  render(getLayout: () => LayoutInfo | null): void {
+  /**
+   * Render picker results ABOVE the readline prompt using relative cursor movement.
+   * Uses \x1b7/\x1b8 (save/restore) and \x1b[nA (move up) so we don't need
+   * to know the absolute row of the prompt.
+   *
+   * Layout (bottom-up, selected item closest to prompt):
+   *   ...previous output...
+   *   result 5              ← top of picker (furthest from prompt)
+   *   result 4
+   *   result 3
+   *   result 2
+   *   result 1 (selected)   ← just above prompt
+   *   ❯ @query|             ← readline prompt (cursor here)
+   */
+  render(): void {
     if (!this.state.active) return;
 
-    const layoutInfo = getLayout();
-    if (!layoutInfo) return;
-
-    const { scrollBottom, cols } = layoutInfo;
     const results = this.state.results;
     const numResults = results.length;
 
-    // Nothing to show: clear any previous render
     if (numResults === 0) {
-      this.clearRender(getLayout);
+      this.clearRender();
       return;
     }
 
-    // Render results above the status bar (bottom of scroll region)
-    const startRow = scrollBottom - numResults + 1;
-    if (startRow < 1) return;
+    const cols = process.stdout.columns || 80;
 
-    let buf = "\x1b7"; // save cursor
+    // First clear any previously rendered lines (if count differs)
+    if (this.state.renderedLines > 0 && this.state.renderedLines !== numResults) {
+      this.clearRender();
+    }
 
+    let buf = "\x1b7"; // save cursor position
+
+    // Move up N lines from prompt
+    buf += `\x1b[${numResults}A`;
+
+    // Render results top-to-bottom (index 0 = top of picker)
+    // Reverse order: last result at top, first (selected=0) closest to prompt
     for (let i = 0; i < numResults; i++) {
-      const row = startRow + i;
-      const result = results[i];
-      const isSelected = i === this.state.selected;
+      // Map: top of picker = results[numResults-1-i] visually
+      // But simpler: just render results[i] at line i (top to bottom)
+      // with selected closest to prompt (bottom of picker)
+      const resultIdx = numResults - 1 - i;
+      const result = results[resultIdx];
+      const isSelected = resultIdx === this.state.selected;
 
       const maxPathLen = cols - 6;
       const displayPath = result.path.length > maxPathLen
@@ -115,33 +131,39 @@ export class FilePicker {
         ? `  \x1b[7m ${displayPath} \x1b[0m`
         : `   \x1b[2m${displayPath}\x1b[0m`;
 
-      buf += `\x1b[${row};1H\x1b[2K${line}`;
+      buf += `\x1b[2K${line}`; // clear line + write
+      if (i < numResults - 1) buf += "\x1b[B"; // move down (except last)
     }
 
-    buf += "\x1b8"; // restore cursor
+    buf += "\x1b8"; // restore cursor to prompt
     this.state.renderedLines = numResults;
 
     process.stdout.write(buf);
   }
 
-  clearRender(getLayout: () => LayoutInfo | null): void {
-    if (this.state.renderedLines === 0) return;
-
-    const layoutInfo = getLayout();
-    if (!layoutInfo) return;
-
-    const { scrollBottom } = layoutInfo;
+  clearRender(): void {
     const numLines = this.state.renderedLines;
-    const startRow = scrollBottom - numLines + 1;
-    if (startRow < 1) return;
+    if (numLines === 0) return;
 
     let buf = "\x1b7"; // save cursor
+
+    // Move up to the top of the picker
+    buf += `\x1b[${numLines}A`;
+
+    // Clear each line
     for (let i = 0; i < numLines; i++) {
-      buf += `\x1b[${startRow + i};1H\x1b[2K`;
+      buf += "\x1b[2K"; // clear line
+      if (i < numLines - 1) buf += "\x1b[B"; // move down
     }
+
     buf += "\x1b8"; // restore cursor
     this.state.renderedLines = 0;
 
     process.stdout.write(buf);
+
+    // Force readline to redraw its prompt (may have been visually disturbed)
+    if (this.rl?._refreshLine) {
+      this.rl._refreshLine();
+    }
   }
 }
