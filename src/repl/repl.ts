@@ -359,6 +359,19 @@ export async function startRepl(
   // Delegate keypress events to layout manager when not at readline prompt
   process.stdin.on("keypress", (str: string | undefined, key: { name?: string; ctrl?: boolean; meta?: boolean; shift?: boolean; sequence?: string }) => {
     if (!promptActive && layout.isInAgentMode()) {
+      // ESC → abort running agent immediately
+      if (key?.name === "escape") {
+        if (currentCancellation && !currentCancellation.cancelled) {
+          currentCancellation.cancel();
+        }
+        if (currentStreamer?.isRunning) {
+          currentStreamer.abort();
+        }
+        renderer.notifyIdle();
+        process.stdout.write("\n");
+        renderer.info("Generation aborted.");
+        return;
+      }
       layout.handleKeypress(str, key);
     }
   });
@@ -1013,17 +1026,6 @@ async function handleNaturalInput(
 
     // Real-time streaming: open box on first content, stream into it
     streamer.on("text_delta", (delta: string) => {
-      // ESC abort during text streaming
-      if (layout && layout.getEscapePressed()) {
-        layout.clearEscapePressed();
-        renderer.stopSpinner();
-        if (boxOpen) { renderer.endBox(); boxOpen = false; }
-        streamer.abort();
-        renderer.notifyIdle();
-        process.stdout.write("\n");
-        renderer.info("Generation aborted.");
-        return;
-      }
       if (!boxOpen) {
         renderer.stopSpinner();
         renderer.startBox(route.model);
@@ -1071,18 +1073,6 @@ async function handleNaturalInput(
         renderer.stopSpinner();
         if (boxOpen) { renderer.endBox(); boxOpen = false; }
         streamer.abort();
-        return;
-      }
-
-      // ESC abort: if user pressed ESC while agent is working, abort immediately
-      if (layout && layout.getEscapePressed()) {
-        layout.clearEscapePressed();
-        renderer.stopSpinner();
-        if (boxOpen) { renderer.endBox(); boxOpen = false; }
-        streamer.abort();
-        renderer.notifyIdle();
-        process.stdout.write("\n");
-        renderer.info("Generation aborted.");
         return;
       }
 

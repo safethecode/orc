@@ -87,9 +87,6 @@ export class LayoutManager {
   private inputCursor = 0;
   private messageQueue: string[] = [];
 
-  // ESC abort flag
-  private escapePressed = false;
-
   // Resize debounce
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -245,12 +242,6 @@ export class LayoutManager {
 
     // Ctrl+C — don't handle, let SIGINT propagate
     if (key.ctrl && key.name === "c") return;
-
-    // ESC — signal agent abort
-    if (key.name === "escape") {
-      this.escapePressed = true;
-      return;
-    }
 
     // Enter — queue the message
     if (key.name === "return") {
@@ -435,14 +426,6 @@ export class LayoutManager {
 
   getQueuedCount(): number {
     return this.messageQueue.length;
-  }
-
-  getEscapePressed(): boolean {
-    return this.escapePressed;
-  }
-
-  clearEscapePressed(): void {
-    this.escapePressed = false;
   }
 
   /** Drain all queued messages without exiting agent mode */
