@@ -15,7 +15,7 @@ import { notify } from "../utils/notifications.ts";
 import { RolloutRecorder } from "../session/rollout.ts";
 import { eventBus } from "../core/events.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
-import { decompose } from "../core/decomposer.ts";
+import { decompose, decomposeWithSam } from "../core/decomposer.ts";
 import { ResultCollector } from "../core/result-collector.ts";
 import { ContextPropagator } from "../core/context-propagator.ts";
 import { scoutSkills, type ScoutResult } from "./skill-scout.ts";
@@ -1575,8 +1575,9 @@ async function handleMultiAgent(
 ): Promise<void> {
   const taskId = `repl-${Date.now().toString(36)}`;
 
-  // 1. Decompose
-  const decomposition = decompose(input, taskId);
+  // 1. Decompose via Sam (haiku) — falls back to regex-based decomposition
+  renderer.info(`\x1b[2m🏷 Sam is decomposing task...\x1b[0m`);
+  const decomposition = await decomposeWithSam(input, taskId);
 
   // Single subtask fallback → run as normal single agent
   if (decomposition.subtasks.length <= 1) {
@@ -1691,8 +1692,9 @@ async function handleMultiAgent(
     renderer.riskAssessment(prediction.risks.map(r => `${r.likelihood}: ${r.description}`));
   }
 
-  // 4. Show plan
+  // 4. Show plan + init HUD tracking
   renderer.planSummary(decomposition.subtasks, decomposition.executionPlan);
+  renderer.getLayoutManager()?.setSubtaskCount(decomposition.subtasks.length);
   eventBus.publish({
     type: "supervisor:plan",
     taskId,
@@ -1831,6 +1833,10 @@ async function executeSubtask(
 
   renderer.agentHeader(agentName, modelTier, subtask.agentRole);
   renderer.startSpinner(agentName, modelTier);
+
+  // Track in HUD
+  const lm = renderer.getLayoutManager();
+  lm?.workerStarted(agentName, modelTier);
 
   // Register with WorkerBus for inter-agent communication
   workerBus.registerWorker({
@@ -2085,6 +2091,7 @@ async function executeSubtask(
       }
 
       workerBus.unregisterWorker(agentName);
+      lm?.workerDone(agentName);
       orchestrator.getRuntimeFallback().resetAttempts(agentName);
       return; // Success — exit retry loop
     } catch (e) {
@@ -2115,6 +2122,7 @@ async function executeSubtask(
   }
 
   workerBus.unregisterWorker(agentName);
+  lm?.workerDone(agentName);
 }
 
 // ── /optimize Command Handler ──────────────────────────────────────

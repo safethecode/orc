@@ -16,6 +16,7 @@ const DOMAIN_PATTERNS: Record<string, RegExp> = {
 
 // Role mapping by domain
 const DOMAIN_ROLE_MAP: Record<string, AgentRole> = {
+  implementation: "coder",
   frontend: "coder",
   backend: "coder",
   database: "coder",
@@ -33,10 +34,17 @@ const DEPENDENCY_RULES: Array<{ before: string; after: string }> = [
   { before: "auth", after: "backend" },
   { before: "auth", after: "frontend" },
   { before: "database", after: "auth" },
+  { before: "implementation", after: "testing" },
   { before: "frontend", after: "testing" },
   { before: "backend", after: "testing" },
   { before: "testing", after: "docs" },
 ];
+
+// Domains that always need a coder companion — they can't work alone
+const NEEDS_CODER_COMPANION = new Set(["testing", "docs", "security"]);
+
+// Generic implementation domain for when no specific domain matches
+const GENERIC_IMPL_DOMAIN = "implementation";
 
 export function detectDomains(prompt: string): string[] {
   const domains: string[] = [];
@@ -45,7 +53,15 @@ export function detectDomains(prompt: string): string[] {
       domains.push(domain);
     }
   }
-  return domains.length > 0 ? domains : ["backend"]; // default to backend
+  if (domains.length === 0) return [GENERIC_IMPL_DOMAIN];
+
+  // If only non-implementation domains detected, add a coder domain
+  const hasCoder = domains.some(d => !NEEDS_CODER_COMPANION.has(d));
+  if (!hasCoder) {
+    domains.unshift(GENERIC_IMPL_DOMAIN);
+  }
+
+  return domains;
 }
 
 export function inferRole(domains: string[]): AgentRole {
@@ -255,4 +271,109 @@ export function decompose(
   });
 
   return { subtasks, executionPlan: plan, estimatedTotalCost: 0 };
+}
+
+// ── LLM-based decomposition via Sam (haiku) ───────────────────────
+
+interface SamDecomposition {
+  subtasks: Array<{
+    role: string;   // "coder" | "tester" | "architect" | "reviewer"
+    prompt: string; // what this agent should do
+    dependsOn?: number[]; // indices of subtasks this depends on
+  }>;
+}
+
+/**
+ * Use Sam (haiku) to decompose a task into subtasks with roles and dependencies.
+ * Falls back to regex-based decompose() on failure.
+ */
+export async function decomposeWithSam(
+  prompt: string,
+  parentTaskId: string,
+): Promise<DecompositionResult> {
+  const classifyPrompt = [
+    `You are a task decomposer. Break this task into subtasks for a multi-agent system.`,
+    `Available agent roles: "coder" (implements code), "tester" (writes/runs tests), "architect" (designs systems), "reviewer" (reviews code/security).`,
+    `Reply with ONLY a JSON object:`,
+    `{"subtasks":[{"role":"coder","prompt":"what to do","dependsOn":[]}]}`,
+    `Rules:`,
+    `- Each subtask has a "role", "prompt" (specific instruction), and optional "dependsOn" (array of 0-based indices)`,
+    `- If testing is needed, always include a coder subtask first with implementation`,
+    `- Keep subtask prompts specific and actionable`,
+    `- Use dependsOn to order: implementation before testing, design before implementation`,
+    `- 1-4 subtasks max`,
+    ``,
+    `Task: ${prompt}`,
+  ].join("\n");
+
+  try {
+    const proc = Bun.spawn(
+      ["claude", "-p", classifyPrompt, "--model", "haiku", "--output-format", "text"],
+      { stdout: "pipe", stderr: "pipe", stdin: "ignore" },
+    );
+
+    const output = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) throw new Error("non-zero exit");
+
+    const jsonMatch = output.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("no JSON in output");
+
+    const parsed: SamDecomposition = JSON.parse(jsonMatch[0]);
+    if (!parsed.subtasks || parsed.subtasks.length === 0) throw new Error("empty subtasks");
+
+    // Convert to SubTask[]
+    const subtasks: SubTask[] = [];
+    const subtaskMeta: Array<{ id: string; domain: string }> = [];
+
+    for (let i = 0; i < parsed.subtasks.length; i++) {
+      const st = parsed.subtasks[i];
+      const id = `st-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}-${i}`;
+      const role = (["coder", "tester", "architect", "reviewer"].includes(st.role) ? st.role : "coder") as AgentRole;
+
+      subtaskMeta.push({ id, domain: role });
+      subtasks.push({
+        id,
+        prompt: st.prompt,
+        parentTaskId,
+        dependencies: [],
+        provider: "claude",
+        model: role === "architect" ? "opus" : "sonnet",
+        agentRole: role,
+        priority: i + 1,
+        status: INITIAL_STATUS,
+        result: null,
+        estimatedTokens: 15000,
+        actualTokens: 0,
+        startedAt: null,
+        completedAt: null,
+      });
+    }
+
+    // Build dependencies from Sam's dependsOn indices
+    const deps = new Map<string, string[]>();
+    for (let i = 0; i < subtasks.length; i++) {
+      const samDeps = parsed.subtasks[i].dependsOn ?? [];
+      deps.set(subtasks[i].id, samDeps
+        .filter(idx => idx >= 0 && idx < subtasks.length && idx !== i)
+        .map(idx => subtasks[idx].id));
+    }
+    for (const st of subtasks) {
+      st.dependencies = deps.get(st.id) ?? [];
+    }
+
+    const plan = buildExecutionPlan(subtasks, deps);
+
+    eventBus.publish({
+      type: "supervisor:decompose",
+      taskId: parentTaskId,
+      subtaskCount: subtasks.length,
+      strategy: plan.strategy,
+    });
+
+    return { subtasks, executionPlan: plan, estimatedTotalCost: 0 };
+  } catch {
+    // Fallback to regex-based decomposition
+    return decompose(prompt, parentTaskId);
+  }
 }

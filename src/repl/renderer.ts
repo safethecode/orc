@@ -32,6 +32,10 @@ export function setLayoutManager(lm: LayoutManager): void {
   layoutManager = lm;
 }
 
+export function getLayoutManager(): LayoutManager | null {
+  return layoutManager;
+}
+
 export function setPromptActive(active: boolean): void {
   _promptActive = active;
 }

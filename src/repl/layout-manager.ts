@@ -65,8 +65,8 @@ interface KeyInfo {
 
 // ── LayoutManager ───────────────────────────────────────────────────
 
-const MIN_ROWS = 8;
-const RESERVED_ROWS = 2; // status bar + input line
+const MIN_ROWS = 10;
+const RESERVED_ROWS = 3; // HUD row + status bar + input line
 const PROMPT_STR = "❯ ";
 const PROMPT_W = 2; // visible width of "❯ "
 
@@ -81,6 +81,12 @@ export class LayoutManager {
   private costSoFar = 0;
   private elapsedStart = 0;
   private statusTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Multi-agent HUD tracking
+  private projectPath = process.cwd();
+  private activeWorkers: Map<string, { state: AgentState; model: string; startedAt: number }> = new Map();
+  private completedCount = 0;
+  private totalSubtasks = 0;
 
   // Input queuing during agent mode
   private inputBuffer = "";
@@ -104,7 +110,7 @@ export class LayoutManager {
       rows,
       cols,
       scrollBottom,
-      statusRow: rows - 1,
+      statusRow: rows - 2, // HUD row
       inputRow: rows,
     };
   }
@@ -122,6 +128,7 @@ export class LayoutManager {
     process.stdout.write(setScrollRegion(1, this.state.scrollBottom));
 
     // Draw initial chrome
+    this.renderHUD();
     this.renderStatusBar();
     this.renderInputHint();
 
@@ -130,7 +137,10 @@ export class LayoutManager {
 
     // Start status bar refresh timer (every second for elapsed time)
     this.statusTimer = setInterval(() => {
-      if (this.inAgentMode) this.renderStatusBar();
+      if (this.inAgentMode) {
+        this.renderHUD();
+        this.renderStatusBar();
+      }
     }, 1000);
   }
 
@@ -146,8 +156,9 @@ export class LayoutManager {
     // Reset scroll region to full terminal
     process.stdout.write(resetScrollRegion());
 
-    // Clear status and input rows
+    // Clear HUD, status, and input rows
     process.stdout.write(moveTo(this.state.statusRow, 1) + clearLine());
+    process.stdout.write(moveTo(this.state.statusRow + 1, 1) + clearLine());
     process.stdout.write(moveTo(this.state.inputRow, 1) + clearLine());
 
     // Move cursor to bottom
@@ -235,6 +246,35 @@ export class LayoutManager {
     this.renderStatusBar();
   }
 
+  // ── Multi-agent HUD tracking ─────────────────────────────────────
+
+  setProjectPath(path: string): void {
+    this.projectPath = path;
+    this.renderHUD();
+  }
+
+  setSubtaskCount(total: number): void {
+    this.totalSubtasks = total;
+    this.completedCount = 0;
+    this.renderHUD();
+  }
+
+  workerStarted(name: string, model: string): void {
+    this.activeWorkers.set(name, { state: "thinking", model, startedAt: Date.now() });
+    this.renderHUD();
+  }
+
+  workerUpdate(name: string, state: AgentState): void {
+    const w = this.activeWorkers.get(name);
+    if (w) { w.state = state; this.renderHUD(); }
+  }
+
+  workerDone(name: string): void {
+    this.activeWorkers.delete(name);
+    this.completedCount++;
+    this.renderHUD();
+  }
+
   // ── Keypress handling (agent mode input) ────────────────────────
 
   handleKeypress(str: string | undefined, key: KeyInfo): void {
@@ -296,10 +336,66 @@ export class LayoutManager {
 
   // ── Rendering ───────────────────────────────────────────────────
 
+  private renderHUD(): void {
+    if (!this.active) return;
+
+    const { statusRow, cols } = this.state;
+    const hudRow = statusRow; // top row of 2-row status area
+
+    // Left: project name
+    const projName = this.projectPath.split("/").pop() ?? "orc";
+    let left = `${FG_CYAN}${BOLD}  ${projName}${RESET}`;
+    let leftW = 2 + projName.length;
+
+    // Middle: active workers
+    let middle = "";
+    let middleW = 0;
+    if (this.activeWorkers.size > 0) {
+      const parts: string[] = [];
+      let partsW = 0;
+      for (const [name, w] of this.activeWorkers) {
+        const icon = w.state === "thinking" ? "◉" : w.state === "streaming" ? "▸" : w.state === "tool_use" ? "⚡" : "○";
+        const color = w.state === "thinking" ? FG_YELLOW : w.state === "streaming" ? FG_GREEN : FG_CYAN;
+        const elapsed = Math.round((Date.now() - w.startedAt) / 1000);
+        const part = `${color}${icon} ${name}${RESET}${FG_DIM}(${w.model}) ${elapsed}s${RESET}`;
+        const partW = 2 + name.length + 1 + w.model.length + 2 + String(elapsed).length + 1;
+        parts.push(part);
+        partsW += partW + 3; // " │ " separator
+      }
+      middle = `  │  ${parts.join(`${FG_DIM} │ ${RESET}`)}`;
+      middleW = 5 + partsW;
+    }
+
+    // Right: progress
+    let right = "";
+    let rightW = 0;
+    if (this.totalSubtasks > 0) {
+      const pct = Math.round((this.completedCount / this.totalSubtasks) * 100);
+      const progressText = `${this.completedCount}/${this.totalSubtasks} (${pct}%)`;
+      right = `${FG_DIM}${progressText}  ${RESET}`;
+      rightW = progressText.length + 2;
+    }
+
+    const padW = Math.max(0, cols - leftW - middleW - rightW);
+    const pad = " ".repeat(padW);
+    const hudLine = `${BG_GRAY}${left}${middle}${pad}${right}${RESET}`;
+
+    process.stdout.write(
+      SAVE +
+      HIDE_CURSOR +
+      moveTo(hudRow, 1) +
+      clearLine() +
+      hudLine +
+      SHOW_CURSOR +
+      RESTORE,
+    );
+  }
+
   private renderStatusBar(): void {
     if (!this.active) return;
 
     const { statusRow, cols } = this.state;
+    const barRow = statusRow + 1; // bottom row of 2-row status area
 
     // Build left side: state indicator + agent name
     let left: string;
@@ -347,7 +443,7 @@ export class LayoutManager {
     process.stdout.write(
       SAVE +
       HIDE_CURSOR +
-      moveTo(statusRow, 1) +
+      moveTo(barRow, 1) +
       clearLine() +
       statusLine +
       SHOW_CURSOR +
