@@ -24,6 +24,7 @@ const ROLE_TITLES: Record<AgentRole, string> = {
   tester: "Test Engineer",
   researcher: "Research Analyst",
   "spec-writer": "Specification Writer",
+  qa: "Quality Assurance Inspector",
 };
 
 const PROTOCOL_BLOCK = `## Output Protocol
@@ -47,6 +48,8 @@ const ROLE_CONSTRAINTS: Record<AgentRole, string> = {
     "Modify test files only. Report pass/fail with counts. MUST NOT modify production code.",
   architect:
     "Analyze full scope before proposing changes. Document design decisions. Prioritize backward compatibility.",
+  qa:
+    'Verify ALL claimed work by reading actual files and running commands. Do NOT trust agent summaries. End with [QA:PASS] or [QA:FAIL reason="..."].',
 };
 
 const PROVIDER_HINTS: Partial<Record<ProviderName, string>> = {

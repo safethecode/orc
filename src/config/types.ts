@@ -64,6 +64,7 @@ export interface SupervisorConfig {
   feedback?: FeedbackLoopConfig;
   workerBus?: { enabled: boolean; broadcastArtifacts: boolean };
   contextPropagation?: { enabled: boolean; includeCodebaseMap: boolean; includeMemory: boolean; maxContextTokens: number; summarizeSiblingResults: boolean };
+  qualityAgent?: { enabled: boolean };
 }
 
 export interface McpServerConfig {
@@ -600,7 +601,7 @@ export interface ProviderCapability {
 
 // ── Supervisor Types ────────────────────────────────────────────────
 
-export type AgentRole = "architect" | "coder" | "reviewer" | "tester" | "researcher" | "spec-writer";
+export type AgentRole = "architect" | "coder" | "reviewer" | "tester" | "researcher" | "spec-writer" | "qa";
 
 export interface SubTask {
   id: string;
