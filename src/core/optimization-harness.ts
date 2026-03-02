@@ -284,7 +284,7 @@ function buildPhases(finalTarget: number, initialMetric: number, lowerIsBetter: 
       parallelPaths: 3,
       maxRounds: 3,
       maxIterations: 15,
-      maxTurns: 8,
+      maxTurns: 5,
       focus: `GOAL: Reach ${Math.round(t1)} ${unit} (30% improvement from ${initialMetric}).
 STRATEGY: Basic structural optimizations — fix obvious inefficiencies first.
 KEY TECHNIQUES:
@@ -306,7 +306,7 @@ Focus on the BIGGEST wins with the LEAST risk. Do not attempt advanced technique
       parallelPaths: 4,
       maxRounds: 4,
       maxIterations: 20,
-      maxTurns: 10,
+      maxTurns: 6,
       focus: `GOAL: Reach ${Math.round(t2)} ${unit} (60% improvement).
 STRATEGY: Apply domain-specific optimizations revealed by the study phase.
 KEY TECHNIQUES:
@@ -328,7 +328,7 @@ Consult the domain reference above for available operations and their semantics.
       parallelPaths: 4,
       maxRounds: 5,
       maxIterations: 25,
-      maxTurns: 15,
+      maxTurns: 8,
       focus: `GOAL: Reach ${Math.round(t3)} ${unit} (85% improvement).
 STRATEGY: Deep optimizations using full domain knowledge.
 KEY TECHNIQUES:
@@ -350,7 +350,7 @@ Every optimization must be validated against the domain reference.`,
       parallelPaths: 5,
       maxRounds: 8,
       maxIterations: 25,
-      maxTurns: 15,
+      maxTurns: 8,
       focus: `GOAL: Reach the final target of ${finalTarget} ${unit}.
 STRATEGY: Micro-level optimization — every unit of the metric counts.
 KEY TECHNIQUES:
@@ -579,13 +579,25 @@ ${truncGolden}
   const selfCheck = buildSelfCheck(domainReference);
 
   parts.push(`
-## Rules
-1. Make ONE focused optimization per iteration
-2. NEVER modify test files
-3. Always maintain correctness — wrong results will be reverted
-4. Read the domain reference above BEFORE coding. Understand what operations exist.
-5. Before implementing, briefly state your strategy in one sentence starting with "Strategy:"
+## Iteration Protocol (follow EXACTLY every iteration)
+
+Step 1 — ANALYZE: Read the current code. Identify the single biggest bottleneck.
+  Write exactly: "BOTTLENECK: [specific location and why it costs performance]"
+
+Step 2 — PLAN: Propose ONE focused change with expected impact.
+  Write exactly: "PLAN: [what change] → expect [N] ${unit} improvement"
+
+Step 3 — IMPLEMENT: Make the change. One optimization only — never combine multiple.
+
+Step 4 — VERIFY: Run the test command. Check correctness and metric.
 ${selfCheck}
+
+## Rules
+- ONE optimization per iteration — combining changes makes failures undiagnosable
+- NEVER modify test files
+- Correctness is mandatory — broken results will be reverted
+- Consult the domain reference before using any operation
+- If a technique appears in Anti-Patterns below, DO NOT attempt it again
 
 Working in: ${config.workdir}
 Target file: ${config.targetFile}
@@ -605,53 +617,70 @@ function buildPhaseIterationPrompt(
   deliberation?: string,
   successPatterns?: SuccessPattern[],
   failurePatterns?: FailurePattern[],
+  reflection?: string,
 ): string {
   const lines: string[] = [];
 
-  lines.push(`## ${phase.name} — iteration ${iteration + 1}/${phase.maxIterations}`);
+  // ── Status (always shown) ──
+  lines.push(`## [Status] ${phase.name} — iteration ${iteration + 1}/${phase.maxIterations}`);
   lines.push(`Current: ${bestMetric} ${unit} → Target: ${phase.targetMetric} ${unit}`);
   lines.push("");
 
-  if (successPatterns && successPatterns.length > 0) {
-    lines.push("## Proven Techniques (these WORKED — build on them, don't undo them)");
-    for (const sp of successPatterns.slice(-8)) {
-      lines.push(`  ✓ ${sp.technique} (${sp.fromMetric} → ${sp.toMetric} ${unit})`);
-    }
+  // ── Deliberation (round-start strategy, iteration 0 only) ──
+  if (deliberation) {
+    lines.push("## [Plan] Strategy from deliberation");
+    lines.push(deliberation);
     lines.push("");
   }
 
+  // ── Reflection from last iteration ──
+  if (reflection) {
+    lines.push("## [Reflection] What happened last iteration");
+    lines.push(reflection);
+    lines.push("");
+  }
+
+  // ── Knowledge: failures — always shown (critical to avoid wasting iterations) ──
   if (failurePatterns && failurePatterns.length > 0) {
-    lines.push("## Anti-Patterns (DO NOT repeat — these already failed)");
-    for (const fp of failurePatterns.slice(-6)) {
+    lines.push("## [Knowledge] Anti-Patterns — DO NOT repeat these");
+    for (const fp of failurePatterns.slice(-8)) {
       lines.push(`  ✗ ${fp.technique} — ${fp.reason}`);
     }
     lines.push("");
   }
 
-  if (history.length > 0) {
-    lines.push("## Performance History");
-    for (const step of history.slice(-10)) {
-      const marker = step.improved ? "IMPROVED" : step.correct ? "no_gain" : "BROKEN";
+  // ── Knowledge: successes — shown after iteration 2 (let agent explore freely first) ──
+  if (iteration >= 2 && successPatterns && successPatterns.length > 0) {
+    lines.push("## [Knowledge] Proven Techniques — build on these, don't undo them");
+    for (const sp of successPatterns.slice(-6)) {
+      lines.push(`  ✓ ${sp.technique} (${sp.fromMetric} → ${sp.toMetric} ${unit})`);
+    }
+    lines.push("");
+  }
+
+  // ── History — condensed, shown after iteration 3 ──
+  if (iteration >= 3 && history.length > 0) {
+    lines.push("## [History] Recent attempts");
+    for (const step of history.slice(-5)) {
+      const marker = step.improved ? "✓" : step.correct ? "○" : "✗";
       lines.push(`  ${marker} iter ${step.iteration}: ${step.metric ?? "N/A"} ${unit} → ${step.action}`);
     }
     lines.push("");
   }
 
-  if (deliberation) {
-    lines.push(deliberation);
-    lines.push("");
-  }
-
+  // ── Observation (last test output) ──
   if (lastOutput) {
     const truncated = lastOutput.length > 2000 ? lastOutput.slice(-2000) : lastOutput;
-    lines.push("## Last Test Output");
+    lines.push("## [Observation] Last test output");
     lines.push("```");
     lines.push(truncated);
     lines.push("```");
     lines.push("");
   }
 
-  lines.push("Now implement the next optimization. State your strategy first, then implement it.");
+  // ── Action instruction ──
+  lines.push("Follow the Iteration Protocol: ANALYZE → PLAN → IMPLEMENT → VERIFY.");
+  lines.push("Start your response with BOTTLENECK: and PLAN: before writing any code.");
   return lines.join("\n");
 }
 
@@ -694,6 +723,7 @@ async function runExplorationPath(
 
   const pathConfig = { ...config, workdir: pathWorkdir };
   const systemPrompt = buildPhaseSystemPrompt(phase, domainReference, pathConfig, personality, prevPhaseCode, goldenCode);
+  let lastReflection: string | undefined;
 
   for (let iter = 0; iter < phase.maxIterations; iter++) {
     if (signal?.aborted) break;
@@ -703,6 +733,7 @@ async function runExplorationPath(
       config.lowerIsBetter, unit, lastTestOutput,
       iter === 0 ? deliberation : undefined,
       successPatterns, failurePatterns,
+      lastReflection,
     );
 
     const streamer = new AgentStreamer();
@@ -780,6 +811,18 @@ async function runExplorationPath(
       callbacks.onIterationComplete?.(pathIndex, step);
       if (bestCode) await restoreFile(pathWorkdir, config.targetFile, bestCode);
     }
+
+    // Build structured reflection for next iteration (Manus-inspired)
+    const bottleneckMatch = agentText.match(/BOTTLENECK:\s*(.+?)(?:\n|$)/i);
+    const planMatch = agentText.match(/PLAN:\s*(.+?)(?:\n|$)/i);
+    const reflParts: string[] = [];
+    if (bottleneckMatch) reflParts.push(`Identified bottleneck: ${bottleneckMatch[1].trim().slice(0, 150)}`);
+    if (planMatch) reflParts.push(`Planned: ${planMatch[1].trim().slice(0, 150)}`);
+    const lastStep = history[history.length - 1];
+    if (lastStep) {
+      reflParts.push(`Result: ${lastStep.metric ?? "N/A"} ${unit} — ${lastStep.improved ? "IMPROVED" : lastStep.correct ? "no gain, rolled back" : "BROKEN, rolled back"}`);
+    }
+    lastReflection = reflParts.length > 0 ? reflParts.join("\n") : undefined;
   }
 
   return { history, bestMetric, bestCode, successPatterns, failurePatterns };
@@ -1112,7 +1155,7 @@ export async function runOptimization(
       parallelPaths: 6,
       maxRounds: 6,
       maxIterations: 20,
-      maxTurns: 12,
+      maxTurns: 8,
       focus: `GOAL: FINAL PUSH — get from ${bestMetric} to ${fullConfig.lowerIsBetter ? "below" : "above"} ${fullConfig.target} ${unit}.
 You are ${gapPct}% away from the target. This is achievable.
 
