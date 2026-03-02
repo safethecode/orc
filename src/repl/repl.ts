@@ -744,12 +744,15 @@ async function handleNaturalInput(
     return;
   }
 
+  // Use the actual profile model for display, not the router tier
+  const displayModel = (profile.model as ModelTier) ?? route.model;
+
   // Publish event
-  eventBus.publish({ type: "agent:start", agent: agentName, tier: route.model, reason: route.reason });
+  eventBus.publish({ type: "agent:start", agent: agentName, tier: displayModel, reason: route.reason });
 
   // Show agent header + spinner immediately
-  renderer.agentHeader(agentName, route.model, route.reason);
-  renderer.startSpinner(agentName, route.model);
+  renderer.agentHeader(agentName, displayModel, route.reason);
+  renderer.startSpinner(agentName, displayModel);
 
   // Parallel Haiku scout: skill + MCP discovery (with cache)
   const skillIndex = orchestrator.getSkillIndex();
@@ -1030,7 +1033,7 @@ async function handleNaturalInput(
 
   const cmd = buildCommand(providerConfig, profile, {
     prompt: fullPrompt,
-    model: route.model,
+    model: profile.model,
     systemPrompt,
     maxTurns: profile.maxTurns,
     mcpConfig: mcpConfigPath,
@@ -1065,7 +1068,7 @@ async function handleNaturalInput(
           currentProviderConfig = config.providers[fb.provider] ?? currentProviderConfig;
           currentCmd = buildCommand(currentProviderConfig, currentProfile, {
             prompt: fullPrompt,
-            model: route.model,
+            model: currentProfile.model,
             systemPrompt,
             maxTurns: currentProfile.maxTurns,
             mcpConfig: mcpConfigPath,
@@ -1329,16 +1332,16 @@ async function handleNaturalInput(
         forkManager?.addTurn(interjectedTurn);
 
         // Rebuild prompt with new context and re-run
-        conversation.setTokenBudget(TIER_BUDGETS[route.model] ?? TIER_BUDGETS.sonnet);
+        conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? route.model] ?? TIER_BUDGETS.sonnet);
         const newPrompt = conversation.buildPrompt(userMsg);
         currentCmd = buildCommand(currentProviderConfig, currentProfile, {
           prompt: newPrompt,
-          model: route.model,
+          model: currentProfile.model,
           systemPrompt,
           maxTurns: currentProfile.maxTurns,
           mcpConfig: mcpConfigPath,
         });
-        renderer.startSpinner(agentName, route.model);
+        renderer.startSpinner(agentName, displayModel);
         queueDrainAbort = false;
         attempt = -1; // Will increment to 0 at loop top
         continue;
@@ -1489,11 +1492,11 @@ async function handleNaturalInput(
       forkManager?.addTurn(contTurn);
 
       renderer.info(`\x1b[2mauto-loop iteration ${iteration + 1}: continuing...\x1b[0m`);
-      renderer.startSpinner(agentName, route.model);
+      renderer.startSpinner(agentName, displayModel);
 
       const contCmd = buildCommand(currentProviderConfig, currentProfile, {
         prompt: contPrompt,
-        model: route.model,
+        model: currentProfile.model,
         systemPrompt,
         maxTurns: currentProfile.maxTurns,
         mcpConfig: mcpConfigPath,
@@ -1607,7 +1610,7 @@ async function handleMultiAgent(
     });
     const cmd = buildCommand(providerConfig, profile, {
       prompt: conversation.buildPrompt(input),
-      model: route.model,
+      model: profile.model,
       systemPrompt: harness.systemPrompt + `\n\nYou are working in the project at: ${process.cwd()}`,
       maxTurns: profile.maxTurns,
     });
@@ -1820,7 +1823,9 @@ async function executeSubtask(
   propagator: ContextPropagator,
 ): Promise<void> {
   const agentName = `${subtask.agentRole}-${subtask.id.slice(-4)}`;
-  const modelTier = subtask.model as ModelTier;
+  // Use profile model if available, otherwise fall back to subtask.model
+  const profileForSubtask = orchestrator.getRegistry().get(subtask.agentRole);
+  const modelTier = (profileForSubtask?.model as ModelTier) ?? (subtask.model as ModelTier);
   const workerBus = orchestrator.getWorkerBus();
   const watcher = orchestrator.getConflictWatcher();
 
@@ -1939,7 +1944,7 @@ async function executeSubtask(
   const maxAttempts = maxRetries + 1;
   const providerSelector = orchestrator.getSupervisor().getProviderSelector();
   let currentProvider = subtask.provider;
-  let currentModel = subtask.model;
+  let currentModel = profileForSubtask?.model ?? subtask.model;
   let lastError: string | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
