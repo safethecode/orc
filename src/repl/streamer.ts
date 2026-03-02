@@ -37,6 +37,7 @@ const MAX_OUTPUT_BYTES = 1_048_576; // 1 MiB
 
 export class AgentStreamer extends EventEmitter {
   private proc: ReturnType<typeof Bun.spawn> | null = null;
+  private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private aborted = false;
   private textBuffer = "";
   private currentBlockType: string | null = null;
@@ -66,7 +67,8 @@ export class AgentStreamer extends EventEmitter {
       stdin: "ignore",
     });
 
-    const reader = (this.proc.stdout as ReadableStream<Uint8Array>).getReader();
+    this.reader = (this.proc.stdout as ReadableStream<Uint8Array>).getReader();
+    const reader = this.reader;
     const decoder = new TextDecoder();
     let buffer = "";
 
@@ -130,7 +132,8 @@ export class AgentStreamer extends EventEmitter {
         this.textBuffer = "";
       }
     } finally {
-      reader.releaseLock();
+      try { reader.releaseLock(); } catch { /* already cancelled */ }
+      this.reader = null;
     }
 
     // If aborted, proc is already killed and nulled — skip stderr/exit handling
@@ -244,6 +247,11 @@ export class AgentStreamer extends EventEmitter {
 
   abort(): void {
     this.aborted = true;
+    // Cancel reader first so reader.read() resolves immediately
+    if (this.reader) {
+      this.reader.cancel().catch(() => {});
+      this.reader = null;
+    }
     if (this.proc) {
       // Kill entire process group to prevent orphaned children
       if (this.proc.pid) killProcessGroup(this.proc.pid);

@@ -367,6 +367,7 @@ export async function startRepl(
         if (currentStreamer?.isRunning) {
           currentStreamer.abort();
         }
+        renderer.stopSpinner();
         renderer.notifyIdle();
         process.stdout.write("\n");
         renderer.info("Generation aborted.");
