@@ -415,6 +415,21 @@ export function riskAssessment(risks: string[]): void {
   }
 }
 
+// ── Phase Status ──────────────────────────────────────────────────
+
+export function phaseStart(phaseNum: number, name: string, target: number): void {
+  process.stdout.write(
+    `\n  ${MAGENTA}${BOLD}◆${RESET} ${WHITE}Phase ${phaseNum + 1}: ${name}${RESET}  ${DIM}target < ${target} cycles${RESET}\n`,
+  );
+}
+
+export function studyComplete(durationMs: number): void {
+  const time = `${(durationMs / 1000).toFixed(1)}s`;
+  process.stdout.write(
+    `  ${GREEN}✓${RESET} ${DIM}deep study complete — ISA reference built  ${GRAY}(${time})${RESET}\n\n`,
+  );
+}
+
 // ── Research Status ────────────────────────────────────────────────
 
 export function researchStart(round: number): void {

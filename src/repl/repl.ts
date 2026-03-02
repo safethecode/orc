@@ -1929,12 +1929,21 @@ async function handleOptimizeCommand(
 
   const workdir = process.cwd();
 
-  // Read the target file to build domain context
-  let domainContext: string | undefined;
-  try {
-    const problemFile = await Bun.file(`${workdir}/problem.py`).text();
-    domainContext = `## ISA Reference (from problem.py)\n\`\`\`python\n${problemFile.slice(0, 8000)}\n\`\`\``;
-  } catch { /* no domain context available */ }
+  // Auto-detect context files for deep study
+  const contextFiles: string[] = [];
+  for (const candidate of ["problem.py", "simulator.py", "machine.py"]) {
+    try {
+      await Bun.file(`${workdir}/${candidate}`).text();
+      contextFiles.push(candidate);
+    } catch { /* not present */ }
+  }
+
+  // Parse --context flag for additional files
+  for (let i = 4; i < tokens.length - 1; i++) {
+    if (tokens[i] === "--context") {
+      contextFiles.push(tokens[++i]);
+    }
+  }
 
   const optimConfig: OptimizationConfig = {
     testCommand,
@@ -1946,8 +1955,8 @@ async function handleOptimizeCommand(
     maxRounds,
     workdir,
     targetFile,
-    domainContext,
     explorerModel,
+    contextFiles: contextFiles.length > 0 ? contextFiles : undefined,
   };
 
   // Get provider config
@@ -1970,11 +1979,20 @@ async function handleOptimizeCommand(
   renderer.info(`  file:   ${targetFile}`);
   renderer.info(`  rounds: ${maxRounds} × ${parallelPaths} paths × ${maxIterations} iters`);
   renderer.info(`  model:  ${explorerModel}`);
+  if (contextFiles.length > 0) {
+    renderer.info(`  study:  ${contextFiles.join(", ")}`);
+  }
   renderer.separator();
 
   layout.enterAgentMode("optimize");
 
   const callbacks: OptimizationCallbacks = {
+    onPhaseStart: (phase, name, target) => {
+      renderer.phaseStart(phase, name, target);
+    },
+    onStudyComplete: (durationMs) => {
+      renderer.studyComplete(durationMs);
+    },
     onRoundStart: (round, paths) => {
       renderer.info(`\n\x1b[1m\x1b[33m▶ Round ${round + 1}\x1b[0m  \x1b[2m${paths} exploration paths\x1b[0m`);
     },
