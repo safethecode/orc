@@ -151,7 +151,7 @@ export async function startRepl(
           (rl as any).line = _pickerSavedLine;
           (rl as any).cursor = _pickerSavedCursor;
           (rl as any)._refreshLine?.();
-          filePicker.moveSelection(action === "up" ? -1 : 1);
+          filePicker.moveSelection(action === "up" ? 1 : -1);
           filePicker.render();
           return;
         }
