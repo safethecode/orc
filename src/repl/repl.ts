@@ -97,13 +97,27 @@ export async function startRepl(
     },
   });
 
-  const filePicker = new FilePicker(fileRef, rl);
+  const filePicker = new FilePicker(fileRef, () => refreshLine());
 
   // ── Inline ghost hint for / commands ─────────────────────────────
   // Writes dim text AFTER the cursor on the SAME line. No \n ever.
   // Truncated to terminal width so it never wraps.
   let promptActive = false;
   const PROMPT_VIS = 2; // visible width of "❯ "
+
+  // Force readline to redraw its line. Bun lacks _refreshLine, so
+  // we clear and rewrite the prompt + line content manually.
+  let currentPrompt = renderer.PROMPT;
+  function refreshLine(): void {
+    if ((rl as any)._refreshLine) {
+      (rl as any)._refreshLine();
+      return;
+    }
+    const line = (rl as any).line ?? "";
+    const cursor = (rl as any).cursor ?? line.length;
+    const cursorCol = PROMPT_VIS + cursor + 1;
+    process.stdout.write(`\r\x1b[2K${currentPrompt}${line}\x1b[${cursorCol}G`);
+  }
 
   process.stdin.on("keypress", (_str: string | undefined, key: { name?: string }) => {
     if (!promptActive) return;
@@ -140,7 +154,7 @@ export async function startRepl(
             (rl as any).line = before + "@" + selected.path + " " + after;
             (rl as any).cursor = atIdx + 1 + selected.path.length + 1;
           }
-          (rl as any)._refreshLine?.();
+          refreshLine();
           filePicker.clearRender();
           filePicker.deactivate();
           return;
@@ -150,7 +164,7 @@ export async function startRepl(
         if (action === "up" || action === "down") {
           (rl as any).line = _pickerSavedLine;
           (rl as any).cursor = _pickerSavedCursor;
-          (rl as any)._refreshLine?.();
+          refreshLine();
           filePicker.moveSelection(action === "up" ? 1 : -1);
           filePicker.render();
           return;
@@ -369,10 +383,10 @@ export async function startRepl(
         try {
           promptActive = true;
           renderer.setPromptActive(true);
-          const prompt = planMode.isActive()
+          currentPrompt = planMode.isActive()
             ? `\x1b[1m\x1b[33m[plan]\x1b[35m ❯\x1b[0m `
             : renderer.PROMPT;
-          input = await rl.question(prompt);
+          input = await rl.question(currentPrompt);
           promptActive = false;
           renderer.setPromptActive(false);
           if (filePicker.isActive()) {

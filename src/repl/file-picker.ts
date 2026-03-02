@@ -13,11 +13,11 @@ export class FilePicker {
   private state: PickerState;
   private resolver: FileRefResolver;
   private maxResults = 5;
-  private rl: any; // readline interface, for _refreshLine after clear
+  private onClear?: () => void;
 
-  constructor(resolver: FileRefResolver, rl?: any) {
+  constructor(resolver: FileRefResolver, onClear?: () => void) {
     this.resolver = resolver;
-    this.rl = rl;
+    this.onClear = onClear;
     this.state = {
       active: false,
       query: "",
@@ -165,9 +165,7 @@ export class FilePicker {
 
     process.stdout.write(buf);
 
-    // Force readline to redraw its prompt (may have been visually disturbed)
-    if (this.rl?._refreshLine) {
-      this.rl._refreshLine();
-    }
+    // Force readline to redraw its prompt
+    this.onClear?.();
   }
 }
