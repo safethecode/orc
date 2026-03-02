@@ -715,7 +715,7 @@ async function handleNaturalInput(
       );
     }
 
-    agentName = suggestAgent(route.tier);
+    agentName = suggestAgent(route.tier, input);
   }
 
   if (route.multiAgent) {

@@ -20,6 +20,41 @@ const MULTI_AGENT_KEYWORDS = [
   "then have",
 ];
 
+// Patterns that indicate a development/engineering task
+const DEV_PATTERNS = [
+  /\.(ts|js|py|go|rs|java|cpp|c|rb|php|yml|yaml|json|toml|sh|css|html|jsx|tsx|sql|proto)\b/,
+  /\b(function|class|module|import|export|const|let|var|def|fn|struct|impl|interface)\b/i,
+  /\b(bug|error|crash|exception|traceback|segfault|stack\s*trace)\b/i,
+  /\b(commit|push|pull|merge|branch|deploy|build|compile|install|run)\b/i,
+  /\b(file|directory|path|repo|codebase|database|api|endpoint|server|client)\b/i,
+  /(코드|파일|함수|클래스|버그|에러|배포|빌드|커밋|푸시|테스트|구현|수정)/,
+];
+
+// Patterns that indicate conversational / non-development prompts
+const CHAT_PATTERNS = [
+  /^(hi|hello|hey|yo|sup|안녕|ㅎㅇ|ㅎㅎ|감사|고마워|thanks|thank you|좋아|ㅇㅇ|ㄴㄴ|ㅋㅋ|ㅎ)\s*[.!?]?$/i,
+  /^(what|who|how|why|when|where|뭐|누구|어떻게|왜|언제|어디)\b.{0,60}\??\s*$/i,
+  /^.{1,15}$/,  // Very short prompts (1-15 chars) are almost always conversational
+];
+
+/**
+ * Detect whether a prompt is a development task (vs general conversation).
+ * Returns true if the prompt contains development signals.
+ */
+export function isDevelopmentTask(prompt: string): boolean {
+  return DEV_PATTERNS.some((p) => p.test(prompt));
+}
+
+/**
+ * Detect whether a prompt is clearly conversational.
+ */
+function isConversational(prompt: string): boolean {
+  if (CHAT_PATTERNS.some((p) => p.test(prompt))) return true;
+  // If no dev signals and prompt is reasonably short, treat as chat
+  if (!isDevelopmentTask(prompt) && prompt.length < 80) return true;
+  return false;
+}
+
 export function routeTask(
   prompt: string,
   config: RoutingConfig,
@@ -97,6 +132,11 @@ export function routeTask(
 
 export function suggestAgent(
   tier: "simple" | "medium" | "complex",
+  prompt?: string,
 ): string {
-  return tier === "complex" ? "architect" : "coder";
+  if (tier === "complex") return "architect";
+  if (tier === "medium") return "coder";
+  // simple tier: check if it's conversation or development
+  if (prompt && isConversational(prompt)) return "Sam";
+  return "coder";
 }

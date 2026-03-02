@@ -1,7 +1,7 @@
 ---
 name: coder
 provider: claude
-model: sonnet
+model: opus
 role: "Software Engineer"
 maxBudgetUsd: 0.50
 requires:

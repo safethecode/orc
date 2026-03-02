@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { routeTask, suggestAgent } from "../src/core/router.ts";
+import { routeTask, suggestAgent, isDevelopmentTask } from "../src/core/router.ts";
 import type { RoutingConfig } from "../src/config/types.ts";
 
 const config: RoutingConfig = {
@@ -79,7 +79,42 @@ describe("suggestAgent", () => {
     expect(suggestAgent("medium")).toBe("coder");
   });
 
-  it("returns 'coder' for simple tier", () => {
+  it("returns 'coder' for simple tier without prompt", () => {
     expect(suggestAgent("simple")).toBe("coder");
+  });
+
+  it("returns 'Sam' for simple tier with conversational prompt", () => {
+    expect(suggestAgent("simple", "hello")).toBe("Sam");
+    expect(suggestAgent("simple", "안녕")).toBe("Sam");
+    expect(suggestAgent("simple", "지금은?")).toBe("Sam");
+    expect(suggestAgent("simple", "thanks")).toBe("Sam");
+  });
+
+  it("returns 'coder' for simple tier with dev-like prompt", () => {
+    expect(suggestAgent("simple", "fix the typo in main.py")).toBe("coder");
+    expect(suggestAgent("simple", "rename the function in utils.ts")).toBe("coder");
+  });
+});
+
+describe("isDevelopmentTask", () => {
+  it("detects file extensions as dev tasks", () => {
+    expect(isDevelopmentTask("fix main.py")).toBe(true);
+    expect(isDevelopmentTask("update config.yml")).toBe(true);
+  });
+
+  it("detects code keywords as dev tasks", () => {
+    expect(isDevelopmentTask("import the module and export it")).toBe(true);
+    expect(isDevelopmentTask("fix the bug in auth")).toBe(true);
+  });
+
+  it("detects Korean dev terms", () => {
+    expect(isDevelopmentTask("코드 수정해줘")).toBe(true);
+    expect(isDevelopmentTask("테스트 돌려봐")).toBe(true);
+  });
+
+  it("returns false for conversational prompts", () => {
+    expect(isDevelopmentTask("hello")).toBe(false);
+    expect(isDevelopmentTask("what time is it?")).toBe(false);
+    expect(isDevelopmentTask("고마워")).toBe(false);
   });
 });

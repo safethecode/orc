@@ -122,7 +122,7 @@ async function main() {
       // Use router to determine best agent if not specified
       const { routeTask, suggestAgent } = await import("./core/router.ts");
       const route = routeTask(actualPrompt, config.routing);
-      const targetAgent = agentName ?? suggestAgent(route.tier);
+      const targetAgent = agentName ?? suggestAgent(route.tier, actualPrompt);
 
       console.log(`Routing: ${route.tier} → ${route.model} (${route.reason})`);
       console.log(`Agent: ${targetAgent}`);
