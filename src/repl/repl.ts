@@ -1118,6 +1118,15 @@ async function handleNaturalInput(
       const inp = tool.input ?? {};
       const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
 
+      // Show tool activity to the user (stop spinner → render → restart)
+      renderer.stopSpinner();
+      if (boxOpen) {
+        renderer.toolUse(tool.name, detail, true);
+      } else {
+        renderer.toolUse(tool.name, detail, false);
+      }
+      renderer.startSpinner(agentName, route.model);
+
       // Permission enforcement on tool use
       const permAction = orchestrator.getPermissions().check(tool.name, detail ?? "", agentName);
       if (permAction === "deny") {
@@ -2063,6 +2072,8 @@ async function executeSubtask(
         ?? (tool.input?.command as string)
         ?? (tool.input?.pattern as string)
         ?? undefined;
+      // Stop spinner so tool activity lines aren't overwritten
+      renderer.stopSpinner();
       // Always show agent-prefixed activity line for multi-agent visibility
       renderer.workerToolUse(agentName, tool.name, detail);
       // Highlight file modifications
@@ -2072,6 +2083,8 @@ async function executeSubtask(
       if (boxOpen) {
         renderer.toolUse(tool.name, detail, true);
       }
+      // Restart spinner after rendering
+      renderer.startSpinner(agentName, modelTier);
       lm?.workerUpdate(agentName, "tool_use", tool.name);
     });
 
