@@ -573,6 +573,10 @@ export async function runOptimization(
             target: fullConfig.target,
             history: allHistory,
             roundNumber: round,
+            workdir: fullConfig.workdir,
+            targetFile: fullConfig.targetFile,
+            testCommand: fullConfig.testCommand,
+            metricPattern: fullConfig.metricPattern,
           };
           const researchResult = await research(
             stallCtx, providerConfig, profile, signal,
