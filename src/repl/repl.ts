@@ -62,6 +62,14 @@ async function pollTeamInbox(): Promise<string | null> {
       // Mark as read
       for (const msg of messages) msg.read = true;
       await Bun.write(inboxPath, JSON.stringify(messages, null, 2));
+      // Show messages in terminal
+      renderer.separator();
+      renderer.info(`\x1b[1m\x1b[36m📨 ${unread.length} message(s) from team [${team}]\x1b[0m`);
+      for (const m of unread) {
+        const preview = m.text.length > 150 ? m.text.slice(0, 150) + "..." : m.text;
+        renderer.info(`\x1b[36m  [${m.from}]\x1b[0m ${preview}`);
+      }
+      renderer.separator();
       // Format as prompt
       const formatted = unread
         .map((m) => `[${m.from}]: ${m.text}`)
@@ -1218,6 +1226,56 @@ async function handleNaturalInput(
         }).catch(() => {});
       }
 
+      // Team/agent visibility: detect Claude Code team operations
+      if (tool.name === "TeamCreate") {
+        const teamName = (inp.team_name as string) ?? "unknown";
+        renderer.info(`\x1b[1m\x1b[36m⚡ Team created: ${teamName}\x1b[0m`);
+        const tmuxViz = orchestrator.getTmuxViz();
+        tmuxViz.isAvailable().then(async (avail) => {
+          if (avail) {
+            await tmuxViz.createSession(`orc-${teamName}`);
+            renderer.info(`\x1b[2mtmux: session orc-${teamName} created\x1b[0m`);
+          }
+        }).catch(() => {});
+      }
+      if (tool.name === "Task") {
+        const desc = (inp.description as string) ?? "";
+        const agentType = (inp.subagent_type as string) ?? "";
+        const tName = (inp.name as string) ?? agentType;
+        const bg = inp.run_in_background ? " [bg]" : "";
+        renderer.info(`\x1b[1m\x1b[33m→ Agent: ${tName}\x1b[0m \x1b[2m(${agentType}) ${desc}${bg}\x1b[0m`);
+        if (inp.name) {
+          const tmuxViz = orchestrator.getTmuxViz();
+          tmuxViz.isAvailable().then(async (avail) => {
+            if (avail) {
+              const pane = await tmuxViz.createPane(tName);
+              if (pane) {
+                await tmuxViz.sendToPane(pane.paneId, `# ${tName}: ${desc}`);
+                await tmuxViz.applyLayout();
+              }
+            }
+          }).catch(() => {});
+        }
+      }
+      if (tool.name === "SendMessage") {
+        const recipient = (inp.recipient as string) ?? (inp.type as string) ?? "";
+        const summary = (inp.summary as string) ?? "";
+        const msgType = (inp.type as string) ?? "message";
+        renderer.info(`\x1b[35m✉ [${msgType}] → ${recipient}: ${summary}\x1b[0m`);
+      }
+      if (tool.name === "TaskCreate") {
+        const subject = (inp.subject as string) ?? "";
+        renderer.info(`\x1b[2m+ Task: ${subject}\x1b[0m`);
+      }
+      if (tool.name === "TaskUpdate") {
+        const tId = (inp.taskId as string) ?? "";
+        const st = (inp.status as string) ?? "";
+        if (st) {
+          const icon = st === "completed" ? "✓" : st === "in_progress" ? "◉" : "○";
+          renderer.info(`\x1b[2m${icon} Task ${tId}: ${st}\x1b[0m`);
+        }
+      }
+
       if (boxOpen) {
         renderer.toolUse(tool.name, detail, true);
       } else {
@@ -1669,9 +1727,9 @@ async function handleMultiAgent(
     const phaseSubtasks = decomposition.subtasks.filter(
       st => phase.subtaskIds.includes(st.id),
     );
-    renderer.phaseHeader(phase.name, phaseSubtasks.length, phase.parallelizable);
+    renderer.phaseHeader(phase.name, phaseSubtasks.length, phaseSubtasks.length > 1);
 
-    if (phase.parallelizable && phaseSubtasks.length > 1) {
+    if (phaseSubtasks.length > 1) {
       const promises = phaseSubtasks.map(st =>
         executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator),
       );
