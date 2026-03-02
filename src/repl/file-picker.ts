@@ -70,6 +70,10 @@ export class FilePicker {
     this.state.selected = ((this.state.selected + delta) % len + len) % len;
   }
 
+  getResultCount(): number {
+    return this.state.results.length;
+  }
+
   getSelected(): FileMatch | null {
     if (this.state.results.length === 0) return null;
     return this.state.results[this.state.selected];

@@ -209,6 +209,30 @@ export async function startRepl(
           return;
         }
         if (key?.name === "tab") {
+          const resultCount = filePicker.getResultCount();
+          if (resultCount <= 1) {
+            // Single result (or none): accept immediately
+            const selected = filePicker.getSelected();
+            if (selected) {
+              const atIdx = filePicker.getAtIndex();
+              const before = (rl as any).line.slice(0, atIdx);
+              const after = (rl as any).line.slice((rl as any).cursor);
+              const newLine = before + "@" + selected.path + " " + after;
+              (rl as any).line = newLine;
+              (rl as any).cursor = atIdx + 1 + selected.path.length + 1;
+              (rl as any)._refreshLine();
+            }
+            filePicker.clearRender();
+            filePicker.deactivate();
+          } else {
+            // Multiple results: cycle selection down
+            filePicker.moveSelection(1);
+            filePicker.render();
+          }
+          return;
+        }
+        if (key?.name === "return" || key?.name === "enter") {
+          // Enter accepts current selection
           const selected = filePicker.getSelected();
           if (selected) {
             const atIdx = filePicker.getAtIndex();
@@ -221,7 +245,7 @@ export async function startRepl(
           }
           filePicker.clearRender();
           filePicker.deactivate();
-          return;
+          return; // swallow Enter — don't submit the line
         }
         if (key?.name === "escape") {
           filePicker.clearRender();
