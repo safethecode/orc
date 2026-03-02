@@ -63,8 +63,8 @@ export async function startRepl(
     const file = (e as { file: string }).file;
     recentFileChanges.push(file);
     if (recentFileChanges.length > 20) recentFileChanges.shift();
-    // Show notification only when not mid-generation
-    if (!currentStreamer?.isRunning) {
+    // Show notification only when idle (not during generation or prompt input)
+    if (!currentStreamer?.isRunning && !promptActive) {
       renderer.info(`\x1b[2mfile changed externally: ${file.split("/").pop()}\x1b[0m`);
     }
   });
@@ -361,17 +361,20 @@ export async function startRepl(
       } else {
         try {
           promptActive = true;
+          renderer.setPromptActive(true);
           const prompt = planMode.isActive()
             ? `\x1b[1m\x1b[33m[plan]\x1b[35m ❯\x1b[0m `
             : renderer.PROMPT;
           input = await rl.question(prompt);
           promptActive = false;
+          renderer.setPromptActive(false);
           if (filePicker.isActive()) {
             filePicker.clearRender(getPickerLayout);
             filePicker.deactivate();
           }
         } catch {
           promptActive = false;
+          renderer.setPromptActive(false);
           if (filePicker.isActive()) {
             filePicker.clearRender(getPickerLayout);
             filePicker.deactivate();

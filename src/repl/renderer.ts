@@ -26,9 +26,34 @@ const BLACK = "\x1b[30m";
 // ── Layout Manager Reference ──────────────────────────────────────
 
 let layoutManager: LayoutManager | null = null;
+let _promptActive = false;
 
 export function setLayoutManager(lm: LayoutManager): void {
   layoutManager = lm;
+}
+
+export function setPromptActive(active: boolean): void {
+  _promptActive = active;
+}
+
+/**
+ * Write a line into the scroll region without disturbing readline.
+ * When layout is active and the prompt is live, we save/restore the cursor
+ * and move into the scroll region so `\n` scrolls inside the scroll region
+ * only — keeping the status bar and input row untouched.
+ */
+function writeInScrollRegion(text: string): void {
+  if (layoutManager?.isActive() && _promptActive) {
+    const ls = layoutManager.getLayout();
+    process.stdout.write(
+      `\x1b7` +                                 // save cursor
+      `\x1b[${ls.scrollBottom};1H` +            // bottom of scroll region
+      `\n${text}` +                             // scroll up + write
+      `\x1b8`,                                  // restore cursor
+    );
+  } else {
+    process.stdout.write(`${text}\n`);
+  }
 }
 
 const TIER_COLORS: Record<ModelTier, string> = {
@@ -258,11 +283,11 @@ export function error(message: string): void {
 // ── Info ─────────────────────────────────────────────────────────────
 
 export function info(message: string): void {
-  process.stdout.write(`  ${DIM}${message}${RESET}\n`);
+  writeInScrollRegion(`  ${DIM}${message}${RESET}`);
 }
 
 export function dim(message: string): void {
-  process.stdout.write(`${DIM}${message}${RESET}\n`);
+  writeInScrollRegion(`${DIM}${message}${RESET}`);
 }
 
 // ── Handoff ──────────────────────────────────────────────────────────
