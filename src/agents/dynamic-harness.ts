@@ -46,6 +46,31 @@ interface ProjectFingerprint {
 
 type TaskType = "bug_fix" | "feature" | "refactor" | "test_write" | "review" | "debug" | "generic";
 
+// ── Role → TaskType mapping ──────────────────────────────────────────
+// Non-coder roles have a deterministic task type; only coders need classification.
+import type { AgentRole } from "../config/types.ts";
+
+const ROLE_TASK_MAP: Partial<Record<AgentRole, TaskType>> = {
+  tester: "test_write",
+  reviewer: "review",
+  architect: "review",
+  researcher: "generic",
+  "spec-writer": "generic",
+  qa: "review",
+};
+
+function resolveTaskTypeSync(role: string, prompt: string): TaskType {
+  const forced = ROLE_TASK_MAP[role as AgentRole];
+  if (forced) return forced;
+  return classifyTaskTypeKeyword(prompt);
+}
+
+async function resolveTaskTypeAsync(role: string, prompt: string): Promise<TaskType> {
+  const forced = ROLE_TASK_MAP[role as AgentRole];
+  if (forced) return forced;
+  return classifyTaskTypeAI(prompt);
+}
+
 // ── Layer 6: Codebase Context ────────────────────────────────────────
 
 function detectProjectFingerprint(projectDir: string): ProjectFingerprint {
@@ -443,7 +468,7 @@ function buildQualityGateBlock(fp: ProjectFingerprint): string {
  * Prefer buildDynamicHarnessAsync() for better classification accuracy.
  */
 export function buildDynamicHarness(options: DynamicHarnessOptions): HarnessResult {
-  const taskType = classifyTaskTypeKeyword(options.prompt);
+  const taskType = resolveTaskTypeSync(options.role, options.prompt);
   return assembleDynamicHarness(options, taskType);
 }
 
@@ -453,7 +478,7 @@ export function buildDynamicHarness(options: DynamicHarnessOptions): HarnessResu
  * Cost: ~$0.001 per call via Haiku.
  */
 export async function buildDynamicHarnessAsync(options: DynamicHarnessOptions): Promise<HarnessResult> {
-  const taskType = await classifyTaskTypeAI(options.prompt);
+  const taskType = await resolveTaskTypeAsync(options.role, options.prompt);
   return assembleDynamicHarness(options, taskType);
 }
 
