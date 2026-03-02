@@ -1,4 +1,6 @@
 import * as readline from "node:readline/promises";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import type { Orchestrator } from "../core/orchestrator.ts";
 import type { OrchestratorConfig, AgentProfile, ModelTier, SubTask, ProviderName, DecompositionResult } from "../config/types.ts";
 import { routeTask, suggestAgent, type RouteResult } from "../core/router.ts";
@@ -36,6 +38,41 @@ import * as renderer from "./renderer.ts";
 import { LayoutManager } from "./layout-manager.ts";
 import { shouldBrainstorm, brainstorm } from "../core/brainstorm.ts";
 import { runOptimization, type OptimizationConfig, type OptimizationCallbacks } from "../core/optimization-harness.ts";
+
+async function pollTeamInbox(): Promise<string | null> {
+  const teamsDir = join(homedir(), ".claude", "teams");
+  try {
+    const { readdir } = await import("node:fs/promises");
+    const teams = await readdir(teamsDir);
+    for (const team of teams) {
+      const configPath = join(teamsDir, team, "config.json");
+      const configFile = Bun.file(configPath);
+      if (!(await configFile.exists())) continue;
+      const config = (await configFile.json()) as { members?: Array<{ name: string }> };
+      const leadName = config.members?.[0]?.name;
+      if (!leadName) continue;
+      const inboxPath = join(teamsDir, team, "inboxes", `${leadName}.json`);
+      const inboxFile = Bun.file(inboxPath);
+      if (!(await inboxFile.exists())) continue;
+      const messages = (await inboxFile.json()) as Array<{ from: string; text: string; read: boolean }>;
+      const unread = messages.filter(
+        (m) => !m.read && !m.text?.startsWith('{"type":"idle'),
+      );
+      if (unread.length === 0) continue;
+      // Mark as read
+      for (const msg of messages) msg.read = true;
+      await Bun.write(inboxPath, JSON.stringify(messages, null, 2));
+      // Format as prompt
+      const formatted = unread
+        .map((m) => `[${m.from}]: ${m.text}`)
+        .join("\n\n---\n\n");
+      return `Your team agents sent the following messages. Review them, then decide and execute the next steps:\n\n${formatted}`;
+    }
+  } catch {
+    /* no teams or read error */
+  }
+  return null;
+}
 
 export async function startRepl(
   orchestrator: Orchestrator,
@@ -541,6 +578,12 @@ export async function startRepl(
         pendingMessages.push(...queued);
         renderer.notifyIdle();
       }
+      // Poll team inbox for unread messages from teammates
+      const inboxPrompt = await pollTeamInbox();
+      if (inboxPrompt) {
+        pendingMessages.push(inboxPrompt);
+      }
+
       hasInteraction = true;
       currentStreamer = null;
       currentCancellation = null;
