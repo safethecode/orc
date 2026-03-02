@@ -499,6 +499,8 @@ export async function startRepl(
       currentCancellation = cancellation;
 
       // Enter agent mode: enable split-pane input queuing
+      // Resume stdin so keypress events fire (readline pauses it after question() resolves)
+      process.stdin.resume();
       layout.enterAgentMode("agent");
 
       try {
