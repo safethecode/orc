@@ -6,13 +6,16 @@
 // Phase 1: Foundation — loops + basic VLIW packing (Sonnet)
 // Phase 2: Vectorization — SIMD with valu/vload/vstore (Sonnet)
 // Phase 3: Advanced — scatter emulation + interleaving (Opus)
-// Phase 4: Extreme — software pipelining + full slot usage (Opus)
+// Phase 4: Extreme — software pipelining (Opus)
+// Phase 5: Micro — cycle-level bundle auditing + slot filling (Opus)
 //
 // Quality boosters:
 // - Path diversity: each parallel path gets a different "personality"
 // - Success/failure pattern tracking: proven techniques & anti-patterns
 // - Phase transition injection: winning code from phase N → phase N+1
-// - Increased parallelism at harder phases (more lottery tickets)
+// - Top-2 tournament seeding: runner-up code seeds 40% of next round's paths
+// - Final push: if within 15% of target after all phases, retry with fresh strategy
+// - Self-check: agents must verify ISA compliance before submitting code
 
 import { AgentStreamer, type ToolUseEvent } from "../repl/streamer.ts";
 import { buildCommand } from "../agents/provider.ts";
@@ -73,8 +76,6 @@ export interface OptimizationCallbacks {
 }
 
 // ── Path Diversity ──────────────────────────────────────────────────
-// Each parallel path gets a different strategic bias to maximize
-// the chance that at least one path finds the right approach.
 
 const PATH_PERSONALITIES = [
   "", // path 0: default — follow phase focus directly
@@ -85,8 +86,6 @@ const PATH_PERSONALITIES = [
 ];
 
 // ── Success/Failure Patterns ────────────────────────────────────────
-// Track what worked and what didn't to prevent repeating failures
-// and to reinforce proven techniques.
 
 interface SuccessPattern {
   fromMetric: number;
@@ -96,11 +95,10 @@ interface SuccessPattern {
 
 interface FailurePattern {
   technique: string;
-  reason: string; // "broke correctness" | "no improvement" | "crashed"
+  reason: string;
 }
 
 function extractStrategy(agentText: string): string {
-  // Try to extract the agent's stated strategy from its response
   const patterns = [
     /(?:strategy|approach|plan|optimization)[:\s]*(.+?)(?:\n|$)/i,
     /(?:I'll|Let me|I will|My approach is to|Going to)\s+(.+?)(?:\n|$)/i,
@@ -110,10 +108,20 @@ function extractStrategy(agentText: string): string {
     const m = agentText.match(p);
     if (m?.[1] && m[1].length > 10) return m[1].trim().slice(0, 200);
   }
-  // Fallback: first non-empty line
   const firstLine = agentText.split("\n").find(l => l.trim().length > 10);
   return firstLine?.trim().slice(0, 200) ?? "unknown approach";
 }
+
+// ── Self-Check Prompt Fragment ──────────────────────────────────────
+
+const SELF_CHECK = `
+MANDATORY SELF-CHECK before submitting your code change:
+1. Verify every instruction name exists in the ISA reference above
+2. Count slots per bundle: alu ≤ 12, valu ≤ 6, load ≤ 2, store ≤ 2, flow ≤ 1
+3. No RAW hazards: you cannot READ a value WRITTEN in the same bundle (end-of-cycle writes)
+4. Scratch registers must be allocated before use (alloc_scratch)
+5. vload/vstore addresses must be contiguous — NOT for scatter/gather
+If any check fails, fix it before proceeding.`;
 
 // ── Phase Definition ──────────────────────────────────────────────
 
@@ -219,17 +227,17 @@ EXAMPLE PATTERN — scatter gather with scalar loads:
     });
   }
 
-  // Phase 4: Extreme — software pipelining + full utilization
+  // Phase 4: Extreme — software pipelining + structural optimization
   if (finalTarget < 2000) {
     phases.push({
       name: "extreme",
-      targetMetric: finalTarget,
+      targetMetric: Math.max(finalTarget, 1500),
       model: "opus",
       parallelPaths: 5,
       maxRounds: 8,
       maxIterations: 25,
       maxTurns: 15,
-      focus: `GOAL: Get below ${finalTarget} cycles with extreme optimization.
+      focus: `GOAL: Get below ${Math.max(finalTarget, 1500)} cycles with software pipelining.
 STRATEGY: Software pipelining, full VLIW slot utilization, and micro-architectural tricks.
 KEY TECHNIQUES:
 - Software pipelining: overlap iterations of the main loop.
@@ -256,7 +264,50 @@ EXAMPLE PATTERN — software pipelined loop:
       ("*", hash_A, hash_A, prime, "valu"),    # more compute THIS
       ("add", addr_next, addr_next, stride, "alu"),  # addr calc for next
   ]
-  # Epilogue: finish last iteration's compute (no more loads needed)`,
+  # Epilogue: finish last iteration's compute (no more loads needed)
+${SELF_CHECK}`,
+    });
+  }
+
+  // Phase 5: Micro — cycle-level bundle auditing + slot filling
+  if (finalTarget < 1500) {
+    phases.push({
+      name: "micro",
+      targetMetric: finalTarget,
+      model: "opus",
+      parallelPaths: 5,
+      maxRounds: 10,
+      maxIterations: 20,
+      maxTurns: 12,
+      focus: `GOAL: Get below ${finalTarget} cycles with cycle-level micro-optimization.
+THIS IS THE FINAL PHASE. You are close to the target. Every single cycle matters.
+
+APPROACH — audit first, optimize second:
+1. Before ANY code change, produce a CYCLE AUDIT of the main loop:
+   - List each VLIW bundle (cycle) in the hot loop
+   - For each bundle: slot usage — alu: N/12, valu: N/6, load: N/2, store: N/2, flow: N/1
+   - Calculate: total_cycles = bundles_per_iteration × loop_iterations
+   - Identify the #1 waste: which bundles have the most empty slots?
+
+2. OPTIMIZATION PRIORITIES (highest impact first):
+   a. REPLACE FLOW WITH ALU: select/vselect uses the flow engine (only 1 slot!).
+      Replace with bitwise: result = (cond & a) | (~cond & b) using alu/valu (12/6 slots).
+      This is often worth 10-50 cycles because it unblocks cond_jump packing.
+   b. MERGE BUNDLES: if two adjacent bundles have no data dependencies between them
+      (no value written in bundle A is read in bundle B), merge them into one bundle.
+   c. FILL EMPTY SLOTS: if a bundle uses 1/12 alu, move address calculations from
+      neighboring bundles into the empty slots.
+   d. HOIST INVARIANTS: move loads/computations that don't change per iteration outside the loop.
+      Use the "const" instruction for compile-time constants.
+   e. UNROLL 2x: if the loop body has few bundles, unrolling 2x hides the cond_jump overhead
+      and creates more opportunities for inter-iteration slot filling.
+
+3. MEASURE: count cycles before and after. Show your math.
+
+SLOT LIMITS: alu:12, valu:6, load:2, store:2, flow:1
+CRITICAL BOTTLENECK: flow has 1 slot. select + cond_jump cannot coexist in one bundle.
+Every select you eliminate = one more bundle where cond_jump can pack with other work.
+${SELF_CHECK}`,
     });
   }
 
@@ -456,7 +507,6 @@ ${phase.focus}`);
   }
 
   if (prevPhaseCode) {
-    // Show winning code from previous phase so agent understands what's already been achieved
     const truncated = prevPhaseCode.length > 6000 ? prevPhaseCode.slice(0, 6000) + "\n# ... (truncated)" : prevPhaseCode;
     parts.push(`\n## Starting Code (result of previous optimization phase)\nStudy this carefully — it represents proven optimizations. Build on it, don't revert it.\n\`\`\`python\n${truncated}\n\`\`\``);
   }
@@ -493,7 +543,6 @@ function buildPhaseIterationPrompt(
   lines.push(`Current: ${bestMetric} cycles → Target: ${phase.targetMetric} cycles`);
   lines.push("");
 
-  // Proven techniques — build on these
   if (successPatterns && successPatterns.length > 0) {
     lines.push("## Proven Techniques (these WORKED — build on them, don't undo them)");
     for (const sp of successPatterns.slice(-8)) {
@@ -502,7 +551,6 @@ function buildPhaseIterationPrompt(
     lines.push("");
   }
 
-  // Anti-patterns — don't repeat these
   if (failurePatterns && failurePatterns.length > 0) {
     lines.push("## Anti-Patterns (DO NOT repeat — these already failed)");
     for (const fp of failurePatterns.slice(-6)) {
@@ -615,7 +663,6 @@ async function runExplorationPath(
     const correct = testResult.exitCode === 0 || (metric !== null && testResult.output.includes("ok"));
 
     if (metric !== null && correct && isImproved(metric, bestMetric, config.lowerIsBetter)) {
-      // Success — record the pattern
       successPatterns.push({ fromMetric: bestMetric, toMetric: metric, technique: strategy });
       bestMetric = metric;
       bestCode = await saveFile(pathWorkdir, config.targetFile);
@@ -627,14 +674,12 @@ async function runExplorationPath(
         break;
       }
     } else if (metric !== null && correct) {
-      // No improvement — record anti-pattern
       failurePatterns.push({ technique: strategy, reason: `no improvement (${metric} cycles, best is ${bestMetric})` });
       const step: OptimizationStep = { iteration: iter, metric, correct: true, improved: false, action: "rollback", strategy };
       history.push(step);
       callbacks.onIterationComplete?.(pathIndex, step);
       if (bestCode) await restoreFile(pathWorkdir, config.targetFile, bestCode);
     } else {
-      // Broken — record anti-pattern
       failurePatterns.push({ technique: strategy, reason: "broke correctness" });
       const step: OptimizationStep = { iteration: iter, metric, correct: false, improved: false, action: "rollback", strategy };
       history.push(step);
@@ -666,6 +711,31 @@ async function setupWorktrees(
   return paths;
 }
 
+/** Set up worktrees seeded from multiple starting codes (top-K tournament) */
+async function setupWorktreesMultiSeed(
+  repoDir: string,
+  seeds: Array<{ code: string | null; count: number }>,
+  targetFile: string,
+): Promise<string[]> {
+  const runId = randomUUID().slice(0, 8);
+  const paths: string[] = [];
+  let pathIdx = 0;
+  for (const seed of seeds) {
+    for (let i = 0; i < seed.count; i++) {
+      const wtPath = `/tmp/orc-optimize-${runId}-path${pathIdx}`;
+      const ok = await createWorktree(repoDir, wtPath);
+      if (!ok) {
+        const proc = Bun.spawn(["cp", "-r", repoDir, wtPath], { stdout: "pipe", stderr: "pipe" });
+        await proc.exited;
+      }
+      if (seed.code) await restoreFile(wtPath, targetFile, seed.code);
+      paths.push(wtPath);
+      pathIdx++;
+    }
+  }
+  return paths;
+}
+
 async function teardownWorktrees(repoDir: string, worktrees: string[]): Promise<void> {
   for (const wt of worktrees) {
     await removeWorktree(repoDir, wt);
@@ -693,10 +763,14 @@ async function runPhase(
   callbacks: OptimizationCallbacks,
   signal?: AbortSignal,
   prevPhaseCode?: string,
+  initialSuccess?: SuccessPattern[],
+  initialFailure?: FailurePattern[],
 ): Promise<{ bestMetric: number; bestCode: string | null; successPatterns: SuccessPattern[]; failurePatterns: FailurePattern[] }> {
-  // Accumulated patterns across rounds in this phase
-  let phaseSuccess: SuccessPattern[] = [];
-  let phaseFailure: FailurePattern[] = [];
+  let phaseSuccess: SuccessPattern[] = [...(initialSuccess ?? [])];
+  let phaseFailure: FailurePattern[] = [...(initialFailure ?? [])];
+
+  // Top-2 codes for tournament seeding (runner-up gets 40% of paths)
+  let runnerUpCode: string | null = null;
 
   // Deliberation for this phase
   let deliberation: string | undefined;
@@ -729,7 +803,19 @@ async function runPhase(
         bestCode = result.bestCode;
       }
     } else {
-      const worktrees = await setupWorktrees(gitRoot, phase.parallelPaths, bestCode, config.targetFile);
+      // Top-2 seeding: first round uses bestCode only, subsequent rounds use winner + runner-up
+      let worktrees: string[];
+      if (round > 0 && runnerUpCode && runnerUpCode !== bestCode) {
+        const primaryCount = Math.ceil(phase.parallelPaths * 0.6);
+        const secondaryCount = phase.parallelPaths - primaryCount;
+        worktrees = await setupWorktreesMultiSeed(gitRoot, [
+          { code: bestCode, count: primaryCount },
+          { code: runnerUpCode, count: secondaryCount },
+        ], config.targetFile);
+      } else {
+        worktrees = await setupWorktrees(gitRoot, phase.parallelPaths, bestCode, config.targetFile);
+      }
+
       try {
         const pathResults = await Promise.all(
           worktrees.map((wtPath, p) =>
@@ -764,20 +850,19 @@ async function runPhase(
           }
         }
 
-        let tournamentBest = bestMetric;
-        let tournamentCode = bestCode;
-        let tournamentPath = -1;
-        for (let p = 0; p < pathResults.length; p++) {
-          if (isImproved(pathResults[p].bestMetric, tournamentBest, config.lowerIsBetter)) {
-            tournamentBest = pathResults[p].bestMetric;
-            tournamentCode = pathResults[p].bestCode;
-            tournamentPath = p;
-          }
+        // Top-2 tournament: pick winner AND runner-up
+        const sorted = [...pathResults]
+          .map((r, i) => ({ ...r, idx: i }))
+          .sort((a, b) => config.lowerIsBetter ? a.bestMetric - b.bestMetric : b.bestMetric - a.bestMetric);
+
+        if (sorted.length > 0 && isImproved(sorted[0].bestMetric, bestMetric, config.lowerIsBetter)) {
+          bestMetric = sorted[0].bestMetric;
+          bestCode = sorted[0].bestCode;
+          callbacks.onTournamentResult?.(round, bestMetric, sorted[0].idx);
         }
-        if (tournamentPath >= 0) {
-          bestMetric = tournamentBest;
-          bestCode = tournamentCode;
-          callbacks.onTournamentResult?.(round, bestMetric, tournamentPath);
+        // Runner-up for next round's seeding
+        if (sorted.length > 1 && sorted[1].bestCode) {
+          runnerUpCode = sorted[1].bestCode;
         }
       } finally {
         await teardownWorktrees(gitRoot, worktrees);
@@ -813,7 +898,6 @@ async function runPhase(
         } catch { /* non-fatal */ }
       }
 
-      // Include pattern knowledge in re-deliberation
       const successBlock = phaseSuccess.length > 0
         ? `\n## What Worked\n${phaseSuccess.slice(-5).map(s => `- ${s.technique} (${s.fromMetric}→${s.toMetric})`).join("\n")}`
         : "";
@@ -905,12 +989,8 @@ export async function runOptimization(
     bestMetric = phaseResult.bestMetric;
     bestCode = phaseResult.bestCode;
     totalRounds += phase.maxRounds;
-
-    // Carry patterns forward to next phase
     carrySuccess = phaseResult.successPatterns;
     carryFailure = phaseResult.failurePatterns;
-
-    // Winning code becomes the example for the next phase
     prevPhaseCode = bestCode ?? undefined;
 
     // Final target reached?
@@ -920,6 +1000,51 @@ export async function runOptimization(
     }
   }
 
+  // 5. Final push — if within 15% of target, retry with accumulated knowledge
+  const closeEnough = fullConfig.lowerIsBetter
+    ? bestMetric <= fullConfig.target * 1.15
+    : bestMetric >= fullConfig.target * 0.85;
+
+  if (closeEnough && !signal?.aborted) {
+    callbacks.onPhaseStart?.(phases.length, "final_push", fullConfig.target);
+
+    const pushPhase: OptimizationPhase = {
+      name: "final_push",
+      targetMetric: fullConfig.target,
+      model: "opus",
+      parallelPaths: 6,
+      maxRounds: 6,
+      maxIterations: 20,
+      maxTurns: 12,
+      focus: `GOAL: FINAL PUSH — get from ${bestMetric} to below ${fullConfig.target} cycles.
+You are ${((bestMetric / fullConfig.target - 1) * 100).toFixed(0)}% away from the target. This is achievable.
+
+STRATEGY: Cycle-level micro-optimization. Every single cycle counts.
+1. AUDIT: List every bundle in the hot loop. Count slots used vs available.
+2. BIGGEST WIN FIRST: Find the bundle with the most waste. Fix it.
+3. FLOW ELIMINATION: Every select/vselect uses the precious flow slot (only 1!).
+   Replace with: result = (cond & a) | (~cond & b) using alu/valu.
+4. BUNDLE MERGING: Adjacent bundles with no data dependencies → merge into one.
+5. CONSTANT HOISTING: Any value computed the same way every iteration → move outside loop.
+6. Remember: the winning code represents PROVEN optimizations. Don't undo them.
+${SELF_CHECK}`,
+    };
+
+    const pushResult = await runPhase(
+      pushPhase, task, fullConfig, gitRoot, isaReference,
+      providerConfig, profile, bestMetric, bestCode,
+      allHistory, callbacks, signal, prevPhaseCode,
+      carrySuccess, carryFailure,
+    );
+
+    bestMetric = pushResult.bestMetric;
+    bestCode = pushResult.bestCode;
+    totalRounds += pushPhase.maxRounds;
+  }
+
   if (bestCode) await restoreFile(fullConfig.workdir, fullConfig.targetFile, bestCode);
-  return { bestMetric, initialMetric, totalIterations: allHistory.length, totalRounds, history: allHistory, durationMs: Date.now() - startTime, reason: "max_rounds" };
+
+  const reason = isTargetReached(bestMetric, fullConfig.target, fullConfig.lowerIsBetter)
+    ? "target_reached" : "max_rounds";
+  return { bestMetric, initialMetric, totalIterations: allHistory.length, totalRounds, history: allHistory, durationMs: Date.now() - startTime, reason };
 }
