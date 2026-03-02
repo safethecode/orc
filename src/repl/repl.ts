@@ -1891,8 +1891,8 @@ async function handleOptimizeCommand(
   }
 
   if (tokens.length < 4) {
-    renderer.info("\x1b[1mUsage:\x1b[0m /optimize \"<test-cmd>\" \"<metric-regex>\" <target> <file> [--rounds N] [--paths N] [--iters N] [--model tier]");
-    renderer.info("\x1b[2mExample:\x1b[0m /optimize \"python tests/submission_tests.py\" \"CYCLES:\\s+(\\d+)\" 1487 perf_takehome.py");
+    renderer.info("\x1b[1mUsage:\x1b[0m /optimize \"<test-cmd>\" \"<metric-regex>\" <target> <file> [--rounds N] [--paths N] [--iters N] [--model tier] [--unit label] [--context file]");
+    renderer.info("\x1b[2mExample:\x1b[0m /optimize \"python tests/test.py\" \"time:\\s+([\\d.]+)\" 50 main.py --unit ms --context config.py");
     return;
   }
 
@@ -1919,31 +1919,19 @@ async function handleOptimizeCommand(
   let parallelPaths = 3;
   let maxIterations = 15;
   let explorerModel: ModelTier = "sonnet";
+  let metricUnit = "units";
+  const contextFiles: string[] = [];
 
   for (let i = 4; i < tokens.length - 1; i++) {
     if (tokens[i] === "--rounds") maxRounds = parseInt(tokens[++i]) || maxRounds;
     else if (tokens[i] === "--paths") parallelPaths = parseInt(tokens[++i]) || parallelPaths;
     else if (tokens[i] === "--iters") maxIterations = parseInt(tokens[++i]) || maxIterations;
     else if (tokens[i] === "--model") explorerModel = (tokens[++i] as ModelTier) || explorerModel;
+    else if (tokens[i] === "--unit") metricUnit = tokens[++i] || metricUnit;
+    else if (tokens[i] === "--context") contextFiles.push(tokens[++i]);
   }
 
   const workdir = process.cwd();
-
-  // Auto-detect context files for deep study
-  const contextFiles: string[] = [];
-  for (const candidate of ["problem.py", "simulator.py", "machine.py"]) {
-    try {
-      await Bun.file(`${workdir}/${candidate}`).text();
-      contextFiles.push(candidate);
-    } catch { /* not present */ }
-  }
-
-  // Parse --context flag for additional files
-  for (let i = 4; i < tokens.length - 1; i++) {
-    if (tokens[i] === "--context") {
-      contextFiles.push(tokens[++i]);
-    }
-  }
 
   const optimConfig: OptimizationConfig = {
     testCommand,
@@ -1956,6 +1944,7 @@ async function handleOptimizeCommand(
     workdir,
     targetFile,
     explorerModel,
+    metricUnit,
     contextFiles: contextFiles.length > 0 ? contextFiles : undefined,
     goldenDir: `${workdir}/.orc-golden`,
   };
@@ -1976,10 +1965,11 @@ async function handleOptimizeCommand(
   renderer.info(`\x1b[1mOptimization Harness\x1b[0m`);
   renderer.info(`  test:   ${testCommand}`);
   renderer.info(`  metric: ${metricPatternStr}`);
-  renderer.info(`  target: ${target}`);
+  renderer.info(`  target: ${target} ${metricUnit}`);
   renderer.info(`  file:   ${targetFile}`);
   renderer.info(`  rounds: ${maxRounds} × ${parallelPaths} paths × ${maxIterations} iters`);
   renderer.info(`  model:  ${explorerModel}`);
+  renderer.info(`  unit:   ${metricUnit}`);
   if (contextFiles.length > 0) {
     renderer.info(`  study:  ${contextFiles.join(", ")}`);
   }
@@ -2001,13 +1991,13 @@ async function handleOptimizeCommand(
     onIterationComplete: (path, step) => {
       const marker = step.improved ? "\x1b[32m✓\x1b[0m" : step.correct ? "\x1b[33m○\x1b[0m" : "\x1b[31m✗\x1b[0m";
       const metric = step.metric !== null ? `${step.metric}` : "N/A";
-      renderer.info(`  ${marker} path ${path} iter ${step.iteration}: ${metric} cycles → ${step.action}`);
+      renderer.info(`  ${marker} path ${path} iter ${step.iteration}: ${metric} ${metricUnit} → ${step.action}`);
     },
     onTournamentResult: (round, bestMetric, bestPath) => {
-      renderer.info(`\x1b[1m\x1b[32m★ Round ${round + 1} winner:\x1b[0m path ${bestPath} → ${bestMetric} cycles`);
+      renderer.info(`\x1b[1m\x1b[32m★ Round ${round + 1} winner:\x1b[0m path ${bestPath} → ${bestMetric} ${metricUnit}`);
     },
     onTestRun: (_path, output) => {
-      // Extract cycle count for live display
+      // Extract metric for live display
       const m = output.match(metricPattern);
       if (m) renderer.updateCostLive(parseFloat(m[1]) || 0);
     },

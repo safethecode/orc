@@ -2,22 +2,21 @@
 // Phase-gated optimization with deep study, adaptive models, and
 // verified research. Each phase has its own target, model, and strategy.
 //
-// Phase 0: Deep Study — agent reads ISA/simulator, produces reference
-// Phase 1: Foundation — loops + basic VLIW packing (Sonnet)
-// Phase 2: Vectorization — SIMD with valu/vload/vstore (Sonnet)
-// Phase 3: Advanced — scatter emulation + interleaving (Opus)
-// Phase 4: Extreme — software pipelining (Opus)
-// Phase 5: Micro — cycle-level bundle auditing + slot filling (Opus)
+// Phase 0: Deep Study — agent reads source files, produces domain reference
+// Phase 1: Foundation — basic structural optimizations (Sonnet)
+// Phase 2: Intermediate — domain-specific optimizations from study (Sonnet)
+// Phase 3: Advanced — deep optimizations with full domain knowledge (Opus)
+// Phase 4: Extreme — micro-level optimizations (Opus)
 //
 // Quality boosters:
-// - Golden solution injection: reference code from past runs injected as structural examples
-// - ISA verifier: Haiku pre-flight check catches ISA violations before expensive testing
+// - Golden solution injection: reference code from past runs
+// - Domain verifier: Haiku pre-flight check catches violations before testing
 // - Path diversity: each parallel path gets a different "personality"
 // - Success/failure pattern tracking: proven techniques & anti-patterns
 // - Phase transition injection: winning code from phase N → phase N+1
 // - Top-2 tournament seeding: runner-up code seeds 40% of next round's paths
-// - Final push: if within 15% of target after all phases, retry with fresh strategy
-// - Self-check: agents must verify ISA compliance before submitting code
+// - Final push: if within 15% of target after all phases, retry
+// - Self-check: agents verify domain compliance before submitting code
 
 import { AgentStreamer, type ToolUseEvent } from "../repl/streamer.ts";
 import { buildCommand } from "../agents/provider.ts";
@@ -40,6 +39,8 @@ export interface OptimizationConfig {
   workdir: string;
   targetFile: string;
   explorerModel: ModelTier;
+  /** Label for the metric being optimized (e.g. "cycles", "ms", "bytes") */
+  metricUnit?: string;
   /** Additional source files to feed the agent for deep understanding */
   contextFiles?: string[];
   /** Directory for golden solution persistence (default: ${workdir}/.orc-golden) */
@@ -86,10 +87,10 @@ export interface OptimizationCallbacks {
 
 const PATH_PERSONALITIES = [
   "", // path 0: default — follow phase focus directly
-  `STYLE: CONSERVATIVE. Make small, safe, incremental changes. Prefer proven patterns from the success history below. Never rewrite more than 20 lines at once. Verify your understanding of each instruction before using it.`,
+  `STYLE: CONSERVATIVE. Make small, safe, incremental changes. Prefer proven patterns from the success history below. Never rewrite more than 20 lines at once. Verify your understanding before using any instruction.`,
   `STYLE: AGGRESSIVE. Make bold structural changes. Rewrite entire functions if the architecture is wrong. Prioritize maximum throughput — it's OK to restructure everything as long as correctness holds.`,
-  `STYLE: CREATIVE. Combine techniques in unusual ways. What would a hardware engineer do? Think about the physical pipeline — which stages are idle? Can you overlap operations across loop iterations?`,
-  `STYLE: SYSTEMATIC. Before coding, compute the EXACT cycle count for each section. Identify the single biggest time sink. Fix ONLY that bottleneck this iteration. Show your cycle math.`,
+  `STYLE: CREATIVE. Combine techniques in unusual ways. Think about the underlying hardware/runtime — which resources are idle? Can you overlap operations or restructure data flow?`,
+  `STYLE: SYSTEMATIC. Before coding, compute the EXACT cost for each section. Identify the single biggest bottleneck. Fix ONLY that bottleneck this iteration. Show your math.`,
 ];
 
 // ── Success/Failure Patterns ────────────────────────────────────────
@@ -119,21 +120,21 @@ function extractStrategy(agentText: string): string {
   return firstLine?.trim().slice(0, 200) ?? "unknown approach";
 }
 
-// ── Self-Check Prompt Fragment ──────────────────────────────────────
+// ── Self-Check (Dynamic) ──────────────────────────────────────────
 
-const SELF_CHECK = `
+function buildSelfCheck(domainRef: string): string {
+  if (!domainRef) return "";
+  return `
 MANDATORY SELF-CHECK before submitting your code change:
-1. Verify every instruction name exists in the ISA reference above
-2. Count slots per bundle: alu ≤ 12, valu ≤ 6, load ≤ 2, store ≤ 2, flow ≤ 1
-3. No RAW hazards: you cannot READ a value WRITTEN in the same bundle (end-of-cycle writes)
-4. Scratch registers must be allocated before use (alloc_scratch)
-5. vload/vstore addresses must be contiguous — NOT for scatter/gather
+1. Re-read the domain reference above
+2. Verify every operation/instruction you use actually exists in the reference
+3. Verify you are not violating any constraints or limits described in the reference
+4. Check for data dependency violations (writing and reading the same value in the same step)
+5. Verify all resource allocations are done before use
 If any check fails, fix it before proceeding.`;
+}
 
 // ── Golden Solution Persistence ─────────────────────────────────────
-// Saves winning code from each phase to disk. Future runs load these
-// as structural reference examples, showing agents what optimized code
-// looks like at each performance level.
 
 async function loadGoldenSolutions(goldenDir: string): Promise<Map<number, string>> {
   const solutions = new Map<number, string>();
@@ -168,73 +169,71 @@ function findBestGolden(
   currentMetric: number,
   lowerIsBetter: boolean,
 ): { metric: number; code: string } | undefined {
-  // Find the golden solution with the best metric that's at or better than phaseTarget
   let best: { metric: number; code: string } | undefined;
   for (const [metric, code] of goldenSolutions) {
     if (lowerIsBetter) {
-      // Want golden with metric <= phaseTarget (already achieved target)
-      // Among those, prefer the one closest to phaseTarget (most relevant)
       if (metric <= phaseTarget) {
-        if (!best || metric > best.metric) {
-          best = { metric, code };
-        }
+        if (!best || metric > best.metric) best = { metric, code };
       }
     } else {
       if (metric >= phaseTarget) {
-        if (!best || metric < best.metric) {
-          best = { metric, code };
-        }
+        if (!best || metric < best.metric) best = { metric, code };
       }
     }
   }
   return best;
 }
 
-// ── ISA Verifier (Haiku Pre-Flight Check) ───────────────────────────
-// Fast Haiku agent checks code for ISA violations before expensive testing.
+// ── Domain Verifier (Haiku Pre-Flight Check) ─────────────────────────
+// Fast Haiku agent checks code for domain rule violations before testing.
 // Only runs in opus phases where each wasted iteration is costly.
 
-async function verifyIsaCompliance(
+async function verifyDomainCompliance(
   workdir: string,
   targetFile: string,
-  isaReference: string,
+  domainReference: string,
   providerConfig: ProviderConfig,
   profile: AgentProfile,
   signal?: AbortSignal,
 ): Promise<{ valid: boolean; issue?: string }> {
+  if (!domainReference) return { valid: true };
+
   let code: string;
   try {
     code = await Bun.file(`${workdir}/${targetFile}`).text();
   } catch {
-    return { valid: true }; // can't read → skip verification
+    return { valid: true };
   }
 
-  // Truncate long ISA references for Haiku (keep it fast)
-  const shortIsa = isaReference.length > 2000 ? isaReference.slice(0, 2000) : isaReference;
+  const shortRef = domainReference.length > 2000 ? domainReference.slice(0, 2000) : domainReference;
   const shortCode = code.length > 6000 ? code.slice(0, 6000) : code;
 
-  const prompt = `Check this VLIW SIMD code for ISA violations. Output ONLY one of:
+  const prompt = `Check this code for domain rule violations based on the reference below. Output ONLY one of:
 - "VALID" if no issues found
 - "INVALID: <one-line description of the most critical issue>"
 
-Check these rules:
-1. INSTRUCTION NAMES: Valid ops — alu/valu: +,-,*,^,|,&,~,<<,>>,==,!=,<,>,<=,>=,min,max | load: load,vload,const,load_offset | store: store,vstore | flow: select,vselect,cond_jump,cond_jump_rel,jump,add_imm,vbroadcast
-2. SLOT LIMITS per bundle: alu≤12, valu≤6, load≤2, store≤2, flow≤1
-3. RAW HAZARDS: Cannot read a value written in the same bundle (end-of-cycle writes)
-4. vload/vstore need SCALAR address for VLEN contiguous locations
-5. alloc_scratch must be called before using scratch registers
+## Domain Reference
+${shortRef}
 
-${shortIsa}
-
-\`\`\`python
+## Code to Check
+\`\`\`
 ${shortCode}
-\`\`\``;
+\`\`\`
+
+Rules to check:
+1. Every operation/instruction used must exist in the domain reference
+2. All resource limits and constraints must be respected
+3. No data dependency violations (read-after-write in same step, etc.)
+4. All required setup/allocation must happen before use
+5. Any domain-specific addressing or access patterns must be correct
+
+Only flag CLEAR violations, not style issues.`;
 
   const streamer = new AgentStreamer();
   const cmd = buildCommand(providerConfig, profile, {
     prompt,
     model: "haiku",
-    systemPrompt: "You are an ISA compliance checker. Be precise. Only flag CLEAR violations, not style issues.",
+    systemPrompt: "You are a domain compliance checker. Be precise. Only flag CLEAR violations based on the reference, not style issues.",
     maxTurns: 1,
   });
 
@@ -245,7 +244,7 @@ ${shortCode}
     const issueMatch = text.match(/INVALID:\s*(.+)/i);
     return { valid: false, issue: issueMatch?.[1]?.slice(0, 200) ?? text.slice(0, 200) };
   } catch {
-    return { valid: true }; // verifier failure → proceed normally
+    return { valid: true };
   }
 }
 
@@ -262,173 +261,108 @@ interface OptimizationPhase {
   focus: string;
 }
 
-function buildPhases(finalTarget: number, initialMetric: number): OptimizationPhase[] {
+function buildPhases(finalTarget: number, initialMetric: number, lowerIsBetter: boolean, unit: string): OptimizationPhase[] {
   const phases: OptimizationPhase[] = [];
 
-  if (initialMetric > 18000) {
+  // Compute intermediate targets as fractions of the gap
+  const gap = Math.abs(initialMetric - finalTarget);
+  if (gap === 0) return phases;
+
+  // lerp: fraction of gap from initial toward target
+  const lerp = (frac: number) =>
+    lowerIsBetter
+      ? initialMetric - gap * frac
+      : initialMetric + gap * frac;
+
+  // Phase 1: Foundation — get 30% of the way (Sonnet, conservative)
+  const t1 = lerp(0.3);
+  if (lowerIsBetter ? initialMetric > t1 : initialMetric < t1) {
     phases.push({
       name: "foundation",
-      targetMetric: 18000,
+      targetMetric: Math.round(t1),
       model: "sonnet",
       parallelPaths: 3,
       maxRounds: 3,
       maxIterations: 15,
       maxTurns: 8,
-      focus: `GOAL: Get below 18,000 cycles.
-STRATEGY: Convert the unrolled round×batch loops into actual loops using flow jump/cond_jump instructions, and enable VLIW packing by calling self.build(body, vliw=True).
+      focus: `GOAL: Reach ${Math.round(t1)} ${unit} (30% improvement from ${initialMetric}).
+STRATEGY: Basic structural optimizations — fix obvious inefficiencies first.
 KEY TECHNIQUES:
-- Use cond_jump_rel or cond_jump for loop control instead of unrolling rounds and batch items
-- The build() method already has VLIW packing logic — use it by passing vliw=True
-- A loop counter in scratch + compare + conditional jump replaces the unrolled Python for-loops
-- This alone should give 8-10x speedup from reduced instruction count`,
+- Replace unrolled/repeated code with proper loops
+- Enable any built-in parallelism or optimization flags
+- Fix algorithmic complexity issues (O(n²) → O(n), etc.)
+- Use appropriate data structures for the access pattern
+Focus on the BIGGEST wins with the LEAST risk. Do not attempt advanced techniques yet.`,
     });
   }
 
-  if (finalTarget < 18000) {
+  // Phase 2: Intermediate — get to 60% (Sonnet, moderate)
+  const t2 = lerp(0.6);
+  if (lowerIsBetter ? finalTarget < t1 : finalTarget > t1) {
     phases.push({
-      name: "vectorization",
-      targetMetric: Math.max(finalTarget, 4000),
+      name: "intermediate",
+      targetMetric: Math.round(Math.max(lowerIsBetter ? finalTarget : 0, lowerIsBetter ? t2 : t2)),
       model: "sonnet",
       parallelPaths: 4,
       maxRounds: 4,
       maxIterations: 20,
       maxTurns: 10,
-      focus: `GOAL: Vectorize using SIMD to get below 4,000 cycles.
-STRATEGY: Process VLEN=8 batch items simultaneously using vector instructions.
+      focus: `GOAL: Reach ${Math.round(t2)} ${unit} (60% improvement).
+STRATEGY: Apply domain-specific optimizations revealed by the study phase.
 KEY TECHNIQUES:
-- vload: load VLEN contiguous elements from memory into scratch (addr is scalar)
-- vstore: store VLEN elements from scratch to memory (addr is scalar)
-- valu: operate on VLEN elements in parallel. Same ops as alu but on vectors
-  e.g., ("^", vdest, va, vb) XORs 8 pairs simultaneously
-- vbroadcast: copy a scalar to all VLEN lanes
-- vselect: per-lane conditional select (like select but vectorized)
-- Allocate vector scratch registers: alloc_scratch(name, VLEN) gives 8 consecutive addresses
-- Process the batch in chunks of VLEN instead of one-by-one
-- Hash computation can be fully vectorized since each batch item is independent
-
-EXAMPLE PATTERN — vectorized XOR over batch:
-  alloc_scratch("vdata", VLEN)    # 8 consecutive addresses
-  alloc_scratch("vmask", VLEN)
-  body.append(("vload", vdata, batch_base_addr))   # load 8 batch items
-  body.append(("vbroadcast", vmask, scalar_key))    # broadcast key to all lanes
-  body.append(("^", vdata, vdata, vmask, "valu"))   # XOR all 8 in parallel`,
+- Use parallel/vector/SIMD operations if the domain supports them
+- Batch processing: process multiple items at once instead of one-by-one
+- Memory layout optimization: arrange data for sequential access
+- Reduce instruction count by using specialized operations from the domain reference
+Consult the domain reference above for available operations and their semantics.`,
     });
   }
 
-  if (finalTarget < 4000) {
+  // Phase 3: Advanced — get to 85% (Opus, aggressive)
+  const t3 = lerp(0.85);
+  if (lowerIsBetter ? finalTarget < t2 : finalTarget > t2) {
     phases.push({
       name: "advanced",
-      targetMetric: Math.max(finalTarget, 2000),
+      targetMetric: Math.round(lowerIsBetter ? Math.max(finalTarget, t3) : Math.min(finalTarget, t3)),
       model: "opus",
       parallelPaths: 4,
       maxRounds: 5,
       maxIterations: 25,
       maxTurns: 15,
-      focus: `GOAL: Get below 2,000 cycles with advanced memory and scheduling optimizations.
-STRATEGY: Solve the scatter load bottleneck and hide dependency latencies.
+      focus: `GOAL: Reach ${Math.round(t3)} ${unit} (85% improvement).
+STRATEGY: Deep optimizations using full domain knowledge.
 KEY TECHNIQUES:
-- Scatter load emulation: vload only works for contiguous addresses, but tree node access is indexed.
-  Solution: use multiple scalar "load" or "load_offset" instructions packed in one VLIW bundle.
-  With load slot limit of 2, you need ceil(VLEN/2) = 4 cycles to gather 8 values.
-  OR: precompute addresses with valu, then use load_offset in a loop.
-- Dependency chain hiding: the 6-stage hash has a serial dependency chain.
-  Interleave computation for different vector chunks to fill otherwise-idle slots.
-  While chunk A waits for hash stage 3, start hash stage 1 for chunk B.
-- Pack ALU operations (12 slots!) with loads (2 slots) in the same bundle.
-  Address calculations (alu) can share a bundle with data loads.
-- SLOT LIMITS: alu:12, valu:6, load:2, store:2, flow:1, debug:64
-
-EXAMPLE PATTERN — scatter gather with scalar loads:
-  # Gather 8 tree values using 4 cycles (2 loads per cycle)
-  for i in range(0, VLEN, 2):
-      body.append(("load_offset", dest[i], base, idx[i]))
-      body.append(("load_offset", dest[i+1], base, idx[i+1]))
-      # Pack address calc for next pair in same bundle:
-      if i+2 < VLEN:
-          body.append(("add", idx[i+2], node_base, offset[i+2], "alu"))
-          body.append(("add", idx[i+3], node_base, offset[i+3], "alu"))`,
+- Hide latency: overlap independent operations (pipelining, interleaving)
+- Resolve bottlenecks: identify which resources are saturated and restructure to balance load
+- Dependency chain breaking: restructure computation to expose more parallelism
+- Memory access pattern optimization: prefetch, coalesce, or reorganize for locality
+- Exploit all available execution resources — audit utilization and fill idle capacity
+Every optimization must be validated against the domain reference.`,
     });
   }
 
-  if (finalTarget < 2000) {
+  // Phase 4: Extreme — get to 95%+ (Opus, micro-level)
+  if (lowerIsBetter ? finalTarget < t3 : finalTarget > t3) {
     phases.push({
       name: "extreme",
-      targetMetric: Math.max(finalTarget, 1500),
+      targetMetric: finalTarget,
       model: "opus",
       parallelPaths: 5,
       maxRounds: 8,
       maxIterations: 25,
       maxTurns: 15,
-      focus: `GOAL: Get below ${Math.max(finalTarget, 1500)} cycles with software pipelining.
-STRATEGY: Software pipelining, full VLIW slot utilization, and micro-architectural tricks.
+      focus: `GOAL: Reach the final target of ${finalTarget} ${unit}.
+STRATEGY: Micro-level optimization — every unit of the metric counts.
 KEY TECHNIQUES:
-- Software pipelining: overlap iterations of the main loop.
-  While iteration N does hash computation, iteration N+1 can do memory loads.
-  This requires a "prologue" to fill the pipeline and "epilogue" to drain it.
-- Modulo scheduling: assign each operation to a specific cycle offset within the loop.
-  Ensures every cycle uses the maximum number of slots.
-- Minimize flow engine usage: flow has only 1 slot (select, vselect, cond_jump).
-  Replace select with bitwise: (cond * a) | ((1-cond) * b) using alu.
-  This frees the flow slot for loop control.
-- Use add_imm for loop counter increments (single flow slot, no alu needed).
-- Consider processing multiple rounds in the inner loop to increase the work per iteration
-  and allow more pipelining overlap.
-- EVERY idle slot is a wasted cycle. Audit each bundle and fill empty slots.
+- AUDIT FIRST: before any change, produce a detailed breakdown of where cost accumulates
+- Resource utilization: for every execution step, check how many available slots/units are used vs wasted
+- Replace expensive operations with cheaper equivalents (consult the domain reference)
+- Merge adjacent steps that have no data dependencies between them
+- Hoist invariant computations out of loops
+- Consider unrolling to amortize loop overhead and enable cross-iteration optimization
+- MEASURE: quantify the expected improvement before implementing
 
-EXAMPLE PATTERN — software pipelined loop:
-  # Prologue: start first iteration's loads
-  body.append(("vload", data_A, addr_0))     # iter 0 loads
-  body.append(("add", addr_1, addr_0, stride, "alu"))
-  # Steady state: overlap load(N+1) with compute(N)
-  loop_body = [
-      ("vload", data_B, addr_next),           # load for NEXT iteration
-      ("^", hash_A, hash_A, data_A, "valu"),  # compute THIS iteration
-      ("*", hash_A, hash_A, prime, "valu"),    # more compute THIS
-      ("add", addr_next, addr_next, stride, "alu"),  # addr calc for next
-  ]
-  # Epilogue: finish last iteration's compute (no more loads needed)
-${SELF_CHECK}`,
-    });
-  }
-
-  if (finalTarget < 1500) {
-    phases.push({
-      name: "micro",
-      targetMetric: finalTarget,
-      model: "opus",
-      parallelPaths: 5,
-      maxRounds: 10,
-      maxIterations: 20,
-      maxTurns: 12,
-      focus: `GOAL: Get below ${finalTarget} cycles with cycle-level micro-optimization.
-THIS IS THE FINAL PHASE. You are close to the target. Every single cycle matters.
-
-APPROACH — audit first, optimize second:
-1. Before ANY code change, produce a CYCLE AUDIT of the main loop:
-   - List each VLIW bundle (cycle) in the hot loop
-   - For each bundle: slot usage — alu: N/12, valu: N/6, load: N/2, store: N/2, flow: N/1
-   - Calculate: total_cycles = bundles_per_iteration × loop_iterations
-   - Identify the #1 waste: which bundles have the most empty slots?
-
-2. OPTIMIZATION PRIORITIES (highest impact first):
-   a. REPLACE FLOW WITH ALU: select/vselect uses the flow engine (only 1 slot!).
-      Replace with bitwise: result = (cond & a) | (~cond & b) using alu/valu (12/6 slots).
-      This is often worth 10-50 cycles because it unblocks cond_jump packing.
-   b. MERGE BUNDLES: if two adjacent bundles have no data dependencies between them
-      (no value written in bundle A is read in bundle B), merge them into one bundle.
-   c. FILL EMPTY SLOTS: if a bundle uses 1/12 alu, move address calculations from
-      neighboring bundles into the empty slots.
-   d. HOIST INVARIANTS: move loads/computations that don't change per iteration outside the loop.
-      Use the "const" instruction for compile-time constants.
-   e. UNROLL 2x: if the loop body has few bundles, unrolling 2x hides the cond_jump overhead
-      and creates more opportunities for inter-iteration slot filling.
-
-3. MEASURE: count cycles before and after. Show your math.
-
-SLOT LIMITS: alu:12, valu:6, load:2, store:2, flow:1
-CRITICAL BOTTLENECK: flow has 1 slot. select + cond_jump cannot coexist in one bundle.
-Every select you eliminate = one more bundle where cond_jump can pack with other work.
-${SELF_CHECK}`,
+3. VERIFY: check your changes against ALL domain rules before submitting.`,
     });
   }
 
@@ -443,6 +377,7 @@ const DEFAULT_CONFIG: Partial<OptimizationConfig> = {
   parallelPaths: 3,
   maxRounds: 8,
   explorerModel: "sonnet",
+  metricUnit: "units",
 };
 
 // ── Metric Parser ──────────────────────────────────────────────────
@@ -488,7 +423,7 @@ async function readContextFiles(workdir: string, files: string[]): Promise<strin
   for (const f of files) {
     try {
       const content = await Bun.file(`${workdir}/${f}`).text();
-      parts.push(`\n### File: ${f}\n\`\`\`python\n${content}\n\`\`\``);
+      parts.push(`\n### File: ${f}\n\`\`\`\n${content}\n\`\`\``);
     } catch { /* skip unreadable files */ }
   }
   return parts.join("\n");
@@ -560,38 +495,35 @@ async function deepStudy(
   const sourceContext = await readContextFiles(workdir, contextFiles);
   const targetCode = await saveFile(workdir, targetFile) ?? "";
 
-  const prompt = `You are about to optimize code for a custom VLIW SIMD architecture. Before writing ANY code, you must deeply understand the machine.
+  const prompt = `You are about to optimize code for a specialized domain. Before writing ANY code, you must deeply understand the system.
 
-Read ALL the source files below carefully. Then produce a concise ISA REFERENCE CARD that an optimization engineer can use.
+Read ALL the source files below carefully. Then produce a concise DOMAIN REFERENCE CARD that an optimization engineer can use.
 
 ## Source Files
 ${sourceContext}
 
 ## Target File (to be optimized)
-\`\`\`python
+\`\`\`
 ${targetCode}
 \`\`\`
 
 ## Your Task
 Produce a reference card covering:
 
-1. **Machine Architecture**: cores, scratch space, memory model, cycle counting rules
-2. **Complete Instruction Set**: EVERY engine and EVERY operation with its syntax and semantics
-   - alu ops: list ALL of them with (op, dest, src1, src2) format
-   - valu ops: list ALL with vector semantics (VLEN elements)
-   - load ops: load, vload, const, load_offset — exact semantics
-   - store ops: store, vstore — exact semantics
-   - flow ops: select, vselect, cond_jump, jump, add_imm, etc.
-3. **Slot Limits**: exact limits per engine per cycle
-4. **Critical Semantics**: end-of-cycle writes, hazard rules (WAW, RAW within a bundle)
-5. **Available Data Structures**: Tree, Input, memory layout (header format)
-6. **Current Bottleneck Analysis**: what the current scalar code does and why it's slow
-7. **Key Optimization Opportunities**: specific opportunities based on the ISA
+1. **System Architecture**: execution model, resource types, memory model, cost model (what is being optimized — cycles, latency, size, etc.)
+2. **Complete Operation Set**: EVERY available operation/instruction with syntax and semantics
+   - Group by category (compute, memory, control flow, specialized, etc.)
+   - Include exact parameter formats
+3. **Resource Limits**: exact limits per execution unit per step/cycle/iteration
+4. **Critical Semantics**: timing model, dependency rules, hazard rules (read-after-write, etc.)
+5. **Available Data Structures**: what data types, memory regions, addressing modes exist
+6. **Current Bottleneck Analysis**: what the current code does and why it's slow
+7. **Key Optimization Opportunities**: specific opportunities based on the domain
 
 Be precise. Include exact numbers. This reference will be used by agents who haven't read the source.
 Under 800 words.`;
 
-  const system = `You are a computer architect analyzing a custom ISA. Read every line of the simulator code. Be thorough and precise — missing a single instruction or getting a semantic wrong will cause optimization failures.`;
+  const system = `You are a domain expert analyzing a specialized system. Read every line of the source code. Be thorough and precise — missing a single operation or getting a semantic wrong will cause optimization failures.`;
 
   const streamer = new AgentStreamer();
   const cmd = buildCommand(providerConfig, profile, {
@@ -608,21 +540,22 @@ Under 800 words.`;
 
 function buildPhaseSystemPrompt(
   phase: OptimizationPhase,
-  isaReference: string,
+  domainReference: string,
   config: OptimizationConfig,
   personality?: string,
   prevPhaseCode?: string,
   goldenCode?: { metric: number; code: string },
 ): string {
+  const unit = config.metricUnit ?? "units";
   const parts: string[] = [];
 
-  parts.push(`You are an expert performance optimization engineer working on a custom VLIW SIMD architecture.
+  parts.push(`You are an expert performance optimization engineer.`);
 
-## ISA Reference (study this carefully)
-${isaReference}
+  if (domainReference) {
+    parts.push(`\n## Domain Reference (study this carefully)\n${domainReference}`);
+  }
 
-## Current Phase: ${phase.name}
-${phase.focus}`);
+  parts.push(`\n## Current Phase: ${phase.name}\n${phase.focus}`);
 
   if (personality) {
     parts.push(`\n## Your Optimization Style\n${personality}`);
@@ -630,26 +563,29 @@ ${phase.focus}`);
 
   if (goldenCode) {
     const truncGolden = goldenCode.code.length > 4000 ? goldenCode.code.slice(0, 4000) + "\n# ... (truncated)" : goldenCode.code;
-    parts.push(`\n## Reference Solution (achieved ${goldenCode.metric} cycles in a previous run)
+    parts.push(`\n## Reference Solution (achieved ${goldenCode.metric} ${unit} in a previous run)
 Study this code's STRUCTURE carefully. It shows optimization patterns that work at this performance level.
 Do NOT copy it verbatim — understand WHY it achieves this performance, then apply those principles to your approach.
-\`\`\`python
+\`\`\`
 ${truncGolden}
 \`\`\``);
   }
 
   if (prevPhaseCode) {
     const truncated = prevPhaseCode.length > 6000 ? prevPhaseCode.slice(0, 6000) + "\n# ... (truncated)" : prevPhaseCode;
-    parts.push(`\n## Starting Code (result of previous optimization phase)\nStudy this carefully — it represents proven optimizations. Build on it, don't revert it.\n\`\`\`python\n${truncated}\n\`\`\``);
+    parts.push(`\n## Starting Code (result of previous optimization phase)\nStudy this carefully — it represents proven optimizations. Build on it, don't revert it.\n\`\`\`\n${truncated}\n\`\`\``);
   }
+
+  const selfCheck = buildSelfCheck(domainReference);
 
   parts.push(`
 ## Rules
 1. Make ONE focused optimization per iteration
-2. NEVER modify files in tests/ folder
+2. NEVER modify test files
 3. Always maintain correctness — wrong results will be reverted
-4. Read the ISA reference above BEFORE coding. Understand what instructions exist.
+4. Read the domain reference above BEFORE coding. Understand what operations exist.
 5. Before implementing, briefly state your strategy in one sentence starting with "Strategy:"
+${selfCheck}
 
 Working in: ${config.workdir}
 Target file: ${config.targetFile}
@@ -664,6 +600,7 @@ function buildPhaseIterationPrompt(
   history: OptimizationStep[],
   bestMetric: number,
   lowerIsBetter: boolean,
+  unit: string,
   lastOutput?: string,
   deliberation?: string,
   successPatterns?: SuccessPattern[],
@@ -672,13 +609,13 @@ function buildPhaseIterationPrompt(
   const lines: string[] = [];
 
   lines.push(`## ${phase.name} — iteration ${iteration + 1}/${phase.maxIterations}`);
-  lines.push(`Current: ${bestMetric} cycles → Target: ${phase.targetMetric} cycles`);
+  lines.push(`Current: ${bestMetric} ${unit} → Target: ${phase.targetMetric} ${unit}`);
   lines.push("");
 
   if (successPatterns && successPatterns.length > 0) {
     lines.push("## Proven Techniques (these WORKED — build on them, don't undo them)");
     for (const sp of successPatterns.slice(-8)) {
-      lines.push(`  ✓ ${sp.technique} (${sp.fromMetric} → ${sp.toMetric} cycles)`);
+      lines.push(`  ✓ ${sp.technique} (${sp.fromMetric} → ${sp.toMetric} ${unit})`);
     }
     lines.push("");
   }
@@ -695,7 +632,7 @@ function buildPhaseIterationPrompt(
     lines.push("## Performance History");
     for (const step of history.slice(-10)) {
       const marker = step.improved ? "IMPROVED" : step.correct ? "no_gain" : "BROKEN";
-      lines.push(`  ${marker} iter ${step.iteration}: ${step.metric ?? "N/A"} cycles → ${step.action}`);
+      lines.push(`  ${marker} iter ${step.iteration}: ${step.metric ?? "N/A"} ${unit} → ${step.action}`);
     }
     lines.push("");
   }
@@ -733,7 +670,7 @@ async function runExplorationPath(
   phase: OptimizationPhase,
   config: OptimizationConfig,
   pathWorkdir: string,
-  isaReference: string,
+  domainReference: string,
   providerConfig: ProviderConfig,
   profile: AgentProfile,
   initialMetric: number,
@@ -752,17 +689,18 @@ async function runExplorationPath(
   let lastTestOutput: string | undefined;
   const successPatterns: SuccessPattern[] = [...(inheritedSuccess ?? [])];
   const failurePatterns: FailurePattern[] = [...(inheritedFailure ?? [])];
-  const useVerifier = phase.model === "opus";
+  const useVerifier = phase.model === "opus" && domainReference.length > 0;
+  const unit = config.metricUnit ?? "units";
 
   const pathConfig = { ...config, workdir: pathWorkdir };
-  const systemPrompt = buildPhaseSystemPrompt(phase, isaReference, pathConfig, personality, prevPhaseCode, goldenCode);
+  const systemPrompt = buildPhaseSystemPrompt(phase, domainReference, pathConfig, personality, prevPhaseCode, goldenCode);
 
   for (let iter = 0; iter < phase.maxIterations; iter++) {
     if (signal?.aborted) break;
 
     const prompt = buildPhaseIterationPrompt(
       phase, iter, history, bestMetric,
-      config.lowerIsBetter, lastTestOutput,
+      config.lowerIsBetter, unit, lastTestOutput,
       iter === 0 ? deliberation : undefined,
       successPatterns, failurePatterns,
     );
@@ -790,19 +728,19 @@ async function runExplorationPath(
 
     const strategy = extractStrategy(agentText);
 
-    // ISA verifier pre-flight check (opus phases only)
+    // Domain verifier pre-flight check (opus phases only)
     if (useVerifier) {
-      const verification = await verifyIsaCompliance(
-        pathWorkdir, config.targetFile, isaReference,
+      const verification = await verifyDomainCompliance(
+        pathWorkdir, config.targetFile, domainReference,
         providerConfig, profile, signal,
       );
       callbacks.onVerification?.(pathIndex, verification.valid, verification.issue);
       if (!verification.valid) {
-        const issue = verification.issue ?? "ISA violation";
-        failurePatterns.push({ technique: strategy, reason: `ISA violation: ${issue}` });
+        const issue = verification.issue ?? "domain violation";
+        failurePatterns.push({ technique: strategy, reason: `violation: ${issue}` });
         const step: OptimizationStep = {
           iteration: iter, metric: null, correct: false, improved: false,
-          action: "rollback", strategy: `${strategy} [ISA: ${issue}]`,
+          action: "rollback", strategy: `${strategy} [${issue}]`,
         };
         history.push(step);
         callbacks.onIterationComplete?.(pathIndex, step);
@@ -830,7 +768,7 @@ async function runExplorationPath(
         break;
       }
     } else if (metric !== null && correct) {
-      failurePatterns.push({ technique: strategy, reason: `no improvement (${metric} cycles, best is ${bestMetric})` });
+      failurePatterns.push({ technique: strategy, reason: `no improvement (${metric} ${unit}, best is ${bestMetric})` });
       const step: OptimizationStep = { iteration: iter, metric, correct: true, improved: false, action: "rollback", strategy };
       history.push(step);
       callbacks.onIterationComplete?.(pathIndex, step);
@@ -909,7 +847,7 @@ async function runPhase(
   task: string,
   config: OptimizationConfig,
   gitRoot: string,
-  isaReference: string,
+  domainReference: string,
   providerConfig: ProviderConfig,
   profile: AgentProfile,
   bestMetric: number,
@@ -925,9 +863,10 @@ async function runPhase(
   let phaseSuccess: SuccessPattern[] = [...(initialSuccess ?? [])];
   let phaseFailure: FailurePattern[] = [...(initialFailure ?? [])];
   let runnerUpCode: string | null = null;
+  const unit = config.metricUnit ?? "units";
 
   let deliberation: string | undefined;
-  const delibTask = `${task}\n\nCurrent metric: ${bestMetric} cycles. Phase goal: ${phase.targetMetric} cycles.\n\n${phase.focus}`;
+  const delibTask = `${task}\n\nCurrent metric: ${bestMetric} ${unit}. Phase goal: ${phase.targetMetric} ${unit}.\n\n${phase.focus}`;
   if (shouldBrainstorm(delibTask, "complex")) {
     try {
       const bsResult = await brainstorm(delibTask, providerConfig, profile, signal);
@@ -944,7 +883,7 @@ async function runPhase(
 
     if (phase.parallelPaths <= 1) {
       const result = await runExplorationPath(
-        0, phase, config, config.workdir, isaReference,
+        0, phase, config, config.workdir, domainReference,
         providerConfig, profile, bestMetric, deliberation, callbacks, signal,
         "", prevPhaseCode, phaseSuccess, phaseFailure, goldenCode,
       );
@@ -972,7 +911,7 @@ async function runPhase(
         const pathResults = await Promise.all(
           worktrees.map((wtPath, p) =>
             runExplorationPath(
-              p, phase, config, wtPath, isaReference,
+              p, phase, config, wtPath, domainReference,
               providerConfig, profile, bestMetric, deliberation, callbacks, signal,
               PATH_PERSONALITIES[p % PATH_PERSONALITIES.length],
               prevPhaseCode, phaseSuccess, phaseFailure, goldenCode,
@@ -1074,6 +1013,7 @@ export async function runOptimization(
   const allHistory: OptimizationStep[] = [];
   const gitRoot = await findGitRoot(fullConfig.workdir);
   const goldenDir = fullConfig.goldenDir ?? `${fullConfig.workdir}/.orc-golden`;
+  const unit = fullConfig.metricUnit ?? "units";
 
   // 1. Load golden solutions from past runs
   const goldenSolutions = await loadGoldenSolutions(goldenDir);
@@ -1092,12 +1032,12 @@ export async function runOptimization(
   let bestCode = await saveFile(fullConfig.workdir, fullConfig.targetFile);
 
   // 3. Deep Study Phase
-  let isaReference = "";
+  let domainReference = "";
   const contextFiles = fullConfig.contextFiles ?? [];
   if (contextFiles.length > 0) {
     try {
       const studyStart = Date.now();
-      isaReference = await deepStudy(
+      domainReference = await deepStudy(
         fullConfig.workdir, fullConfig.targetFile, contextFiles,
         providerConfig, profile, signal,
       );
@@ -1106,7 +1046,7 @@ export async function runOptimization(
   }
 
   // 4. Build optimization phases
-  const phases = buildPhases(fullConfig.target, initialMetric);
+  const phases = buildPhases(fullConfig.target, initialMetric, fullConfig.lowerIsBetter, unit);
   if (phases.length === 0) {
     return { bestMetric, initialMetric, totalIterations: 0, totalRounds: 0, history: allHistory, durationMs: Date.now() - startTime, reason: "target_reached" };
   }
@@ -1124,11 +1064,10 @@ export async function runOptimization(
 
     callbacks.onPhaseStart?.(phases.indexOf(phase), phase.name, phase.targetMetric);
 
-    // Find best golden solution for this phase
     const golden = findBestGolden(goldenSolutions, phase.targetMetric, bestMetric, fullConfig.lowerIsBetter);
 
     const phaseResult = await runPhase(
-      phase, task, fullConfig, gitRoot, isaReference,
+      phase, task, fullConfig, gitRoot, domainReference,
       providerConfig, profile, bestMetric, bestCode,
       allHistory, callbacks, signal, prevPhaseCode,
       undefined, undefined, golden,
@@ -1141,7 +1080,6 @@ export async function runOptimization(
     carryFailure = phaseResult.failurePatterns;
     prevPhaseCode = bestCode ?? undefined;
 
-    // Save golden solution after each phase
     if (bestCode && isImproved(bestMetric, initialMetric, fullConfig.lowerIsBetter)) {
       await saveGoldenSolution(goldenDir, bestMetric, bestCode);
       callbacks.onGoldenSaved?.(bestMetric);
@@ -1162,6 +1100,10 @@ export async function runOptimization(
     callbacks.onPhaseStart?.(phases.length, "final_push", fullConfig.target);
 
     const golden = findBestGolden(goldenSolutions, fullConfig.target, bestMetric, fullConfig.lowerIsBetter);
+    const selfCheck = buildSelfCheck(domainReference);
+    const gapPct = fullConfig.lowerIsBetter
+      ? ((bestMetric / fullConfig.target - 1) * 100).toFixed(0)
+      : ((1 - bestMetric / fullConfig.target) * 100).toFixed(0);
 
     const pushPhase: OptimizationPhase = {
       name: "final_push",
@@ -1171,22 +1113,21 @@ export async function runOptimization(
       maxRounds: 6,
       maxIterations: 20,
       maxTurns: 12,
-      focus: `GOAL: FINAL PUSH — get from ${bestMetric} to below ${fullConfig.target} cycles.
-You are ${((bestMetric / fullConfig.target - 1) * 100).toFixed(0)}% away from the target. This is achievable.
+      focus: `GOAL: FINAL PUSH — get from ${bestMetric} to ${fullConfig.lowerIsBetter ? "below" : "above"} ${fullConfig.target} ${unit}.
+You are ${gapPct}% away from the target. This is achievable.
 
-STRATEGY: Cycle-level micro-optimization. Every single cycle counts.
-1. AUDIT: List every bundle in the hot loop. Count slots used vs available.
-2. BIGGEST WIN FIRST: Find the bundle with the most waste. Fix it.
-3. FLOW ELIMINATION: Every select/vselect uses the precious flow slot (only 1!).
-   Replace with: result = (cond & a) | (~cond & b) using alu/valu.
-4. BUNDLE MERGING: Adjacent bundles with no data dependencies → merge into one.
-5. CONSTANT HOISTING: Any value computed the same way every iteration → move outside loop.
+STRATEGY: Micro-level optimization — every single ${unit.replace(/s$/, "")} counts.
+1. AUDIT: produce a detailed breakdown of where cost accumulates in the hot path
+2. BIGGEST WIN FIRST: identify the step/section with the most waste and fix it
+3. REPLACE EXPENSIVE WITH CHEAP: consult the domain reference for cheaper equivalent operations
+4. MERGE STEPS: adjacent steps with no data dependencies can often be combined
+5. HOIST INVARIANTS: any value computed identically every iteration belongs outside the loop
 6. Remember: the winning code represents PROVEN optimizations. Don't undo them.
-${SELF_CHECK}`,
+${selfCheck}`,
     };
 
     const pushResult = await runPhase(
-      pushPhase, task, fullConfig, gitRoot, isaReference,
+      pushPhase, task, fullConfig, gitRoot, domainReference,
       providerConfig, profile, bestMetric, bestCode,
       allHistory, callbacks, signal, prevPhaseCode,
       carrySuccess, carryFailure, golden,
