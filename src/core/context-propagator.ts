@@ -21,7 +21,7 @@ export class ContextPropagator {
     private compressor: ContextCompressor,
     options?: { maxContextTokens?: number },
   ) {
-    this.maxContextTokens = options?.maxContextTokens ?? 4000;
+    this.maxContextTokens = options?.maxContextTokens ?? 16000;
   }
 
   async buildWorkerPrompt(
@@ -215,7 +215,7 @@ export class ContextPropagator {
       subtaskId: result.subtaskId,
       role: (result as CollectedResult & { role?: AgentRole }).role ?? "coder",
       domain: (result as CollectedResult & { domain?: string }).domain ?? "general",
-      summary: result.result.slice(0, 500),
+      summary: result.result,
       filesChanged: result.files,
       apisCreated: [],
       schemasCreated: [],

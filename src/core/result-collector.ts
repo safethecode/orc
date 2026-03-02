@@ -119,7 +119,7 @@ export class ResultCollector {
       subtaskId: r.subtaskId,
       role: r.role ?? "coder" as AgentRole,
       domain: r.domain ?? "general",
-      summary: r.result.slice(0, 500),
+      summary: r.result,
       filesChanged: r.files,
       apisCreated: this.extractApis(r.result),
       schemasCreated: this.extractSchemas(r.result),

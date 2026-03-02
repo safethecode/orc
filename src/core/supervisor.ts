@@ -106,7 +106,7 @@ export class Supervisor {
       deps.contextBuilder,
       this.workerBus,
       deps.compressor,
-      { maxContextTokens: cpConfig?.maxContextTokens ?? 4000 },
+      { maxContextTokens: cpConfig?.maxContextTokens ?? 16000 },
     );
 
     // Initialize FeedbackLoop with worker bus + provider config for LLM quality gate
@@ -209,6 +209,43 @@ export class Supervisor {
         // After each phase: run conflict analysis on completed results, then clear diffs to avoid re-detection
         this.analyzePhaseConflicts(phaseSubtasks, collector);
         this.deps.conflictWatcher?.clearDiffs();
+      }
+
+      // 6.5. QA Agent — final verification phase
+      if (decomposition.subtasks.length > 1) {
+        const allResults = collector.getAllResults();
+        const resultSections = allResults.map(r =>
+          `### ${r.agentName} (${r.role})\n${r.result}`
+        ).join("\n\n---\n\n");
+
+        const qaPrompt = [
+          `## Original User Request`,
+          prompt,
+          ``,
+          `## Completed Phase Results`,
+          resultSections,
+          ``,
+          `Verify the original request was fully achieved. Read actual files, run commands/tests. End with [QA:PASS] or [QA:FAIL reason="..."].`,
+        ].join("\n");
+
+        const qaSubtask: SubTask = {
+          id: `st-qa-${Date.now().toString(36)}`,
+          prompt: qaPrompt,
+          parentTaskId: taskId,
+          dependencies: decomposition.subtasks.map(st => st.id),
+          provider: "claude" as ProviderName,
+          model: "sonnet",
+          agentRole: "qa",
+          priority: 999,
+          status: "queued" as TaskStatus,
+          result: null,
+          estimatedTokens: 20000,
+          actualTokens: 0,
+          startedAt: null,
+          completedAt: null,
+        };
+
+        await this.executeSubtask(qaSubtask, collector, decomposition, rootCtx);
       }
 
       // 7. Aggregate and return
