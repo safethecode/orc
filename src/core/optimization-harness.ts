@@ -8,8 +8,11 @@
 // Phase 3: Advanced — scatter emulation + interleaving (Opus)
 // Phase 4: Extreme — software pipelining + full slot usage (Opus)
 //
-// Each phase runs its own tournament of parallel paths.
-// Researcher activates on plateau with prior art + verification.
+// Quality boosters:
+// - Path diversity: each parallel path gets a different "personality"
+// - Success/failure pattern tracking: proven techniques & anti-patterns
+// - Phase transition injection: winning code from phase N → phase N+1
+// - Increased parallelism at harder phases (more lottery tickets)
 
 import { AgentStreamer, type ToolUseEvent } from "../repl/streamer.ts";
 import { buildCommand } from "../agents/provider.ts";
@@ -69,6 +72,49 @@ export interface OptimizationCallbacks {
   onStudyComplete?: (durationMs: number) => void;
 }
 
+// ── Path Diversity ──────────────────────────────────────────────────
+// Each parallel path gets a different strategic bias to maximize
+// the chance that at least one path finds the right approach.
+
+const PATH_PERSONALITIES = [
+  "", // path 0: default — follow phase focus directly
+  `STYLE: CONSERVATIVE. Make small, safe, incremental changes. Prefer proven patterns from the success history below. Never rewrite more than 20 lines at once. Verify your understanding of each instruction before using it.`,
+  `STYLE: AGGRESSIVE. Make bold structural changes. Rewrite entire functions if the architecture is wrong. Prioritize maximum throughput — it's OK to restructure everything as long as correctness holds.`,
+  `STYLE: CREATIVE. Combine techniques in unusual ways. What would a hardware engineer do? Think about the physical pipeline — which stages are idle? Can you overlap operations across loop iterations?`,
+  `STYLE: SYSTEMATIC. Before coding, compute the EXACT cycle count for each section. Identify the single biggest time sink. Fix ONLY that bottleneck this iteration. Show your cycle math.`,
+];
+
+// ── Success/Failure Patterns ────────────────────────────────────────
+// Track what worked and what didn't to prevent repeating failures
+// and to reinforce proven techniques.
+
+interface SuccessPattern {
+  fromMetric: number;
+  toMetric: number;
+  technique: string;
+}
+
+interface FailurePattern {
+  technique: string;
+  reason: string; // "broke correctness" | "no improvement" | "crashed"
+}
+
+function extractStrategy(agentText: string): string {
+  // Try to extract the agent's stated strategy from its response
+  const patterns = [
+    /(?:strategy|approach|plan|optimization)[:\s]*(.+?)(?:\n|$)/i,
+    /(?:I'll|Let me|I will|My approach is to|Going to)\s+(.+?)(?:\n|$)/i,
+    /##\s*(?:Strategy|Approach|Plan)\s*\n+(.+?)(?:\n|$)/i,
+  ];
+  for (const p of patterns) {
+    const m = agentText.match(p);
+    if (m?.[1] && m[1].length > 10) return m[1].trim().slice(0, 200);
+  }
+  // Fallback: first non-empty line
+  const firstLine = agentText.split("\n").find(l => l.trim().length > 10);
+  return firstLine?.trim().slice(0, 200) ?? "unknown approach";
+}
+
 // ── Phase Definition ──────────────────────────────────────────────
 
 interface OptimizationPhase {
@@ -79,7 +125,7 @@ interface OptimizationPhase {
   maxRounds: number;
   maxIterations: number;
   maxTurns: number;
-  focus: string; // injected into prompt so agent knows WHAT to optimize
+  focus: string;
 }
 
 function buildPhases(finalTarget: number, initialMetric: number): OptimizationPhase[] {
@@ -91,7 +137,7 @@ function buildPhases(finalTarget: number, initialMetric: number): OptimizationPh
       name: "foundation",
       targetMetric: 18000,
       model: "sonnet",
-      parallelPaths: 2,
+      parallelPaths: 3,
       maxRounds: 3,
       maxIterations: 15,
       maxTurns: 8,
@@ -111,7 +157,7 @@ KEY TECHNIQUES:
       name: "vectorization",
       targetMetric: Math.max(finalTarget, 4000),
       model: "sonnet",
-      parallelPaths: 3,
+      parallelPaths: 4,
       maxRounds: 4,
       maxIterations: 20,
       maxTurns: 10,
@@ -126,7 +172,14 @@ KEY TECHNIQUES:
 - vselect: per-lane conditional select (like select but vectorized)
 - Allocate vector scratch registers: alloc_scratch(name, VLEN) gives 8 consecutive addresses
 - Process the batch in chunks of VLEN instead of one-by-one
-- Hash computation can be fully vectorized since each batch item is independent`,
+- Hash computation can be fully vectorized since each batch item is independent
+
+EXAMPLE PATTERN — vectorized XOR over batch:
+  alloc_scratch("vdata", VLEN)    # 8 consecutive addresses
+  alloc_scratch("vmask", VLEN)
+  body.append(("vload", vdata, batch_base_addr))   # load 8 batch items
+  body.append(("vbroadcast", vmask, scalar_key))    # broadcast key to all lanes
+  body.append(("^", vdata, vdata, vmask, "valu"))   # XOR all 8 in parallel`,
     });
   }
 
@@ -136,7 +189,7 @@ KEY TECHNIQUES:
       name: "advanced",
       targetMetric: Math.max(finalTarget, 2000),
       model: "opus",
-      parallelPaths: 3,
+      parallelPaths: 4,
       maxRounds: 5,
       maxIterations: 25,
       maxTurns: 15,
@@ -152,7 +205,17 @@ KEY TECHNIQUES:
   While chunk A waits for hash stage 3, start hash stage 1 for chunk B.
 - Pack ALU operations (12 slots!) with loads (2 slots) in the same bundle.
   Address calculations (alu) can share a bundle with data loads.
-- SLOT LIMITS: alu:12, valu:6, load:2, store:2, flow:1, debug:64`,
+- SLOT LIMITS: alu:12, valu:6, load:2, store:2, flow:1, debug:64
+
+EXAMPLE PATTERN — scatter gather with scalar loads:
+  # Gather 8 tree values using 4 cycles (2 loads per cycle)
+  for i in range(0, VLEN, 2):
+      body.append(("load_offset", dest[i], base, idx[i]))
+      body.append(("load_offset", dest[i+1], base, idx[i+1]))
+      # Pack address calc for next pair in same bundle:
+      if i+2 < VLEN:
+          body.append(("add", idx[i+2], node_base, offset[i+2], "alu"))
+          body.append(("add", idx[i+3], node_base, offset[i+3], "alu"))`,
     });
   }
 
@@ -162,8 +225,8 @@ KEY TECHNIQUES:
       name: "extreme",
       targetMetric: finalTarget,
       model: "opus",
-      parallelPaths: 4,
-      maxRounds: 6,
+      parallelPaths: 5,
+      maxRounds: 8,
       maxIterations: 25,
       maxTurns: 15,
       focus: `GOAL: Get below ${finalTarget} cycles with extreme optimization.
@@ -180,7 +243,20 @@ KEY TECHNIQUES:
 - Use add_imm for loop counter increments (single flow slot, no alu needed).
 - Consider processing multiple rounds in the inner loop to increase the work per iteration
   and allow more pipelining overlap.
-- EVERY idle slot is a wasted cycle. Audit each bundle and fill empty slots.`,
+- EVERY idle slot is a wasted cycle. Audit each bundle and fill empty slots.
+
+EXAMPLE PATTERN — software pipelined loop:
+  # Prologue: start first iteration's loads
+  body.append(("vload", data_A, addr_0))     # iter 0 loads
+  body.append(("add", addr_1, addr_0, stride, "alu"))
+  # Steady state: overlap load(N+1) with compute(N)
+  loop_body = [
+      ("vload", data_B, addr_next),           # load for NEXT iteration
+      ("^", hash_A, hash_A, data_A, "valu"),  # compute THIS iteration
+      ("*", hash_A, hash_A, prime, "valu"),    # more compute THIS
+      ("add", addr_next, addr_next, stride, "alu"),  # addr calc for next
+  ]
+  # Epilogue: finish last iteration's compute (no more loads needed)`,
     });
   }
 
@@ -362,25 +438,42 @@ function buildPhaseSystemPrompt(
   phase: OptimizationPhase,
   isaReference: string,
   config: OptimizationConfig,
+  personality?: string,
+  prevPhaseCode?: string,
 ): string {
-  return `You are an expert performance optimization engineer working on a custom VLIW SIMD architecture.
+  const parts: string[] = [];
+
+  parts.push(`You are an expert performance optimization engineer working on a custom VLIW SIMD architecture.
 
 ## ISA Reference (study this carefully)
 ${isaReference}
 
 ## Current Phase: ${phase.name}
-${phase.focus}
+${phase.focus}`);
 
+  if (personality) {
+    parts.push(`\n## Your Optimization Style\n${personality}`);
+  }
+
+  if (prevPhaseCode) {
+    // Show winning code from previous phase so agent understands what's already been achieved
+    const truncated = prevPhaseCode.length > 6000 ? prevPhaseCode.slice(0, 6000) + "\n# ... (truncated)" : prevPhaseCode;
+    parts.push(`\n## Starting Code (result of previous optimization phase)\nStudy this carefully — it represents proven optimizations. Build on it, don't revert it.\n\`\`\`python\n${truncated}\n\`\`\``);
+  }
+
+  parts.push(`
 ## Rules
 1. Make ONE focused optimization per iteration
 2. NEVER modify files in tests/ folder
 3. Always maintain correctness — wrong results will be reverted
 4. Read the ISA reference above BEFORE coding. Understand what instructions exist.
-5. Explain your strategy briefly, then implement it
+5. Before implementing, briefly state your strategy in one sentence starting with "Strategy:"
 
 Working in: ${config.workdir}
 Target file: ${config.targetFile}
-Test command: ${config.testCommand}`;
+Test command: ${config.testCommand}`);
+
+  return parts.join("\n");
 }
 
 function buildPhaseIterationPrompt(
@@ -391,12 +484,32 @@ function buildPhaseIterationPrompt(
   lowerIsBetter: boolean,
   lastOutput?: string,
   deliberation?: string,
+  successPatterns?: SuccessPattern[],
+  failurePatterns?: FailurePattern[],
 ): string {
   const lines: string[] = [];
 
   lines.push(`## ${phase.name} — iteration ${iteration + 1}/${phase.maxIterations}`);
   lines.push(`Current: ${bestMetric} cycles → Target: ${phase.targetMetric} cycles`);
   lines.push("");
+
+  // Proven techniques — build on these
+  if (successPatterns && successPatterns.length > 0) {
+    lines.push("## Proven Techniques (these WORKED — build on them, don't undo them)");
+    for (const sp of successPatterns.slice(-8)) {
+      lines.push(`  ✓ ${sp.technique} (${sp.fromMetric} → ${sp.toMetric} cycles)`);
+    }
+    lines.push("");
+  }
+
+  // Anti-patterns — don't repeat these
+  if (failurePatterns && failurePatterns.length > 0) {
+    lines.push("## Anti-Patterns (DO NOT repeat — these already failed)");
+    for (const fp of failurePatterns.slice(-6)) {
+      lines.push(`  ✗ ${fp.technique} — ${fp.reason}`);
+    }
+    lines.push("");
+  }
 
   if (history.length > 0) {
     lines.push("## Performance History");
@@ -421,11 +534,19 @@ function buildPhaseIterationPrompt(
     lines.push("");
   }
 
-  lines.push("Now implement the next optimization. Focus on this phase's strategy.");
+  lines.push("Now implement the next optimization. State your strategy first, then implement it.");
   return lines.join("\n");
 }
 
 // ── Single Exploration Path ────────────────────────────────────────
+
+interface PathResult {
+  history: OptimizationStep[];
+  bestMetric: number;
+  bestCode: string | null;
+  successPatterns: SuccessPattern[];
+  failurePatterns: FailurePattern[];
+}
 
 async function runExplorationPath(
   pathIndex: number,
@@ -439,14 +560,20 @@ async function runExplorationPath(
   deliberation: string | undefined,
   callbacks: OptimizationCallbacks,
   signal?: AbortSignal,
-): Promise<{ history: OptimizationStep[]; bestMetric: number; bestCode: string | null }> {
+  personality?: string,
+  prevPhaseCode?: string,
+  inheritedSuccess?: SuccessPattern[],
+  inheritedFailure?: FailurePattern[],
+): Promise<PathResult> {
   const history: OptimizationStep[] = [];
   let bestMetric = initialMetric;
   let bestCode = await saveFile(pathWorkdir, config.targetFile);
   let lastTestOutput: string | undefined;
+  const successPatterns: SuccessPattern[] = [...(inheritedSuccess ?? [])];
+  const failurePatterns: FailurePattern[] = [...(inheritedFailure ?? [])];
 
   const pathConfig = { ...config, workdir: pathWorkdir };
-  const systemPrompt = buildPhaseSystemPrompt(phase, isaReference, pathConfig);
+  const systemPrompt = buildPhaseSystemPrompt(phase, isaReference, pathConfig, personality, prevPhaseCode);
 
   for (let iter = 0; iter < phase.maxIterations; iter++) {
     if (signal?.aborted) break;
@@ -455,6 +582,7 @@ async function runExplorationPath(
       phase, iter, history, bestMetric,
       config.lowerIsBetter, lastTestOutput,
       iter === 0 ? deliberation : undefined,
+      successPatterns, failurePatterns,
     );
 
     const streamer = new AgentStreamer();
@@ -468,14 +596,17 @@ async function runExplorationPath(
     streamer.on("text_delta", (delta: string) => callbacks.onAgentStream?.(pathIndex, delta));
     streamer.on("tool_use", (tool: ToolUseEvent) => callbacks.onAgentTool?.(pathIndex, tool));
 
+    let agentText = "";
     try {
-      await streamer.run(cmd, signal);
+      const result = await streamer.run(cmd, signal);
+      agentText = result.text;
     } catch {
-      history.push({ iteration: iter, metric: null, correct: false, improved: false, action: "rollback" });
+      history.push({ iteration: iter, metric: null, correct: false, improved: false, action: "rollback", strategy: "crashed" });
       if (bestCode) await restoreFile(pathWorkdir, config.targetFile, bestCode);
       continue;
     }
 
+    const strategy = extractStrategy(agentText);
     const testResult = await runTest(config.testCommand, pathWorkdir);
     callbacks.onTestRun?.(pathIndex, testResult.output);
     lastTestOutput = testResult.output;
@@ -484,26 +615,35 @@ async function runExplorationPath(
     const correct = testResult.exitCode === 0 || (metric !== null && testResult.output.includes("ok"));
 
     if (metric !== null && correct && isImproved(metric, bestMetric, config.lowerIsBetter)) {
+      // Success — record the pattern
+      successPatterns.push({ fromMetric: bestMetric, toMetric: metric, technique: strategy });
       bestMetric = metric;
       bestCode = await saveFile(pathWorkdir, config.targetFile);
-      history.push({ iteration: iter, metric, correct: true, improved: true, action: "checkpoint" });
-      callbacks.onIterationComplete?.(pathIndex, { iteration: iter, metric, correct: true, improved: true, action: "checkpoint" });
+      const step: OptimizationStep = { iteration: iter, metric, correct: true, improved: true, action: "checkpoint", strategy };
+      history.push(step);
+      callbacks.onIterationComplete?.(pathIndex, step);
 
       if (isTargetReached(metric, phase.targetMetric, config.lowerIsBetter)) {
-        break; // Phase target reached
+        break;
       }
     } else if (metric !== null && correct) {
-      history.push({ iteration: iter, metric, correct: true, improved: false, action: "rollback" });
-      callbacks.onIterationComplete?.(pathIndex, { iteration: iter, metric, correct: true, improved: false, action: "rollback" });
+      // No improvement — record anti-pattern
+      failurePatterns.push({ technique: strategy, reason: `no improvement (${metric} cycles, best is ${bestMetric})` });
+      const step: OptimizationStep = { iteration: iter, metric, correct: true, improved: false, action: "rollback", strategy };
+      history.push(step);
+      callbacks.onIterationComplete?.(pathIndex, step);
       if (bestCode) await restoreFile(pathWorkdir, config.targetFile, bestCode);
     } else {
-      history.push({ iteration: iter, metric, correct: false, improved: false, action: "rollback" });
-      callbacks.onIterationComplete?.(pathIndex, { iteration: iter, metric, correct: false, improved: false, action: "rollback" });
+      // Broken — record anti-pattern
+      failurePatterns.push({ technique: strategy, reason: "broke correctness" });
+      const step: OptimizationStep = { iteration: iter, metric, correct: false, improved: false, action: "rollback", strategy };
+      history.push(step);
+      callbacks.onIterationComplete?.(pathIndex, step);
       if (bestCode) await restoreFile(pathWorkdir, config.targetFile, bestCode);
     }
   }
 
-  return { history, bestMetric, bestCode };
+  return { history, bestMetric, bestCode, successPatterns, failurePatterns };
 }
 
 // ── Worktree Setup/Teardown ──────────────────────────────────────
@@ -552,7 +692,12 @@ async function runPhase(
   allHistory: OptimizationStep[],
   callbacks: OptimizationCallbacks,
   signal?: AbortSignal,
-): Promise<{ bestMetric: number; bestCode: string | null }> {
+  prevPhaseCode?: string,
+): Promise<{ bestMetric: number; bestCode: string | null; successPatterns: SuccessPattern[]; failurePatterns: FailurePattern[] }> {
+  // Accumulated patterns across rounds in this phase
+  let phaseSuccess: SuccessPattern[] = [];
+  let phaseFailure: FailurePattern[] = [];
+
   // Deliberation for this phase
   let deliberation: string | undefined;
   const delibTask = `${task}\n\nCurrent metric: ${bestMetric} cycles. Phase goal: ${phase.targetMetric} cycles.\n\n${phase.focus}`;
@@ -574,8 +719,11 @@ async function runPhase(
       const result = await runExplorationPath(
         0, phase, config, config.workdir, isaReference,
         providerConfig, profile, bestMetric, deliberation, callbacks, signal,
+        "", prevPhaseCode, phaseSuccess, phaseFailure,
       );
       allHistory.push(...result.history);
+      phaseSuccess = result.successPatterns;
+      phaseFailure = result.failurePatterns;
       if (isImproved(result.bestMetric, bestMetric, config.lowerIsBetter)) {
         bestMetric = result.bestMetric;
         bestCode = result.bestCode;
@@ -588,11 +736,33 @@ async function runPhase(
             runExplorationPath(
               p, phase, config, wtPath, isaReference,
               providerConfig, profile, bestMetric, deliberation, callbacks, signal,
+              PATH_PERSONALITIES[p % PATH_PERSONALITIES.length],
+              prevPhaseCode,
+              phaseSuccess,
+              phaseFailure,
             ),
           ),
         );
 
         for (const result of pathResults) allHistory.push(...result.history);
+
+        // Merge patterns from all paths (cross-pollination)
+        const seenSuccess = new Set(phaseSuccess.map(s => s.technique));
+        const seenFailure = new Set(phaseFailure.map(f => f.technique));
+        for (const result of pathResults) {
+          for (const sp of result.successPatterns) {
+            if (!seenSuccess.has(sp.technique)) {
+              phaseSuccess.push(sp);
+              seenSuccess.add(sp.technique);
+            }
+          }
+          for (const fp of result.failurePatterns) {
+            if (!seenFailure.has(fp.technique)) {
+              phaseFailure.push(fp);
+              seenFailure.add(fp.technique);
+            }
+          }
+        }
 
         let tournamentBest = bestMetric;
         let tournamentCode = bestCode;
@@ -618,7 +788,7 @@ async function runPhase(
 
     // Phase target reached?
     if (isTargetReached(bestMetric, phase.targetMetric, config.lowerIsBetter)) {
-      return { bestMetric, bestCode };
+      return { bestMetric, bestCode, successPatterns: phaseSuccess, failurePatterns: phaseFailure };
     }
 
     // Research + re-deliberation on plateau
@@ -643,12 +813,20 @@ async function runPhase(
         } catch { /* non-fatal */ }
       }
 
+      // Include pattern knowledge in re-deliberation
+      const successBlock = phaseSuccess.length > 0
+        ? `\n## What Worked\n${phaseSuccess.slice(-5).map(s => `- ${s.technique} (${s.fromMetric}→${s.toMetric})`).join("\n")}`
+        : "";
+      const failureBlock = phaseFailure.length > 0
+        ? `\n## What Failed (don't repeat)\n${phaseFailure.slice(-5).map(f => `- ${f.technique}: ${f.reason}`).join("\n")}`
+        : "";
+
       const historyContext = allHistory.slice(-15).map(s =>
         `iter ${s.iteration}: ${s.metric ?? "N/A"}, ${s.action}${s.improved ? " (improved)" : ""}`
       ).join("\n");
 
       const researchBlock = researchInsights ? `\n\n## Research Insights\n${researchInsights}` : "";
-      const reDelibTask = `${task}\n\nPhase: ${phase.name}, target: ${phase.targetMetric}\nBest: ${bestMetric}\n${historyContext}${researchBlock}\n\n${phase.focus}\n\nPropose the NEXT strategy.`;
+      const reDelibTask = `${task}\n\nPhase: ${phase.name}, target: ${phase.targetMetric}\nBest: ${bestMetric}\n${historyContext}${successBlock}${failureBlock}${researchBlock}\n\n${phase.focus}\n\nPropose the NEXT strategy. Do NOT repeat failed approaches.`;
       try {
         const bsResult = await brainstorm(reDelibTask, providerConfig, profile, signal);
         deliberation = bsResult.synthesized || deliberation;
@@ -656,7 +834,7 @@ async function runPhase(
     }
   }
 
-  return { bestMetric, bestCode };
+  return { bestMetric, bestCode, successPatterns: phaseSuccess, failurePatterns: phaseFailure };
 }
 
 // ── Main Optimization Harness ──────────────────────────────────────
@@ -705,8 +883,12 @@ export async function runOptimization(
     return { bestMetric, initialMetric, totalIterations: 0, totalRounds: 0, history: allHistory, durationMs: Date.now() - startTime, reason: "target_reached" };
   }
 
-  // 4. Execute phases sequentially
+  // 4. Execute phases sequentially, carrying winning code + patterns forward
   let totalRounds = 0;
+  let prevPhaseCode: string | undefined;
+  let carrySuccess: SuccessPattern[] = [];
+  let carryFailure: FailurePattern[] = [];
+
   for (const phase of phases) {
     if (signal?.aborted) {
       return { bestMetric, initialMetric, totalIterations: allHistory.length, totalRounds, history: allHistory, durationMs: Date.now() - startTime, reason: "cancelled" };
@@ -717,12 +899,19 @@ export async function runOptimization(
     const phaseResult = await runPhase(
       phase, task, fullConfig, gitRoot, isaReference,
       providerConfig, profile, bestMetric, bestCode,
-      allHistory, callbacks, signal,
+      allHistory, callbacks, signal, prevPhaseCode,
     );
 
     bestMetric = phaseResult.bestMetric;
     bestCode = phaseResult.bestCode;
     totalRounds += phase.maxRounds;
+
+    // Carry patterns forward to next phase
+    carrySuccess = phaseResult.successPatterns;
+    carryFailure = phaseResult.failurePatterns;
+
+    // Winning code becomes the example for the next phase
+    prevPhaseCode = bestCode ?? undefined;
 
     // Final target reached?
     if (isTargetReached(bestMetric, fullConfig.target, fullConfig.lowerIsBetter)) {
