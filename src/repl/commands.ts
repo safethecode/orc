@@ -46,6 +46,15 @@ export interface CommandContext {
   forkManager?: SessionForkManager;
   getPinnedAgent: () => string | null;
   setPinnedAgent: (name: string | null) => void;
+  consumePendingSnapshot?: () => {
+    id: string;
+    sessionName: string;
+    turnsJson: string;
+    language: string | null;
+    summary: string | null;
+    turnCount: number;
+    createdAt: string;
+  } | null;
 }
 
 export function isCommand(input: string): boolean {
@@ -371,13 +380,14 @@ export async function handleCommand(
     }
 
     case "resume": {
-      const snap = ctx.orchestrator.getStore().getLatestSnapshot();
+      const snap = ctx.consumePendingSnapshot?.() ?? ctx.orchestrator.getStore().getLatestSnapshot();
       if (!snap) {
         renderer.info("no saved session found");
         return "continue";
       }
       const turns = JSON.parse(snap.turnsJson);
       ctx.conversation.restore({ turns, language: snap.language ?? undefined });
+      ctx.orchestrator.getStore().deleteSnapshot(snap.id);
       renderer.info(`\u2713 restored ${snap.turnCount} turns from ${snap.createdAt}`);
       return "continue";
     }

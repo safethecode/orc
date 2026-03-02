@@ -38,6 +38,32 @@ export class FileRefResolver {
     return { ref };
   }
 
+  async warmCache(): Promise<void> {
+    await this.refreshCache();
+  }
+
+  searchSync(query: string, maxResults = 5): FileMatch[] {
+    if (this.fileCache.length === 0) return [];
+
+    const scored: FileMatch[] = [];
+    const queryLower = query.toLowerCase();
+
+    for (const filePath of this.fileCache) {
+      const score = this.fuzzyScore(queryLower, filePath.toLowerCase());
+      if (score > 0) {
+        scored.push({
+          path: filePath,
+          absolutePath: resolve(this.projectDir, filePath),
+          score,
+          preview: "",
+        });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, maxResults);
+  }
+
   async search(query: string, maxResults = 10): Promise<FileMatch[]> {
     await this.refreshCache();
 

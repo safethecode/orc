@@ -358,6 +358,10 @@ export class Store {
     }));
   }
 
+  deleteSnapshot(id: string): void {
+    this.db.prepare(`DELETE FROM session_snapshots WHERE id = ?`).run(id);
+  }
+
   // ── Codebase Map ────────────────────────────────────────────────────
 
   upsertCodebaseEntry(path: string, purpose: string, agent?: string): void {

@@ -25,6 +25,7 @@ import { ContextCompactor } from "../core/compaction.ts";
 import { RuntimeFallbackManager } from "../core/runtime-fallback.ts";
 import { PlanMode } from "./plan-mode.ts";
 import { FileRefResolver } from "./file-ref.ts";
+import { FilePicker } from "./file-picker.ts";
 import { SessionForkManager } from "../core/session-fork.ts";
 import { SessionSharer } from "../core/session-share.ts";
 import { InputHandler, type InputResult } from "./input-handler.ts";
@@ -43,6 +44,8 @@ export async function startRepl(
   const conversation = new Conversation();
   const planMode = new PlanMode();
   const fileRef = new FileRefResolver(process.cwd());
+  fileRef.warmCache().catch(() => {});
+  const filePicker = new FilePicker(fileRef);
   const forkManager = new SessionForkManager();
   const inputHandler = orchestrator.getInputHandler();
   let currentStreamer: AgentStreamer | null = null;
@@ -80,6 +83,18 @@ export async function startRepl(
     output: process.stdout,
     terminal: true,
     completer: (line: string): [string[], string] => {
+      // @ file completion (fallback when picker handles Tab directly)
+      const lastAt = line.lastIndexOf("@");
+      if (lastAt >= 0 && (lastAt === 0 || /\s/.test(line[lastAt - 1]))) {
+        const query = line.slice(lastAt + 1);
+        if (!/\s/.test(query) && query.length > 0) {
+          const results = fileRef.searchSync(query, 5);
+          if (results.length > 0) {
+            const completions = results.map(r => line.slice(0, lastAt) + "@" + r.path);
+            return [completions, line];
+          }
+        }
+      }
       if (line.startsWith("/lang ")) {
         const partial = line.slice(6).toLowerCase();
         const hits = LANGUAGES.filter((l) => l.startsWith(partial));
@@ -99,16 +114,56 @@ export async function startRepl(
   let promptActive = false;
   const PROMPT_VIS = 2; // visible width of "❯ "
 
+  const getPickerLayout = () => {
+    const ls = layout.getLayout();
+    return ls.scrollBottom > 0 ? { scrollBottom: ls.scrollBottom, cols: ls.cols } : null;
+  };
+
   process.stdin.on("keypress", (_str: string | undefined, key: { name?: string }) => {
     if (!promptActive) return;
-    // On enter, readline handles the newline — nothing to do
-    if (key?.name === "return" || key?.name === "enter") return;
+
+    // On enter: clean up picker if active
+    if (key?.name === "return" || key?.name === "enter") {
+      if (filePicker.isActive()) {
+        filePicker.clearRender(getPickerLayout);
+        filePicker.deactivate();
+      }
+      return;
+    }
 
     setImmediate(() => {
       const line = rl.line;
+      const cursor = rl.cursor;
 
-      // Only touch the terminal for / commands (ASCII-only, safe to use .length)
-      // Non-slash input (Korean, etc.) is left entirely to readline
+      // ── File picker logic ──────────────────────────────────────
+      if (filePicker.isActive()) {
+        const atIdx = filePicker.getAtIndex();
+        // User backspaced past @ or deleted it
+        if (cursor <= atIdx || line[atIdx] !== "@") {
+          filePicker.clearRender(getPickerLayout);
+          filePicker.deactivate();
+        } else {
+          const query = line.slice(atIdx + 1, cursor);
+          filePicker.updateQuery(query);
+          filePicker.render(getPickerLayout);
+        }
+        return; // Skip ghost hint when picker active
+      }
+
+      // Detect @ trigger: last @ before cursor with whitespace/start prefix
+      const beforeCursor = line.slice(0, cursor);
+      const lastAt = beforeCursor.lastIndexOf("@");
+      if (lastAt >= 0 && (lastAt === 0 || /\s/.test(line[lastAt - 1]))) {
+        const query = line.slice(lastAt + 1, cursor);
+        if (!/\s/.test(query)) {
+          filePicker.activate(lastAt);
+          filePicker.updateQuery(query);
+          filePicker.render(getPickerLayout);
+          return; // Skip ghost hint
+        }
+      }
+
+      // ── Ghost hint for / commands (unchanged) ──────────────────
       if (!line.startsWith("/")) return;
 
       const endCol = PROMPT_VIS + line.length + 1; // 1-indexed
@@ -142,6 +197,46 @@ export async function startRepl(
     });
   });
 
+  // ── _ttyWrite override: intercept keys when file picker is active ──
+  const origTtyWrite = (rl as any)._ttyWrite;
+  if (origTtyWrite) {
+    (rl as any)._ttyWrite = function(s: string, key: any) {
+      if (filePicker.isActive() && promptActive) {
+        if (key?.name === "up") {
+          filePicker.moveSelection(-1);
+          filePicker.render(getPickerLayout);
+          return;
+        }
+        if (key?.name === "down") {
+          filePicker.moveSelection(1);
+          filePicker.render(getPickerLayout);
+          return;
+        }
+        if (key?.name === "tab") {
+          const selected = filePicker.getSelected();
+          if (selected) {
+            const atIdx = filePicker.getAtIndex();
+            const before = (rl as any).line.slice(0, atIdx);
+            const after = (rl as any).line.slice((rl as any).cursor);
+            const newLine = before + "@" + selected.path + " " + after;
+            (rl as any).line = newLine;
+            (rl as any).cursor = atIdx + 1 + selected.path.length + 1;
+            (rl as any)._refreshLine();
+          }
+          filePicker.clearRender(getPickerLayout);
+          filePicker.deactivate();
+          return;
+        }
+        if (key?.name === "escape") {
+          filePicker.clearRender(getPickerLayout);
+          filePicker.deactivate();
+          return;
+        }
+      }
+      origTtyWrite.call(rl, s, key);
+    };
+  }
+
   // Ctrl+C handling: abort running generation via cancellation token
   process.on("SIGINT", () => {
     if (currentCancellation && !currentCancellation.cancelled) {
@@ -155,10 +250,7 @@ export async function startRepl(
       process.stdout.write("\n");
       renderer.info("Generation aborted.");
     } else {
-      layout.deactivate();
-      process.stdout.write("\n");
       rl.close();
-      process.exit(0);
     }
   });
 
@@ -215,14 +307,16 @@ export async function startRepl(
     renderer.info(`\x1b[2mNotepads: ${notepadNames.join(", ")}\x1b[0m`);
   }
 
-  // Show last session hint if available
+  // Show last session hint if available, then consume it from DB
   const lastSnapshot = orchestrator.getStore().getLatestSnapshot();
+  let pendingSnapshot: typeof lastSnapshot = lastSnapshot;
   if (lastSnapshot) {
     const summary = lastSnapshot.summary || "no summary";
     renderer.info(
       `\x1b[2mPrevious session: ${lastSnapshot.turnCount} turns, ${lastSnapshot.createdAt} \u2014 "${summary}"\x1b[0m`,
     );
     renderer.info("\x1b[2mType /resume to continue or start fresh\x1b[0m");
+    orchestrator.getStore().deleteSnapshot(lastSnapshot.id);
   }
 
   // Wire crash recovery signal handlers
@@ -272,8 +366,16 @@ export async function startRepl(
             : renderer.PROMPT;
           input = await rl.question(prompt);
           promptActive = false;
+          if (filePicker.isActive()) {
+            filePicker.clearRender(getPickerLayout);
+            filePicker.deactivate();
+          }
         } catch {
           promptActive = false;
+          if (filePicker.isActive()) {
+            filePicker.clearRender(getPickerLayout);
+            filePicker.deactivate();
+          }
           break;
         }
       }
@@ -326,6 +428,11 @@ export async function startRepl(
           forkManager,
           getPinnedAgent: () => pinnedAgent,
           setPinnedAgent: (name) => { pinnedAgent = name; },
+          consumePendingSnapshot: () => {
+            const snap = pendingSnapshot;
+            pendingSnapshot = null;
+            return snap;
+          },
         });
         if (result === "quit") break;
         continue;
