@@ -14,6 +14,11 @@ export interface CommandOptions {
   mcpConfig?: string;
 }
 
+/** Shell-escape a single argument by wrapping in single quotes. */
+function shellEscape(arg: string): string {
+  return "'" + arg.replace(/'/g, "'\\''") + "'";
+}
+
 export function buildCommand(
   provider: ProviderConfig,
   profile: AgentProfile,
@@ -82,7 +87,7 @@ export function buildCommand(
   }
 
   if (options.workdir) {
-    cmd = ["sh", "-c", `cd '${options.workdir.replace(/'/g, "'\\''")}' && ${cmd.join(" ")}`];
+    cmd = ["sh", "-c", `cd ${shellEscape(options.workdir)} && ${cmd.map(shellEscape).join(" ")}`];
   }
 
   return cmd;
