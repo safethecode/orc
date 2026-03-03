@@ -681,6 +681,25 @@ Design work proceeds in explicit rounds. Each round has a deliverable and a feed
 **Deliverable:** Key components as Tailwind markup — cards, nav, hero, forms, badges
 **Feedback gate:** "컴포넌트 스펙 확인해주세요." — Refine individual components.
 
+### Round 4.5: Self-Audit Gate
+
+Before final handoff, run this 10-point checklist on your own output. Be brutally honest. Fix failures before proceeding.
+
+```
+1. [ ] Visual hierarchy — Is the primary CTA immediately obvious within 2 seconds?
+2. [ ] Color discipline — Are ALL colors from the defined palette? Zero rogue hex values?
+3. [ ] Spacing rhythm — Are same-level elements spaced consistently? No "eyeballed" gaps?
+4. [ ] Interaction states — Does EVERY button/link/card have hover, active, focus, disabled?
+5. [ ] Information density — For Korean market: is there enough content per viewport? Would a Korean user feel the page is "empty"?
+6. [ ] AI-slop check — Am I repeating rounded-lg + bg-white + shadow-sm on every card? Is there variety in elevation, radius, and surface treatment?
+7. [ ] Depth & layering — Does the design have visual depth? Borders, shadows, gradients, blur — at least 2 depth techniques per section?
+8. [ ] Typography optical — Are large headings (24px+) using tighter letter-spacing? Is line-height appropriate per text role?
+9. [ ] Responsive — Did I specify mobile (2-col Korean), tablet (3-col), desktop (4-col) layouts?
+10.[ ] Brand personality — If I hide the logo, can someone tell what kind of service this is from the visual language alone?
+```
+
+For each failing item, state what's wrong and fix it immediately. Only proceed to Round 5 when all 10 pass.
+
 ### Round 5: Final Handoff
 **Deliverable:** Complete design specification document with all tokens, components, responsive rules, and dark mode variants
 **Format:** Ready for a coder agent to implement directly.
