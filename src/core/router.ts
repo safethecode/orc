@@ -34,6 +34,7 @@ const DEV_PATTERNS = [
   /\b(commit|push|pull|merge|branch|deploy|build|compile|install|run)\b/i,
   /\b(file|directory|path|repo|codebase|database|api|endpoint|server|client)\b/i,
   /(코드|파일|함수|클래스|버그|에러|배포|빌드|커밋|푸시|테스트|구현|수정)/,
+  /(디자인|스타일|레이아웃|색상|폰트|컴포넌트|UI|UX|사용성|인터페이스)/,
 ];
 
 // Patterns that indicate conversational / non-development prompts
@@ -68,11 +69,12 @@ const CLASSIFY_TIMEOUT_MS = 15_000; // 15s — CLI spawn + haiku API needs headr
 export async function classifyWithSam(prompt: string): Promise<Classification> {
   const classifyPrompt = [
     `Classify this user prompt. Reply with ONLY a JSON object, nothing else.`,
-    `{"type":"development"|"conversation","agent":"Sam"|"coder"|"architect"}`,
+    `{"type":"development"|"conversation","agent":"Sam"|"coder"|"architect"|"design"}`,
     `Rules:`,
     `- "conversation" → greetings, questions, status, explanations, general chat → agent "Sam"`,
     `- "development" standard → code changes, bugs, tests, refactor, implement → agent "coder"`,
-    `- "development" complex → architecture, system design, security audit, migration → agent "architect"`,
+    `- "development" complex → system architecture, security audit, migration, infrastructure → agent "architect"`,
+    `- "development" design → UI/UX design, styling, visual improvements, layout, colors, fonts, components, usability, look and feel, CSS, frontend appearance → agent "design"`,
     ``,
     `User prompt: ${prompt}`,
   ].join("\n");
@@ -105,7 +107,8 @@ export async function classifyWithSam(prompt: string): Promise<Classification> {
     if (type === "conversation") {
       agent = "Sam";
     } else {
-      agent = parsed.agent === "architect" ? "architect" : "coder";
+      const validDevAgents = ["architect", "design"];
+      agent = validDevAgents.includes(parsed.agent) ? parsed.agent : "coder";
     }
 
     return { type, agent, reason: `Sam: ${type} → ${agent}` };

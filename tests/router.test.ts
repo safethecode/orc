@@ -112,6 +112,12 @@ describe("isDevelopmentTask", () => {
     expect(isDevelopmentTask("테스트 돌려봐")).toBe(true);
   });
 
+  it("detects Korean design/UI terms as dev tasks", () => {
+    expect(isDevelopmentTask("디자인이 맘에 안 들어")).toBe(true);
+    expect(isDevelopmentTask("스타일 좀 바꿔줘")).toBe(true);
+    expect(isDevelopmentTask("UI가 별로야")).toBe(true);
+  });
+
   it("returns false for conversational prompts", () => {
     expect(isDevelopmentTask("hello")).toBe(false);
     expect(isDevelopmentTask("what time is it?")).toBe(false);
@@ -128,7 +134,7 @@ describe("classifyWithSam", () => {
     expect(result).toHaveProperty("agent");
     expect(result).toHaveProperty("reason");
     expect(["development", "conversation"]).toContain(result.type);
-    expect(["Sam", "coder", "architect"]).toContain(result.agent);
+    expect(["Sam", "coder", "architect", "design"]).toContain(result.agent);
   }, LLM_TIMEOUT);
 
   it("classifies greeting as conversation → Sam", async () => {
@@ -143,11 +149,17 @@ describe("classifyWithSam", () => {
     expect(["coder", "architect"]).toContain(result.agent);
   }, LLM_TIMEOUT);
 
+  it("classifies design/UI task as development → design", async () => {
+    const result = await classifyWithSam("디자인이 맘에 안 들어. 스타일 바꿔줘");
+    expect(result.type).toBe("development");
+    expect(result.agent).toBe("design");
+  }, LLM_TIMEOUT);
+
   it("falls back gracefully when claude CLI is unavailable", async () => {
     // This test verifies the fallback path exists - if claude is available it uses LLM,
     // otherwise regex fallback kicks in. Either way it should return a valid result.
     const result = await classifyWithSam("what's the weather?");
     expect(["development", "conversation"]).toContain(result.type);
-    expect(["Sam", "coder", "architect"]).toContain(result.agent);
+    expect(["Sam", "coder", "architect", "design"]).toContain(result.agent);
   }, LLM_TIMEOUT);
 });

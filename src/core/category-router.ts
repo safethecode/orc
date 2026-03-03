@@ -14,7 +14,7 @@ export interface CategoryConfig {
 // ── Keyword Sets for Classification ─────────────────────────────────
 
 const PLANNING_KEYWORDS = [
-  "architect", "architecture", "design", "plan", "planning", "roadmap",
+  "architect", "architecture", "plan", "planning", "roadmap",
   "system design", "high-level", "strategy", "rfc", "proposal", "adr",
   "tradeoff", "trade-off", "evaluate approach", "migration plan",
 ];
@@ -30,6 +30,9 @@ const VISUAL_KEYWORDS = [
   "responsive", "component", "page", "design", "figma", "animation",
   "color", "theme", "dark mode", "light mode", "sidebar", "navbar",
   "modal", "dialog", "button", "form", "input", "icon",
+  // Korean
+  "디자인", "스타일", "레이아웃", "색상", "폰트", "컴포넌트", "반응형",
+  "다크모드", "테마", "모달", "버튼", "아이콘", "사용성", "인터페이스",
 ];
 
 const WRITING_KEYWORDS = [
