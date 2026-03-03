@@ -12,6 +12,7 @@ const DOMAIN_PATTERNS: Record<string, RegExp> = {
   devops: /\b(docker|ci|cd|deploy|kubernetes|k8s|pipeline|terraform|nginx|cloud)\b/i,
   docs: /\b(document|readme|api.?doc|jsdoc|swagger|openapi|changelog)\b/i,
   security: /\b(security|vulnerability|xss|csrf|injection|sanitize|encrypt|ssl|tls)\b/i,
+  design: /\b(design system|color palette|typography|font pair|spacing scale|ui kit|wireframe|mockup|prototype|dark mode|gradient|hero section|landing page|card design)\b/i,
 };
 
 // Role mapping by domain
@@ -25,6 +26,7 @@ const DOMAIN_ROLE_MAP: Record<string, AgentRole> = {
   devops: "coder",
   docs: "spec-writer",
   security: "reviewer",
+  design: "design",
 };
 
 // Dependency rules: if task A is in domainA and task B is in domainB, B depends on A
@@ -38,6 +40,7 @@ const DEPENDENCY_RULES: Array<{ before: string; after: string }> = [
   { before: "frontend", after: "testing" },
   { before: "backend", after: "testing" },
   { before: "testing", after: "docs" },
+  { before: "design", after: "frontend" },
 ];
 
 // Domains that always need a coder companion — they can't work alone
