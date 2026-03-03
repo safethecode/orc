@@ -296,7 +296,7 @@ export async function decomposeWithSam(
 ): Promise<DecompositionResult> {
   const classifyPrompt = [
     `You are a task decomposer. Break this task into subtasks for a multi-agent system.`,
-    `Available agent roles: "coder" (implements code), "tester" (writes/runs tests), "architect" (designs systems), "reviewer" (reviews code/security).`,
+    `Available agent roles: "coder" (implements code), "tester" (writes/runs tests), "architect" (designs systems), "reviewer" (reviews code/security), "design" (UI/UX design specs, color systems, typography, layout), "researcher" (research and analysis), "spec-writer" (documentation), "qa" (quality assurance verification).`,
     `Reply with ONLY a JSON object:`,
     `{"subtasks":[{"role":"coder","prompt":"what to do","dependsOn":[]}]}`,
     `Rules:`,
@@ -332,7 +332,8 @@ export async function decomposeWithSam(
     for (let i = 0; i < parsed.subtasks.length; i++) {
       const st = parsed.subtasks[i];
       const id = `st-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}-${i}`;
-      const role = (["coder", "tester", "architect", "reviewer"].includes(st.role) ? st.role : "coder") as AgentRole;
+      const validRoles = ["coder", "tester", "architect", "reviewer", "design", "researcher", "spec-writer", "qa"];
+      const role = (validRoles.includes(st.role) ? st.role : "coder") as AgentRole;
 
       subtaskMeta.push({ id, domain: role });
       subtasks.push({
