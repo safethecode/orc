@@ -80,6 +80,7 @@ const ROLE_CATEGORY_MAP: Record<string, string> = {
   "spec-writer": "writing",
   writer: "writing",
   designer: "visual",
+  design: "visual",
   researcher: "deep",
 };
 
