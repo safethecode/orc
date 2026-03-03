@@ -106,6 +106,23 @@ interface FailurePattern {
   reason: string;
 }
 
+/** Detect when improvements are getting progressively smaller — time to change approach. */
+function detectDiminishingReturns(history: OptimizationStep[], lowerIsBetter: boolean): boolean {
+  const improvements = history.filter(s => s.improved && s.metric !== null);
+  if (improvements.length < 4) return false;
+
+  const recent = improvements.slice(-4);
+  const gains: number[] = [];
+  for (let i = 1; i < recent.length; i++) {
+    gains.push(Math.abs(recent[i].metric! - recent[i - 1].metric!));
+  }
+
+  // Diminishing if each successive gain is smaller and the last gain is < 30% of the first
+  const decreasing = gains.every((g, i) => i === 0 || g <= gains[i - 1] * 1.1);
+  const shrank = gains.length >= 2 && gains[gains.length - 1] < gains[0] * 0.3;
+  return decreasing && shrank;
+}
+
 function extractStrategy(agentText: string): string {
   const patterns = [
     /(?:strategy|approach|plan|optimization)[:\s]*(.+?)(?:\n|$)/i,
@@ -286,11 +303,12 @@ function buildPhases(finalTarget: number, initialMetric: number, lowerIsBetter: 
       maxIterations: 15,
       maxTurns: 5,
       focus: `GOAL: Reach ${Math.round(t1)} ${unit} (30% improvement from ${initialMetric}).
-STRATEGY: Basic structural optimizations — fix obvious inefficiencies first.
+STRATEGY: Profile first, then fix obvious inefficiencies.
 KEY TECHNIQUES:
+- PROFILE FIRST: measure resource utilization before changing anything — know your bottleneck
+- Fix algorithmic complexity issues (O(n²) → O(n), etc.)
 - Replace unrolled/repeated code with proper loops
 - Enable any built-in parallelism or optimization flags
-- Fix algorithmic complexity issues (O(n²) → O(n), etc.)
 - Use appropriate data structures for the access pattern
 Focus on the BIGGEST wins with the LEAST risk. Do not attempt advanced techniques yet.`,
     });
@@ -308,13 +326,14 @@ Focus on the BIGGEST wins with the LEAST risk. Do not attempt advanced technique
       maxIterations: 20,
       maxTurns: 6,
       focus: `GOAL: Reach ${Math.round(t2)} ${unit} (60% improvement).
-STRATEGY: Apply domain-specific optimizations revealed by the study phase.
+STRATEGY: Exploit parallelism and reduce serial dependencies.
 KEY TECHNIQUES:
-- Use parallel/vector/SIMD operations if the domain supports them
-- Batch processing: process multiple items at once instead of one-by-one
-- Memory layout optimization: arrange data for sequential access
-- Reduce instruction count by using specialized operations from the domain reference
-Consult the domain reference above for available operations and their semantics.`,
+- Map data dependency chains: identify the longest serial dependency — this limits parallelism
+- Exploit available parallelism: batch processing, vectorized operations, concurrent execution
+- Process multiple independent items simultaneously instead of one-by-one
+- Memory layout optimization: arrange data for sequential/coalesced access
+- Reduce operation count by using specialized operations from the domain reference
+Consult the domain reference above for available operations and constraints.`,
     });
   }
 
@@ -330,13 +349,14 @@ Consult the domain reference above for available operations and their semantics.
       maxIterations: 25,
       maxTurns: 8,
       focus: `GOAL: Reach ${Math.round(t3)} ${unit} (85% improvement).
-STRATEGY: Deep optimizations using full domain knowledge.
+STRATEGY: Pipeline-level optimization beats micro-level tuning. Think in terms of overlapping independent work.
 KEY TECHNIQUES:
-- Hide latency: overlap independent operations (pipelining, interleaving)
-- Resolve bottlenecks: identify which resources are saturated and restructure to balance load
-- Dependency chain breaking: restructure computation to expose more parallelism
-- Memory access pattern optimization: prefetch, coalesce, or reorganize for locality
-- Exploit all available execution resources — audit utilization and fill idle capacity
+- PIPELINE DESIGN: overlap independent stages — hide Stage N's latency with Stage N+1's computation
+- Audit resource utilization: measure how many available slots/units are used vs idle per step
+- Dependency chain breaking: restructure computation to shorten the critical path
+- Process multiple independent batches simultaneously with staggered schedules
+- Memory access pattern optimization: reorganize for locality and coalesced access
+- If utilization is already >90%, micro-optimization won't help — restructure at a higher level
 Every optimization must be validated against the domain reference.`,
     });
   }
@@ -352,17 +372,17 @@ Every optimization must be validated against the domain reference.`,
       maxIterations: 25,
       maxTurns: 8,
       focus: `GOAL: Reach the final target of ${finalTarget} ${unit}.
-STRATEGY: Micro-level optimization — every unit of the metric counts.
+STRATEGY: Micro-level optimization — every unit counts. But know when to change strategy.
 KEY TECHNIQUES:
-- AUDIT FIRST: before any change, produce a detailed breakdown of where cost accumulates
-- Resource utilization: for every execution step, check how many available slots/units are used vs wasted
+- AUDIT FIRST: produce a detailed cost breakdown — where does every unit of cost go?
+- Resource utilization: check slots/units used vs wasted per step. If >95%, the code is near-optimal for this approach
 - Replace expensive operations with cheaper equivalents (consult the domain reference)
 - Merge adjacent steps that have no data dependencies between them
 - Hoist invariant computations out of loops
-- Consider unrolling to amortize loop overhead and enable cross-iteration optimization
-- MEASURE: quantify the expected improvement before implementing
-
-3. VERIFY: check your changes against ALL domain rules before submitting.`,
+- MEASURE: quantify expected improvement before implementing — skip changes worth <2% gain
+- ESCALATION CHECK: if 3+ consecutive attempts yield <5% total improvement, the bottleneck may be algorithmic
+  → Propose a fundamentally different algorithm or data layout instead of more micro-tuning
+VERIFY: check your changes against ALL domain rules before submitting.`,
     });
   }
 
@@ -583,21 +603,27 @@ ${truncGolden}
 
 Step 1 — ANALYZE: Read the current code. Identify the single biggest bottleneck.
   Write exactly: "BOTTLENECK: [specific location and why it costs performance]"
+  Include: what resource is saturated, what the critical dependency chain is, current utilization estimate.
 
 Step 2 — PLAN: Propose ONE focused change with expected impact.
   Write exactly: "PLAN: [what change] → expect [N] ${unit} improvement"
+  If expected gain < 2%: reconsider — is there a bigger opportunity you're missing?
+  If 3+ recent attempts failed: try a fundamentally different approach, not another variant.
 
 Step 3 — IMPLEMENT: Make the change. One optimization only — never combine multiple.
 
-Step 4 — VERIFY: Run the test command. Check correctness and metric.
+Step 4 — VERIFY: Run the test command. Check correctness AND metric.
+  Correctness is non-negotiable — run tests after EVERY change, not just at the end.
 ${selfCheck}
 
 ## Rules
 - ONE optimization per iteration — combining changes makes failures undiagnosable
 - NEVER modify test files
-- Correctness is mandatory — broken results will be reverted
+- Correctness is mandatory — broken results will be reverted immediately
 - Consult the domain reference before using any operation
 - If a technique appears in Anti-Patterns below, DO NOT attempt it again
+- Diminishing returns: if <5% progress over 3 iterations, change your approach entirely
+- Some algorithms have intrinsic serial limits — changing implementation won't help; change the algorithm
 
 Working in: ${config.workdir}
 Target file: ${config.targetFile}
@@ -1030,7 +1056,11 @@ async function runPhase(
         `iter ${s.iteration}: ${s.metric ?? "N/A"}, ${s.action}${s.improved ? " (improved)" : ""}`
       ).join("\n");
       const researchBlock = researchInsights ? `\n\n## Research Insights\n${researchInsights}` : "";
-      const reDelibTask = `${task}\n\nPhase: ${phase.name}, target: ${phase.targetMetric}\nBest: ${bestMetric}\n${historyContext}${successBlock}${failureBlock}${researchBlock}\n\n${phase.focus}\n\nPropose the NEXT strategy. Do NOT repeat failed approaches.`;
+      const diminishing = detectDiminishingReturns(allHistory, config.lowerIsBetter);
+      const pivotBlock = diminishing
+        ? `\n\n## DIMINISHING RETURNS DETECTED\nImprovement rate is declining. Micro-optimizing further is unlikely to close the gap.\nConsider:\n- A fundamentally different algorithm or data structure\n- Restructuring computation to break the critical dependency chain\n- Processing at a higher level of parallelism (pipeline, batch, interleave)\nDo NOT propose another incremental tweak.`
+        : "";
+      const reDelibTask = `${task}\n\nPhase: ${phase.name}, target: ${phase.targetMetric}\nBest: ${bestMetric}\n${historyContext}${successBlock}${failureBlock}${researchBlock}${pivotBlock}\n\n${phase.focus}\n\nPropose the NEXT strategy. Do NOT repeat failed approaches.`;
       try {
         const bsResult = await brainstorm(reDelibTask, providerConfig, profile, signal);
         deliberation = bsResult.synthesized || deliberation;
@@ -1157,15 +1187,20 @@ export async function runOptimization(
       maxIterations: 20,
       maxTurns: 8,
       focus: `GOAL: FINAL PUSH — get from ${bestMetric} to ${fullConfig.lowerIsBetter ? "below" : "above"} ${fullConfig.target} ${unit}.
-You are ${gapPct}% away from the target. This is achievable.
+You are ${gapPct}% away from the target.
 
-STRATEGY: Micro-level optimization — every single ${unit.replace(/s$/, "")} counts.
-1. AUDIT: produce a detailed breakdown of where cost accumulates in the hot path
-2. BIGGEST WIN FIRST: identify the step/section with the most waste and fix it
-3. REPLACE EXPENSIVE WITH CHEAP: consult the domain reference for cheaper equivalent operations
-4. MERGE STEPS: adjacent steps with no data dependencies can often be combined
-5. HOIST INVARIANTS: any value computed identically every iteration belongs outside the loop
-6. Remember: the winning code represents PROVEN optimizations. Don't undo them.
+STRATEGY: Balance micro-optimization with strategic rethinking.
+1. AUDIT: produce a detailed cost breakdown — where does EVERY unit of cost go?
+2. CHECK UTILIZATION: if resource utilization is >95%, micro-optimization is unlikely to help
+   → Consider: different algorithm, different data layout, or different computation structure
+3. BIGGEST WIN FIRST: identify the step/section with the most waste and fix it
+4. REPLACE EXPENSIVE WITH CHEAP: consult the domain reference for cheaper equivalent operations
+5. MERGE STEPS: adjacent steps with no data dependencies can often be combined
+6. HOIST INVARIANTS: any value computed identically every iteration belongs outside the loop
+7. MAP THE CRITICAL PATH: if the longest dependency chain dominates the cost, break the chain
+   → Restructure to process independent batches/stages in parallel
+8. KNOW WHEN TO PIVOT: if 3+ attempts yield <3% total gain, the approach is exhausted — try something fundamentally different
+Remember: the winning code represents PROVEN optimizations. Don't undo them.
 ${selfCheck}`,
     };
 
