@@ -54,6 +54,7 @@ const ROLE_REQUIREMENTS: Record<AgentRole, string[]> = {
   researcher: ["research", "analysis", "large-context"],
   "spec-writer": ["documentation", "analysis"],
   qa: ["testing", "review", "code-generation"],
+  design: ["analysis", "documentation", "code-generation"],
 };
 
 const COST_MULTIPLIER: Record<string, number> = {
