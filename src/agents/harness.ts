@@ -25,6 +25,7 @@ const ROLE_TITLES: Record<AgentRole, string> = {
   researcher: "Research Analyst",
   "spec-writer": "Specification Writer",
   qa: "Quality Assurance Inspector",
+  design: "UI/UX Design Engineer",
 };
 
 const PROTOCOL_BLOCK = `## Output Protocol
@@ -50,6 +51,11 @@ const ROLE_CONSTRAINTS: Record<AgentRole, string> = {
     "Analyze full scope before proposing changes. Document design decisions. Prioritize backward compatibility.",
   qa:
     'Verify ALL claimed work by reading actual files and running commands. Do NOT trust agent summaries. End with [QA:PASS] or [QA:FAIL reason="..."].',
+  design:
+    "Focus on visual design decisions: color, typography, spacing, layout, and component structure. " +
+    "Produce concrete CSS/Tailwind code and design tokens, not abstract advice. " +
+    "Always specify exact values (hex colors, px/rem sizes, font weights). " +
+    "When recommending layouts, include responsive breakpoints.",
 };
 
 const PROVIDER_HINTS: Partial<Record<ProviderName, string>> = {
