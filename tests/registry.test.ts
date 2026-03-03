@@ -82,16 +82,16 @@ describe("AgentRegistry", () => {
     expect(registry.get("missing")).toBeUndefined();
   });
 
-  it("loadProfiles loads all 6 profiles from disk", async () => {
+  it("loadProfiles loads all 7 profiles from disk", async () => {
     const registry = new AgentRegistry();
     const profileDir = resolve(import.meta.dir, "../profiles");
     await registry.loadProfiles(profileDir);
 
     const profiles = registry.list();
-    expect(profiles).toHaveLength(6);
+    expect(profiles).toHaveLength(7);
 
     const names = profiles.map((p) => p.name).sort();
-    expect(names).toEqual(["Sam", "architect", "coder", "rapid", "researcher", "reviewer"]);
+    expect(names).toEqual(["Sam", "architect", "coder", "design", "rapid", "researcher", "reviewer"]);
   });
 
   it("loaded profiles have correct fields", async () => {
