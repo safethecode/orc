@@ -433,6 +433,203 @@ Max content width: `max-w-6xl` (1152px) for Korean sites. Western sites use `max
 - Feature grid: `grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8`
 - Dashboard: `grid grid-cols-2 lg:grid-cols-4 gap-4`
 
+## AI Anti-pattern Avoidance
+
+These are the telltale signs of AI-generated design. You MUST avoid all of them:
+
+### The "AI Slop" Checklist — Never Do These
+
+1. **Uniform radius everywhere** — Do NOT apply `rounded-lg` to every element. Vary by component: `rounded-sm` for badges, `rounded-md` for inputs, `rounded-xl` for featured cards, `rounded-none` for data tables.
+2. **Flat single-color backgrounds** — Never `bg-white` or `bg-gray-50` alone. Layer with subtle borders (`border border-black/5`), micro-gradients (`bg-gradient-to-b from-white to-gray-50/50`), or texture.
+3. **Same shadow on every card** — Use different elevations: `shadow-none` for inline, `shadow-xs` for subtle, `shadow-sm` for cards, `shadow-md` for dropdowns, `shadow-lg` for modals.
+4. **Blue-500 default** — Never use Tailwind's default blue as the only accent. Derive a project-specific palette from the brand/audience. If no brand exists, propose 3 distinct directions.
+5. **Excessive symmetry** — Real layouts have intentional asymmetry: hero text left + image right, sidebar narrower than content, footer columns of different widths.
+6. **Western minimalism on Korean sites** — Korean users expect information density. Empty viewport = wasted space. Show price, rating, badge, seller, all visible without hover.
+7. **Icon-only without labels** — Especially for Korean market: every icon needs a text label. "장바구니" not just a cart icon. Clarity over elegance.
+8. **Generic stock imagery placeholder** — Never suggest `[Image placeholder]`. Specify image content, aspect ratio, and treatment (overlay gradient? border? rounded?).
+9. **Monotonous card grids** — Not every card in a grid should be identical. Feature the first item larger, or vary image ratios, or add a CTA card variant in the grid.
+10. **Missing empty/error/loading states** — Every component needs: default, loading (skeleton), empty (illustration + message), error (retry action).
+
+### Personality Injection
+
+To break out of generic AI aesthetics:
+- **One unexpected element** per section: an angled divider, an overlapping element, an asymmetric grid, a text that breaks the grid
+- **Custom illustration style** over generic icons: recommend specific illustration libraries (unDraw, Storyset) or icon sets (Phosphor, Lucide) per project vibe
+- **Micro-copy personality**: button says "시작하기" not "Submit", error says "앗, 문제가 생겼어요" not "Error occurred"
+
+## Visual Depth & Texture
+
+Flat design is dead. Every surface needs visual depth:
+
+### Layered Shadows
+
+```css
+/* Light mode - soft multi-layer */
+.card-elevated {
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 0.04),
+    0 4px 8px oklch(0 0 0 / 0.04),
+    0 8px 16px oklch(0 0 0 / 0.02);
+}
+
+/* Dark mode - borders replace shadows */
+.dark .card-elevated {
+  box-shadow: none;
+  border: 1px solid oklch(1 0 0 / 0.08);
+  background: oklch(0.18 0.005 264);  /* Slightly tinted, not pure dark */
+}
+```
+
+### Double Container Pattern (from square-ui)
+
+```html
+<!-- Outer: subtle background → Inner: elevated card -->
+<div class="rounded-xl bg-muted/30 border border-border p-3">
+  <div class="rounded-lg bg-card border border-border p-4">
+    <!-- Content here feels nested and layered -->
+  </div>
+</div>
+```
+
+Use this for: stat cards, settings panels, nested forms, feature highlights.
+
+### Glass & Blur Effects
+
+```html
+<!-- Sticky nav -->
+<nav class="sticky top-0 z-50 border-b border-black/5 bg-white/80 backdrop-blur-md">
+
+<!-- Dark mode variant -->
+<nav class="sticky top-0 z-50 border-b border-white/10 bg-gray-950/80 backdrop-blur-md">
+
+<!-- Floating card -->
+<div class="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl p-6 shadow-xl">
+```
+
+### Gradient Techniques
+
+```html
+<!-- Section separator (not a hard line) -->
+<div class="h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+
+<!-- Scroll fade overlay -->
+<div class="pointer-events-none absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-background to-transparent" />
+
+<!-- Hero background depth -->
+<div class="bg-gradient-to-br from-primary-950 via-primary-900 to-gray-950">
+
+<!-- Text gradient (for display headings) -->
+<h1 class="bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
+```
+
+### Surface Hierarchy
+
+Every screen has 3 levels of surface:
+
+| Level | Light Mode | Dark Mode | Usage |
+|-------|-----------|-----------|-------|
+| Base | `bg-gray-50` | `bg-gray-950` | Page background |
+| Surface | `bg-white` | `bg-gray-900` | Cards, panels |
+| Elevated | `bg-white shadow-md` | `bg-gray-800 border-white/10` | Modals, dropdowns, popovers |
+
+## Micro-interactions & States
+
+Every interactive element MUST define all 5 states. No exceptions.
+
+### Button States (Complete Example)
+
+```html
+<button class="
+  /* Base */
+  inline-flex items-center justify-center gap-2 rounded-md px-4 py-2
+  text-sm font-medium
+
+  /* Default */
+  bg-primary-500 text-white
+
+  /* Hover */
+  hover:bg-primary-600
+
+  /* Active/Pressed */
+  active:scale-[0.98] active:bg-primary-700
+
+  /* Focus */
+  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50 focus-visible:ring-offset-2
+
+  /* Disabled */
+  disabled:pointer-events-none disabled:opacity-50
+
+  /* Transition */
+  transition-all duration-150
+">
+```
+
+### Card Hover States
+
+```html
+<div class="
+  rounded-xl border border-border bg-card p-5
+  transition-all duration-200
+  hover:shadow-md hover:border-border/80 hover:-translate-y-0.5
+  active:shadow-sm active:translate-y-0
+">
+```
+
+### Staggered Grid Animations
+
+When cards enter viewport, stagger their appearance:
+
+```html
+<div class="grid grid-cols-4 gap-4">
+  {items.map((item, i) => (
+    <div
+      class="animate-fade-in-up opacity-0"
+      style={{ animationDelay: `${i * 75}ms`, animationFillMode: 'forwards' }}
+    />
+  ))}
+</div>
+```
+
+Animation definition:
+```css
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+```
+
+### Skeleton Loading
+
+Every data component needs a skeleton state:
+
+```html
+<!-- Skeleton card -->
+<div class="rounded-xl border border-border bg-card p-5 space-y-3">
+  <div class="h-4 w-24 rounded bg-muted animate-pulse" />
+  <div class="h-8 w-32 rounded bg-muted animate-pulse" />
+  <div class="h-3 w-full rounded bg-muted animate-pulse" />
+</div>
+```
+
+### Scroll-triggered Entrance
+
+Elements that enter the viewport should animate in, not just appear:
+- Cards: `fade-in-up` with 12px translateY
+- Sections: `fade-in` with scale(0.98)
+- Stats/counters: count-up animation from 0
+
+### Reduced Motion
+
+Always wrap animations:
+```css
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up { animation: none; opacity: 1; transform: none; }
+}
+```
+
 ## Output Format
 
 When delivering design work, always provide:
