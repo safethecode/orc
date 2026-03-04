@@ -34,9 +34,7 @@ function renderMessage(msg: Message) {
       return <HandoffDisplay key={msg.id} from={msg.meta?.agentName ?? ""} to={msg.meta?.reason ?? ""} />;
     case "separator":
       return (
-        <box key={msg.id} width="100%">
-          <text fg="#565f89">{"─".repeat(60)}</text>
-        </box>
+        <box key={msg.id} border={["top"]} borderColor="#565f89" />
       );
     default:
       return null;

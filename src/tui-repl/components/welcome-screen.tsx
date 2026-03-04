@@ -62,9 +62,7 @@ export function WelcomeScreen({ profiles, meta }: Props) {
         <box flexDirection="column" width={30} paddingTop={1} paddingBottom={1} paddingLeft={2}>
           <text fg="#c0caf5" bold>Getting started</text>
           <text fg="#565f89">type naturally or <text fg="#bb9af7">/help</text></text>
-          <box height={1} paddingTop={1}>
-            <text fg="#3d4262">{"─".repeat(26)}</text>
-          </box>
+          <box border={["top"]} borderColor="#3d4262" />
           <text fg="#c0caf5" bold>Agents</text>
           <text fg="#7dcfff">{names.length > 4 ? names.slice(0, 4).join(", ") + ", ..." : names.join(", ")}</text>
         </box>
