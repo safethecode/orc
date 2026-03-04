@@ -609,6 +609,13 @@ export class ReplController {
     sp += harness.systemPrompt;
     sp += `\n\nYou are working in the project at: ${process.cwd()}`;
     if (profile.systemPrompt) sp += "\n\n" + profile.systemPrompt;
+
+    // Codebase scan: persistent project structure overview
+    const scanResult = o.getCodebaseScanner().getScanResult();
+    if (scanResult) {
+      sp += "\n\n" + o.getCodebaseScanner().formatForPrompt(scanResult, profile.role);
+    }
+
     if (skillBodies.length > 0) sp += "\n\n" + skillBodies.join("\n\n");
 
     const lang = this.conversation.getLanguage();

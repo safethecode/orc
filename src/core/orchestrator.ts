@@ -36,6 +36,7 @@ import { ConnectionPrewarmer } from "../session/prewarmer.ts";
 import { RecoveryManager } from "./recovery.ts";
 import { TaskLogger } from "../logging/task-logger.ts";
 import { CodebaseMap } from "../memory/codebase-map.ts";
+import { CodebaseScanner } from "../memory/codebase-scanner.ts";
 import { ContextBuilder } from "../memory/context-builder.ts";
 import { DynamicSecurityProfile } from "../sandbox/dynamic-profile.ts";
 import { initParser } from "../sandbox/safety.ts";
@@ -145,6 +146,7 @@ export class Orchestrator {
   private recovery: RecoveryManager;
   private taskLogger: TaskLogger;
   private codemap!: CodebaseMap;
+  private codebaseScanner!: CodebaseScanner;
   private contextBuilder!: ContextBuilder;
   private dynamicSecurity: DynamicSecurityProfile;
   private accountManager: AccountManager;
@@ -343,6 +345,7 @@ export class Orchestrator {
     this.consolidator = new MemoryConsolidator(this.store, this.memory);
     this.inbox = new Inbox(this.store, db);
     this.codemap = new CodebaseMap(db);
+    this.codebaseScanner = new CodebaseScanner(process.cwd(), this.memory);
     this.contextBuilder = new ContextBuilder(this.memory, this.codemap, db);
     this.predictor = new TaskPredictor(this.memory, this.store);
     this.promptCache = new PromptCache(db);
@@ -956,6 +959,10 @@ export class Orchestrator {
 
   getCodebaseMap(): CodebaseMap {
     return this.codemap;
+  }
+
+  getCodebaseScanner(): CodebaseScanner {
+    return this.codebaseScanner;
   }
 
   getContextBuilder(): ContextBuilder {
