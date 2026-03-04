@@ -207,6 +207,7 @@ export class ReplController {
     if (!providerConfig) { r.error(`No provider config for "${profile.provider}".`); return; }
 
     const displayModel = (profile.model as ModelTier) ?? route.model;
+    route.model = displayModel;
     r.phaseUpdate("executing", agentName);
     eventBus.publish({ type: "agent:start", agent: agentName, tier: displayModel, reason: route.reason });
     r.agentHeader(agentName, displayModel, route.reason);
