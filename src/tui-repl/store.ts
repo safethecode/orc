@@ -5,10 +5,12 @@ export type MessageType =
   | "welcome"
   | "user"
   | "assistant"
+  | "agent_header"
   | "tool"
   | "system"
   | "error"
   | "cost"
+  | "handoff"
   | "separator";
 
 export interface MessageMeta {

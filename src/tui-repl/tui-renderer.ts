@@ -11,7 +11,7 @@ export function createTuiRenderer(dispatch: (action: any) => void): RendererPort
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("welcome", profiles.join(", ")) });
     },
     agentHeader(name, tier, reason) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `${name} (${tier})`, { agentName: name, tier, reason }) });
+      dispatch({ type: "APPEND_MESSAGE", message: createMessage("agent_header", name, { agentName: name, tier, reason }) });
     },
     startBox(tier) {
       dispatch({ type: "STREAMING_START", tier });
@@ -44,7 +44,7 @@ export function createTuiRenderer(dispatch: (action: any) => void): RendererPort
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", message) });
     },
     handoff(from, to) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `${from} → ${to}`) });
+      dispatch({ type: "APPEND_MESSAGE", message: createMessage("handoff", `${from} → ${to}`, { agentName: from, reason: to }) });
     },
     separator() {
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("separator", "") });
