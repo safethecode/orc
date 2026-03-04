@@ -15,6 +15,9 @@ export async function startTuiRepl(
     exitOnCtrlC: true,
   });
 
+  // Enable bracketed paste mode so Cmd+V / Ctrl+V paste works in textarea
+  process.stdout.write("\x1b[?2004h");
+
   // Mutable ref: populated once App mounts and useReducer dispatch is available
   const dispatchRef: { current: ((action: any) => void) | null } = { current: null };
 
@@ -76,6 +79,10 @@ export async function startTuiRepl(
 
   // Keep process alive until renderer is destroyed
   await new Promise<void>((resolve) => {
-    cliRenderer.on("destroy", resolve);
+    cliRenderer.on("destroy", () => {
+      // Disable bracketed paste mode on exit
+      process.stdout.write("\x1b[?2004l");
+      resolve();
+    });
   });
 }
