@@ -32,12 +32,17 @@ export function App({ onSubmit, onAbort, dispatchRef }: Props) {
     [onSubmit],
   );
 
-  // Global escape key to abort agent
+  // Global keyboard shortcuts
   const handleKeyPress = useCallback(
     (key: string) => {
+      // Escape: abort running agent
       if (key === "escape" && isAgentRunning && onAbort) {
         onAbort();
         dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", "Generation aborted.") });
+      }
+      // Ctrl+L: clear messages
+      if (key === "ctrl+l") {
+        dispatch({ type: "CLEAR" });
       }
     },
     [isAgentRunning, onAbort],
