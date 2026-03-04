@@ -50,11 +50,30 @@ export function createMessage(
 
 // ── State ────────────────────────────────────────────────────────────
 
+export type AgentState = "idle" | "thinking" | "streaming" | "tool_use";
+
+export interface WorkerEntry {
+  state: AgentState;
+  model: string;
+  startedAt: number;
+  lastTool?: string;
+}
+
+export interface StatusBarState {
+  agentState: AgentState;
+  agentName: string;
+  tier: ModelTier | null;
+  cost: number;
+  elapsedStart: number;
+  workers: Map<string, WorkerEntry>;
+}
+
 export interface StoreState {
   messages: Message[];
   streamingChunk: string;
   streamingTier: ModelTier | null;
   isStreaming: boolean;
+  status: StatusBarState;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────
@@ -64,6 +83,7 @@ type Action =
   | { type: "STREAMING_START"; tier: ModelTier }
   | { type: "STREAMING_DELTA"; text: string }
   | { type: "STREAMING_COMMIT" }
+  | { type: "STATUS_UPDATE"; partial: Partial<StatusBarState> }
   | { type: "CLEAR" };
 
 function reducer(state: StoreState, action: Action): StoreState {
@@ -85,6 +105,8 @@ function reducer(state: StoreState, action: Action): StoreState {
         isStreaming: false,
       };
     }
+    case "STATUS_UPDATE":
+      return { ...state, status: { ...state.status, ...action.partial } };
     case "CLEAR":
       return { ...state, messages: [] };
     default:
@@ -97,6 +119,14 @@ const INITIAL_STATE: StoreState = {
   streamingChunk: "",
   streamingTier: null,
   isStreaming: false,
+  status: {
+    agentState: "idle",
+    agentName: "",
+    tier: null,
+    cost: 0,
+    elapsedStart: 0,
+    workers: new Map(),
+  },
 };
 
 // ── Context ──────────────────────────────────────────────────────────
