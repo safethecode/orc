@@ -49,7 +49,7 @@ export function MessageArea() {
   const { state } = useStore();
 
   return (
-    <scrollbox flexGrow={1} stickyScroll stickyStart="bottom">
+    <scrollbox flexGrow={1} stickyScroll stickyStart="bottom" focusable={false}>
       {state.messages.map(renderMessage)}
       <ThinkingIndicator />
       {state.isStreaming && <StreamingBubble chunk={state.streamingChunk} tier={state.streamingTier} />}
