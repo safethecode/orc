@@ -9,6 +9,7 @@ const args = process.argv.slice(2);
 
 let configPath: string | undefined;
 let verbose = false;
+let useTui = false;
 
 // Strip global flags from args, leaving positional command + rest
 const positional: string[] = [];
@@ -24,6 +25,11 @@ for (let i = 0; i < args.length; i++) {
 
   if (arg === "--verbose") {
     verbose = true;
+    continue;
+  }
+
+  if (arg === "--tui") {
+    useTui = true;
     continue;
   }
 
@@ -188,9 +194,13 @@ async function main() {
     }
 
     case undefined: {
-      // No args → interactive REPL
-      const { startRepl } = await import("./repl/repl.ts");
-      await startRepl(orchestrator, config);
+      if (useTui) {
+        const { startTuiRepl } = await import("./tui-repl/start.tsx");
+        await startTuiRepl(orchestrator, config);
+      } else {
+        const { startRepl } = await import("./repl/repl.ts");
+        await startRepl(orchestrator, config);
+      }
       break;
     }
 

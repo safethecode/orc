@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/react */
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import type { Orchestrator } from "../core/orchestrator.ts";
