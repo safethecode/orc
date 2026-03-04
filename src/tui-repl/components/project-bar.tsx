@@ -38,7 +38,7 @@ export function ProjectBar() {
   const tier = state.status.tier ?? "haiku";
 
   return (
-    <box height={1} flexShrink={0} border={["top"]} borderColor="#3d4262" flexDirection="row" paddingLeft={1}>
+    <box flexShrink={0} border={["top"]} borderColor="#3d4262" flexDirection="row" paddingLeft={1}>
       <text fg="#565f89">{projectName}</text>
       {git && (
         <box flexDirection="row">
