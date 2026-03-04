@@ -30,7 +30,7 @@ export const COMMANDS = [
   "/variants", "/fastwork", "/ultrathink", "/github",
   "/queue", "/cancel", "/dlq", "/enforce", "/doomloop",
   "/diff", "/compact", "/trust", "/consolidate",
-  "/checkpoint", "/spec", "/ideate", "/benchmark", "/optimize", "/help", "/quit",
+  "/checkpoint", "/spec", "/ideate", "/benchmark", "/optimize", "/scan", "/help", "/quit",
 ];
 
 export const LANGUAGES = [
@@ -2291,6 +2291,25 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "scan": {
+      const scanner = ctx.orchestrator.getCodebaseScanner();
+      const force = args.includes("--force") || args.includes("-f");
+
+      if (force || !scanner.getScanResult()) {
+        const result = scanner.scan();
+        r.info(`Scanned: ${result.totalFiles} files, ${result.modules.length} modules`);
+        r.info(scanner.formatForPrompt(result));
+      } else {
+        const result = scanner.getScanResult()!;
+        const age = Date.now() - new Date(result.scannedAt).getTime();
+        const ageMin = Math.round(age / 60_000);
+        r.info(`Cached scan (${ageMin}m ago): ${result.totalFiles} files, ${result.modules.length} modules`);
+        r.info(scanner.formatForPrompt(result));
+        r.info("\x1b[2muse /scan --force to re-scan\x1b[0m");
+      }
+      return "continue";
+    }
+
     case "help": {
 
       r.info("\x1b[1m/status\x1b[0m\x1b[2m              agent statuses");
@@ -2416,6 +2435,8 @@ export async function handleCommand(
       r.info("\x1b[1m/benchmark report\x1b[0m\x1b[2m    generate/show last report");
       r.info("\x1b[1m/benchmark tasks\x1b[0m\x1b[2m     list available benchmark tasks");
       r.info("\x1b[1m/benchmark cost\x1b[0m\x1b[2m      estimate cost for full run");
+      r.info("\x1b[1m/scan\x1b[0m\x1b[2m                show codebase analysis");
+      r.info("\x1b[1m/scan --force\x1b[0m\x1b[2m        re-scan codebase");
       r.info("\x1b[1m/clear\x1b[0m\x1b[2m               clear conversation");
       r.info("\x1b[1m/lang\x1b[0m \x1b[2m<language>      set response language");
       r.info("\x1b[1m/help\x1b[0m\x1b[2m                this help");
