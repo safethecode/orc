@@ -1,5 +1,5 @@
 /**
- * Two-stage LLM review gate (Superpowers pattern).
+ * Two-stage LLM review gate.
  *
  * Stage 1 — Spec Compliance: "Did the output satisfy the original requirements?"
  * Stage 2 — Code Quality:    "Is the code quality acceptable?"
