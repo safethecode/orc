@@ -1,5 +1,16 @@
 import { resolve, relative, basename, extname } from "node:path";
 
+const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp", ".tiff", ".avif"]);
+const BINARY_EXTS = new Set([".pdf", ".zip", ".tar", ".gz", ".wasm", ".exe", ".dll", ".so", ".dylib", ".bin", ".dat", ".db", ".sqlite"]);
+
+function isImageFile(filePath: string): boolean {
+  return IMAGE_EXTS.has(extname(filePath).toLowerCase());
+}
+
+function isBinaryFile(filePath: string): boolean {
+  return BINARY_EXTS.has(extname(filePath).toLowerCase());
+}
+
 export interface FileMatch {
   path: string;
   absolutePath: string;
@@ -256,12 +267,22 @@ export class FileRefResolver {
       filesIncluded.push(topMatch.path);
 
       try {
-        const content = await this.getContent(topMatch.absolutePath, refInfo.lineRange);
-        const lineInfo = refInfo.lineRange
-          ? ` (lines ${refInfo.lineRange.start}-${refInfo.lineRange.end})`
-          : "";
-        const replacement = `\n[File: ${topMatch.path}${lineInfo}]\n\`\`\`\n${content}\n\`\`\`\n`;
-        resolvedInput = resolvedInput.replace(refInfo.fullMatch, replacement);
+        if (isImageFile(topMatch.absolutePath)) {
+          // Images: provide absolute path so the agent's Read tool can view it
+          const replacement = `\n[Image file: ${topMatch.absolutePath}]\nThis is an image file. Use the Read tool to view it: Read("${topMatch.absolutePath}")\n`;
+          resolvedInput = resolvedInput.replace(refInfo.fullMatch, replacement);
+        } else if (isBinaryFile(topMatch.absolutePath)) {
+          // Binary: just note it exists
+          const replacement = `\n[Binary file: ${topMatch.path} — cannot display inline]\n`;
+          resolvedInput = resolvedInput.replace(refInfo.fullMatch, replacement);
+        } else {
+          const content = await this.getContent(topMatch.absolutePath, refInfo.lineRange);
+          const lineInfo = refInfo.lineRange
+            ? ` (lines ${refInfo.lineRange.start}-${refInfo.lineRange.end})`
+            : "";
+          const replacement = `\n[File: ${topMatch.path}${lineInfo}]\n\`\`\`\n${content}\n\`\`\`\n`;
+          resolvedInput = resolvedInput.replace(refInfo.fullMatch, replacement);
+        }
       } catch {
         // If we can't read the file, leave the reference as-is
       }
