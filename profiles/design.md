@@ -130,6 +130,7 @@ After generating UI code, run this self-check. If ANY item is TRUE, **fix it bef
 - **COLOR UNITY CHECK** — For every colored text: is adjacent icon the SAME color? Color on parent container, not children? Hover changes both icon and text? → Fix: move color to parent flex container.
 - **SPACING CONSISTENCY CHECK** — In headers/toolbars: all gaps equal? Left padding === right padding? Action icons in single flex with one gap? Header padding matches content padding? → Fix: use flex gap, snap to 4px grid.
 - **CURSOR POINTER CHECK** — Every element with onClick has cursor: pointer? Non-button/a clickable elements have cursor-pointer? Disabled shows not-allowed? → Fix: add cursor-pointer to all clickable elements.
+- **SEMANTIC MARKUP CHECK** — Any `<div>` or `<span>` where a semantic element exists? → Fix: `<nav>`, `<main>`, `<section>`, `<article>`, `<header>`, `<footer>`, `<aside>`, `<button>`, `<a>`, `<ul>`/`<li>`, `<figure>`, `<time>`, `<dialog>`. Wrapper divs that only add one class? → Fix: merge into parent or child. Nesting depth >4 without semantic reason? → Fix: flatten. Every `<div>` must justify its existence — if removing it changes nothing, delete it.
 
 ### Component Library Policy
 
@@ -231,6 +232,10 @@ Header/toolbar elements have uneven gaps (8px here, 12px there, 16px elsewhere).
 **FAILURE #13: MISSING CURSOR POINTER ON INTERACTIVE ELEMENTS**
 Clickable divs/spans with onClick but no cursor: pointer. User hovers, cursor stays as arrow.
 → EVERY element with onClick MUST have cursor-pointer. This includes: clickable rows, cards, tabs, icon buttons, custom toggles, breadcrumbs, "show more" links, sidebar nav items. Use `<button>`/`<a>` when possible (free pointer). Disabled = cursor-not-allowed. "Hover sweep test": mentally hover every element — clickable = pointer, not clickable = default.
+
+**FAILURE #14: MEANINGLESS WRAPPER DIVS AND NON-SEMANTIC MARKUP**
+`<div>` soup: deeply nested wrappers that add no meaning, styling, or layout. A `<div>` wrapping a single child with no classes. Navigation built with `<div>` instead of `<nav>`. Lists built with stacked `<div>`s instead of `<ul>`/`<li>`. Clickable elements using `<div onClick>` instead of `<button>`. Links using `<span onClick>` instead of `<a>`.
+→ RULES: (1) Every HTML element must be the most semantic option available: `<nav>` for navigation, `<main>` for primary content, `<section>`/`<article>` for content blocks, `<header>`/`<footer>` for landmarks, `<aside>` for sidebars, `<button>` for actions, `<a>` for links, `<ul>`/`<li>` for lists, `<figure>` for media, `<time>` for dates, `<dialog>` for modals. (2) A `<div>` is ONLY justified when no semantic element fits AND it serves a layout purpose (flex/grid container, positioning wrapper). (3) If a `<div>` has zero classes/styles or only one class that could be merged into parent/child — delete it. (4) Max nesting depth without semantic justification: 4 levels. Deeper = flatten. (5) After generating, count `<div>` tags. If `<div>` is >50% of all tags, refactor.
 
 ---
 
