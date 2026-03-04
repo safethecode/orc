@@ -5,6 +5,7 @@ import { UserMessage } from "./user-message.tsx";
 import { AssistantMessage } from "./assistant-message.tsx";
 import { AgentHeader } from "./agent-header.tsx";
 import { StreamingBubble } from "./streaming-bubble.tsx";
+import { ThinkingIndicator } from "./thinking-indicator.tsx";
 import { ToolBadge } from "./tool-badge.tsx";
 import { SystemInfo } from "./system-info.tsx";
 import { ErrorMessage } from "./error-message.tsx";
@@ -50,6 +51,7 @@ export function MessageArea() {
   return (
     <scrollbox flexGrow={1} scrollY={-1}>
       {state.messages.map(renderMessage)}
+      <ThinkingIndicator />
       {state.isStreaming && <StreamingBubble chunk={state.streamingChunk} tier={state.streamingTier} />}
     </scrollbox>
   );
