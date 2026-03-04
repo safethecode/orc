@@ -109,6 +109,7 @@ export class ReplController {
       const result = await handleCommand(trimmed, {
         orchestrator: this.orchestrator,
         conversation: this.conversation,
+        renderer: this.renderer,
         planMode: this.planMode,
         forkManager: this.forkManager,
         getPinnedAgent: () => this.pinnedAgent,
