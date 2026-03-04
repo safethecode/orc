@@ -11,12 +11,16 @@ export async function startTuiRepl(
   orchestrator: Orchestrator,
   config: OrchestratorConfig,
 ): Promise<void> {
+  // Save real stdout.write before OpenTUI intercepts it (OTUI_OVERRIDE_STDOUT=true)
+  const realWrite = process.stdout.write.bind(process.stdout);
+
   const cliRenderer = await createCliRenderer({
     exitOnCtrlC: true,
   });
 
   // Enable bracketed paste mode so Cmd+V / Ctrl+V paste works in textarea
-  process.stdout.write("\x1b[?2004h");
+  // Must use realWrite since OpenTUI intercepts process.stdout.write
+  realWrite("\x1b[?2004h");
 
   // Mutable ref: populated once App mounts and useReducer dispatch is available
   const dispatchRef: { current: ((action: any) => void) | null } = { current: null };
@@ -81,7 +85,7 @@ export async function startTuiRepl(
   await new Promise<void>((resolve) => {
     cliRenderer.on("destroy", () => {
       // Disable bracketed paste mode on exit
-      process.stdout.write("\x1b[?2004l");
+      realWrite("\x1b[?2004l");
       resolve();
     });
   });
