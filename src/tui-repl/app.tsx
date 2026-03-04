@@ -9,10 +9,11 @@ import { createMessage } from "./store.ts";
 
 interface Props {
   onSubmit?: (text: string) => void;
+  onAbort?: () => void;
   dispatchRef?: { current: ((action: any) => void) | null };
 }
 
-export function App({ onSubmit, dispatchRef }: Props) {
+export function App({ onSubmit, onAbort, dispatchRef }: Props) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
 
   // Expose dispatch to outer scope so controller can send actions
@@ -21,18 +22,30 @@ export function App({ onSubmit, dispatchRef }: Props) {
     return () => { if (dispatchRef) dispatchRef.current = null; };
   }, [dispatch, dispatchRef]);
 
+  const isAgentRunning = state.status.agentState !== "idle";
+
   const handleSubmit = useCallback(
     (text: string) => {
-      // Echo user message to the store
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("user", text) });
       if (onSubmit) onSubmit(text);
     },
     [onSubmit],
   );
 
+  // Global escape key to abort agent
+  const handleKeyPress = useCallback(
+    (key: string) => {
+      if (key === "escape" && isAgentRunning && onAbort) {
+        onAbort();
+        dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", "Generation aborted.") });
+      }
+    },
+    [isAgentRunning, onAbort],
+  );
+
   return (
     <StoreContext.Provider value={{ state, dispatch }}>
-      <box flexDirection="column" width="100%" height="100%">
+      <box flexDirection="column" width="100%" height="100%" onKeyPress={handleKeyPress}>
         <MessageArea />
         <WorkerHud />
         <StatusBar />

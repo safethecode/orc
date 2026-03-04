@@ -32,8 +32,12 @@ export async function startTuiRepl(
     }
   };
 
+  const handleAbort = () => {
+    if (controller) controller.abort();
+  };
+
   const root = createRoot(cliRenderer);
-  root.render(<App onSubmit={handleSubmit} dispatchRef={dispatchRef} />);
+  root.render(<App onSubmit={handleSubmit} onAbort={handleAbort} dispatchRef={dispatchRef} />);
 
   // Initialize controller immediately once dispatch is available
   setTimeout(async () => {
