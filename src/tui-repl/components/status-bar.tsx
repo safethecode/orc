@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { useStore } from "../store.ts";
 import { TIER_HEX } from "../theme-adapter.ts";
 
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
 const STATE_ICONS: Record<string, string> = {
   idle: "○",
   thinking: "◉",
@@ -21,16 +23,19 @@ function formatElapsed(startMs: number): string {
 export function StatusBar() {
   const { state } = useStore();
   const { agentState, agentName, tier, cost, elapsedStart } = state.status;
-  const [, tick] = useState(0);
+  const [frame, setFrame] = useState(0);
 
-  // 1-second ticker for elapsed time
+  // Spinner + elapsed ticker (80ms for smooth spinner)
   useEffect(() => {
     if (agentState === "idle") return;
-    const id = setInterval(() => tick((t) => t + 1), 1000);
+    const id = setInterval(() => setFrame((f) => f + 1), 80);
     return () => clearInterval(id);
   }, [agentState]);
 
-  const icon = STATE_ICONS[agentState] ?? "○";
+  const isActive = agentState !== "idle";
+  const icon = isActive
+    ? SPINNER_FRAMES[frame % SPINNER_FRAMES.length]
+    : (STATE_ICONS[agentState] ?? "○");
   const tierColor = tier ? TIER_HEX[tier as keyof typeof TIER_HEX] ?? "#565f89" : "#565f89";
   const elapsed = formatElapsed(elapsedStart);
   const costStr = cost > 0 ? `$${cost.toFixed(4)}` : "";
