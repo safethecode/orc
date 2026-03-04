@@ -1,21 +1,27 @@
 /** @jsxImportSource @opentui/react */
 import { useStore } from "../store.ts";
+import { WelcomeScreen } from "./welcome-screen.tsx";
 import { UserMessage } from "./user-message.tsx";
 import { AssistantMessage } from "./assistant-message.tsx";
+import { AgentHeader } from "./agent-header.tsx";
 import { StreamingBubble } from "./streaming-bubble.tsx";
 import { ToolBadge } from "./tool-badge.tsx";
 import { SystemInfo } from "./system-info.tsx";
 import { ErrorMessage } from "./error-message.tsx";
+import { CostDisplay } from "./cost-display.tsx";
+import { HandoffDisplay } from "./handoff-display.tsx";
 import type { Message } from "../store.ts";
 
 function renderMessage(msg: Message) {
   switch (msg.type) {
     case "welcome":
-      return <text key={msg.id} fg="#7aa2f7" bold>{msg.content}</text>;
+      return <WelcomeScreen key={msg.id} profiles={msg.content} />;
     case "user":
       return <UserMessage key={msg.id} content={msg.content} />;
     case "assistant":
       return <AssistantMessage key={msg.id} content={msg.content} tier={msg.meta?.tier} />;
+    case "agent_header":
+      return <AgentHeader key={msg.id} name={msg.meta?.agentName ?? msg.content} tier={msg.meta?.tier} reason={msg.meta?.reason} />;
     case "tool":
       return <ToolBadge key={msg.id} name={msg.meta?.toolName ?? ""} detail={msg.meta?.toolDetail} agent={msg.meta?.agentName} />;
     case "system":
@@ -23,15 +29,15 @@ function renderMessage(msg: Message) {
     case "error":
       return <ErrorMessage key={msg.id} content={msg.content} />;
     case "cost":
-      return (
-        <SystemInfo
-          key={msg.id}
-          content={`$${(msg.meta?.cost ?? 0).toFixed(4)} · ${msg.meta?.inputTokens ?? 0}→${msg.meta?.outputTokens ?? 0} tokens · ${((msg.meta?.durationMs ?? 0) / 1000).toFixed(1)}s`}
-          meta={msg.meta}
-        />
-      );
+      return <CostDisplay key={msg.id} meta={msg.meta} />;
+    case "handoff":
+      return <HandoffDisplay key={msg.id} from={msg.meta?.agentName ?? ""} to={msg.meta?.reason ?? ""} />;
     case "separator":
-      return <text key={msg.id} fg="#3d4262">{"─".repeat(40)}</text>;
+      return (
+        <box key={msg.id} width="100%">
+          <text fg="#565f89">{"─".repeat(60)}</text>
+        </box>
+      );
     default:
       return null;
   }
