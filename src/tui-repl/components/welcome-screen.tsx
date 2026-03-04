@@ -35,8 +35,8 @@ export function WelcomeScreen({ profiles, meta }: Props) {
           <ascii-font text="orc" font="slick" color="#bb9af7" />
           <box paddingTop={1} flexDirection="row" gap={1}>
             <text fg="#9ece6a">{defaultTier}</text>
-            <text fg="#565f89">{"·"}</text>
-            <text fg="#7dcfff">{names[0] ?? "default"}</text>
+            <text fg="#565f89">·</text>
+            <text fg="#565f89">default</text>
           </box>
           <text fg="#565f89">{shortCwd}</text>
           {mcpServers.length > 0 && (
