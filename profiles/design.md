@@ -113,12 +113,16 @@ Never use pure gray. Tint neutrals by adding 3-5% saturation of the primary hue:
 | error | `#DC2626` | `#F87171` | Errors, destructive actions |
 | info | `#2563EB` | `#60A5FA` | Informational, links |
 
-### Contrast Ratios (WCAG AA)
+### Contrast Ratios (WCAG AA) — MANDATORY
+
+**This is a HARD RULE, not a suggestion. Violations are bugs.**
 
 - Body text: >= 4.5:1 against background
 - Large text (>=18px bold or >=24px): >= 3:1
 - Interactive elements: >= 3:1 against adjacent colors
-- Always verify with actual contrast checker values.
+- **Saturated/dark backgrounds (primary-500+, any hue)**: ALWAYS use white (`#FFFFFF`) or near-white text. NEVER use dark text on saturated colors. `bg-blue-600 text-black` is UNREADABLE — use `bg-blue-600 text-white`.
+- **Before writing any color pair**, mentally verify contrast. If in doubt, use white text on dark/saturated and dark text on light.
+- Calculate and annotate contrast ratios in your output for every text-on-background pair.
 
 ### Dark Mode
 
@@ -229,17 +233,17 @@ Korean web layouts are ~20% denser than typical Western layouts:
 | xl | 16px | `rounded-xl` | Hero cards, featured sections |
 | full | 9999px | `rounded-full` | Avatars, pill badges |
 
-### Shadows (Elevation)
+### Shadows — DO NOT USE
 
-```css
---shadow-xs: 0 1px 2px oklch(0 0 0 / 0.05);
---shadow-sm: 0 1px 3px oklch(0 0 0 / 0.1), 0 1px 2px oklch(0 0 0 / 0.06);
---shadow-md: 0 4px 6px oklch(0 0 0 / 0.07), 0 2px 4px oklch(0 0 0 / 0.06);
---shadow-lg: 0 10px 15px oklch(0 0 0 / 0.1), 0 4px 6px oklch(0 0 0 / 0.05);
---shadow-xl: 0 20px 25px oklch(0 0 0 / 0.1), 0 8px 10px oklch(0 0 0 / 0.04);
-```
+**Shadows are banned.** Do not use `shadow-*`, `box-shadow`, or any shadow utility.
 
-Dark mode: use border (`border border-white/10`) instead of shadows.
+Use borders and background shifts for elevation instead:
+- Cards: `border border-border` or `border border-black/5`
+- Hover: `hover:bg-muted/50` or `hover:border-primary-500` — NOT `hover:shadow-md`
+- Modals: `border border-border bg-card`
+- Dropdowns: `border border-border bg-card`
+
+The only acceptable shadow is `ring` for focus states: `focus-visible:ring-2 focus-visible:ring-primary-500/50`
 
 ## Component Patterns
 
@@ -258,7 +262,7 @@ Dark mode: use border (`border border-white/10`) instead of shadows.
 +------------------------------+
 ```
 
-Tailwind: `rounded-lg bg-white shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow`
+Tailwind: `rounded-lg bg-white border border-gray-100 overflow-hidden hover:bg-gray-50 hover:border-gray-200 transition-colors`
 
 ### Content Card (Community — ohou style)
 
@@ -353,7 +357,7 @@ h-14, fixed bottom, border-t, bg-white, active: text-primary-500
 +--[ py-20 bg-gradient-to-br from-gray-950 to-primary-950 ]--+
 |  col-span-6              |  col-span-6                      |
 |  Badge (NEW)             |  [Product screenshot             |
-|  Headline 48px/800       |   with shadow-2xl                |
+|  Headline 48px/800       |   with border border-white/10    |
 |  Subtitle 18px/400       |   rounded-xl]                    |
 |  [CTA btn] [Ghost btn]   |                                  |
 +------------------------------------------------------------+
@@ -448,7 +452,7 @@ These are the telltale signs of AI-generated design. You MUST avoid all of them:
 
 1. **Uniform radius everywhere** — Do NOT apply `rounded-lg` to every element. Vary by component: `rounded-sm` for badges, `rounded-md` for inputs, `rounded-xl` for featured cards, `rounded-none` for data tables.
 2. **Flat single-color backgrounds** — Never `bg-white` or `bg-gray-50` alone. Layer with subtle borders (`border border-black/5`), micro-gradients (`bg-gradient-to-b from-white to-gray-50/50`), or texture.
-3. **Same shadow on every card** — Use different elevations: `shadow-none` for inline, `shadow-xs` for subtle, `shadow-sm` for cards, `shadow-md` for dropdowns, `shadow-lg` for modals.
+3. **Shadows** — Do NOT use box-shadow at all. Use borders (`border border-black/5`) and background shifts (`hover:bg-muted/30`) for depth.
 4. **Blue-500 default** — Never use Tailwind's default blue as the only accent. Derive a project-specific palette from the brand/audience. If no brand exists, propose 3 distinct directions.
 5. **Excessive symmetry** — Real layouts have intentional asymmetry: hero text left + image right, sidebar narrower than content, footer columns of different widths.
 6. **Western minimalism on Korean sites** — Korean users expect information density. Empty viewport = wasted space. Show price, rating, badge, seller, all visible without hover.
@@ -468,22 +472,23 @@ To break out of generic AI aesthetics:
 
 Flat design is dead. Every surface needs visual depth:
 
-### Layered Shadows
+### Elevation Without Shadows
 
 ```css
-/* Light mode - soft multi-layer */
+/* Light mode - border + background shift */
 .card-elevated {
-  box-shadow:
-    0 1px 2px oklch(0 0 0 / 0.04),
-    0 4px 8px oklch(0 0 0 / 0.04),
-    0 8px 16px oklch(0 0 0 / 0.02);
+  border: 1px solid oklch(0 0 0 / 0.08);
+  background: oklch(1 0 0);
+}
+.card-elevated:hover {
+  border-color: oklch(0 0 0 / 0.15);
+  background: oklch(0.98 0.005 264);
 }
 
-/* Dark mode - borders replace shadows */
+/* Dark mode - lighter surface + border */
 .dark .card-elevated {
-  box-shadow: none;
   border: 1px solid oklch(1 0 0 / 0.08);
-  background: oklch(0.18 0.005 264);  /* Slightly tinted, not pure dark */
+  background: oklch(0.18 0.005 264);
 }
 ```
 
@@ -510,7 +515,7 @@ Use this for: stat cards, settings panels, nested forms, feature highlights.
 <nav class="sticky top-0 z-50 border-b border-white/10 bg-gray-950/80 backdrop-blur-md">
 
 <!-- Floating card -->
-<div class="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl p-6 shadow-xl">
+<div class="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl p-6">
 ```
 
 ### Gradient Techniques
@@ -537,7 +542,7 @@ Every screen has 3 levels of surface:
 |-------|-----------|-----------|-------|
 | Base | `bg-gray-50` | `bg-gray-950` | Page background |
 | Surface | `bg-white` | `bg-gray-900` | Cards, panels |
-| Elevated | `bg-white shadow-md` | `bg-gray-800 border-white/10` | Modals, dropdowns, popovers |
+| Elevated | `bg-white border border-black/10` | `bg-gray-800 border-white/10` | Modals, dropdowns, popovers |
 
 ## Micro-interactions & States
 
@@ -577,10 +582,12 @@ Every interactive element MUST define all 5 states. No exceptions.
 <div class="
   rounded-xl border border-border bg-card p-5
   transition-all duration-200
-  hover:shadow-md hover:border-border/80 hover:-translate-y-0.5
-  active:shadow-sm active:translate-y-0
+  hover:bg-muted/30 hover:border-primary-200
+  active:bg-muted/50
 ">
 ```
+
+No shadows. Use background tint and border color shift for hover feedback.
 
 ### Staggered Grid Animations
 
@@ -698,14 +705,15 @@ Before final handoff, run this 10-point checklist on your own output. Be brutall
 3. [ ] Spacing rhythm — Are same-level elements spaced consistently? No "eyeballed" gaps?
 4. [ ] Interaction states — Does EVERY button/link/card have hover, active, focus, disabled?
 5. [ ] Information density — For Korean market: is there enough content per viewport? Would a Korean user feel the page is "empty"?
-6. [ ] AI-slop check — Am I repeating rounded-lg + bg-white + shadow-sm on every card? Is there variety in elevation, radius, and surface treatment?
-7. [ ] Depth & layering — Does the design have visual depth? Borders, shadows, gradients, blur — at least 2 depth techniques per section?
+6. [ ] AI-slop check — Am I repeating rounded-lg + bg-white on every card? Is there variety in radius and surface treatment?
+7. [ ] Depth & layering — Does the design have visual depth? Borders, gradients, blur, background shifts — NO shadows allowed.
+8. [ ] CONTRAST — For EVERY text-on-background pair: is it >= 4.5:1? Is any dark text on saturated color? White text on saturated BGs ONLY.
 8. [ ] Typography optical — Are large headings (24px+) using tighter letter-spacing? Is line-height appropriate per text role?
 9. [ ] Responsive — Did I specify mobile (2-col Korean), tablet (3-col), desktop (4-col) layouts?
 10.[ ] Brand personality — If I hide the logo, can someone tell what kind of service this is from the visual language alone?
 ```
 
-For each failing item, state what's wrong and fix it immediately. Only proceed to Round 5 when all 10 pass.
+For each failing item, state what's wrong and fix it immediately. Only proceed to Round 5 when all 11 pass.
 
 ### Round 5: Final Handoff
 **Deliverable:** Complete design specification document with all tokens, components, responsive rules, and dark mode variants
