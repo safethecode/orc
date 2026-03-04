@@ -1,0 +1,42 @@
+import type { ModelTier, SubTask, ExecutionPlan } from "../config/types.ts";
+
+export interface RendererPort {
+  welcome(profiles: string[]): void;
+  agentHeader(name: string, tier: ModelTier, reason: string): void;
+  startBox(tier: ModelTier): void;
+  endBox(): void;
+  text(content: string): void;
+  toolUse(name: string, detail?: string, insideBox?: boolean): void;
+  workerToolUse(agentName: string, toolName: string, detail?: string): void;
+  workerFileChange(agentName: string, action: string, filePath: string): void;
+  cost(usd: number, inputTokens: number, outputTokens: number, durationMs?: number): void;
+  error(message: string): void;
+  info(message: string): void;
+  dim(message: string): void;
+  handoff(from: string, to: string): void;
+  separator(): void;
+  startSpinner(agentName: string, tier: ModelTier): void;
+  updateSpinner(text: string): void;
+  stopSpinner(): void;
+  notifyIdle(): void;
+  updateCostLive(usd: number): void;
+  brainstormStatus(count: number, durationMs: number): void;
+  planSummary(subtasks: SubTask[], plan: ExecutionPlan): void;
+  phaseHeader(name: string, count: number, parallel: boolean): void;
+  mcpStatus(serverNames: string[], toolCount: number): void;
+  mcpScout(names: string[], durationMs: number): void;
+  skillScout(names: string[], durationMs: number): void;
+  retryAttempt(attempt: number, maxAttempts: number, reason: string): void;
+  qualityGate(passes: boolean, issues: string[]): void;
+  costEstimate(single: number, multi: number, recommendation: string): void;
+  conflictWarning(conflicts: string[]): void;
+  riskAssessment(risks: string[]): void;
+  phaseStart(phaseNum: number, name: string, target: number): void;
+  studyComplete(durationMs: number): void;
+  verificationResult(path: number, valid: boolean, issue?: string): void;
+  goldenLoaded(count: number): void;
+  goldenSaved(metric: number): void;
+  researchStart(round: number): void;
+  researchProgress(phase: string, detail?: string): void;
+  researchComplete(durationMs: number): void;
+}
