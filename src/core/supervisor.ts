@@ -28,6 +28,7 @@ import { WorkerBus } from "./worker-bus.ts";
 import { ContextPropagator } from "./context-propagator.ts";
 import { FeedbackLoop } from "./feedback-loop.ts";
 import { eventBus } from "./events.ts";
+import { reviewSpec, reviewQuality } from "./review-gate.ts";
 import type { DistributedTracer, TraceContext } from "./distributed-trace.ts";
 
 export interface SupervisorDeps {
@@ -550,6 +551,28 @@ export class Supervisor {
 
             if (!critique.passes && feedbackConfig?.qaLoopOnFail) {
               await this.feedbackLoop.runQALoop(subtask, critique);
+            }
+          }
+
+          // 10.5. Two-stage review gate
+          const reviewGateConfig = this.deps.config.supervisor?.reviewGate;
+          if (reviewGateConfig?.enabled && subtask.agentRole !== "qa") {
+            try {
+              const specReview = await reviewSpec(subtask.prompt, outcome.result);
+              eventBus.publish({ type: "review:complete", subtaskId: subtask.id, stage: "spec", passed: specReview.passed });
+              if (!specReview.passed) {
+                eventBus.publish({ type: "review:issues", subtaskId: subtask.id, issues: specReview.issues });
+              }
+
+              if (specReview.passed) {
+                const qualReview = await reviewQuality(outcome.result);
+                eventBus.publish({ type: "review:complete", subtaskId: subtask.id, stage: "quality", passed: qualReview.passed });
+                if (!qualReview.passed) {
+                  eventBus.publish({ type: "review:issues", subtaskId: subtask.id, issues: qualReview.issues });
+                }
+              }
+            } catch {
+              // Review gate failure is non-blocking — log and continue
             }
           }
 
