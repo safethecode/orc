@@ -29,6 +29,8 @@ export interface MessageMeta {
   version?: string;
   cwd?: string;
   defaultTier?: string;
+  mcpServers?: string[];
+  formatters?: string[];
 }
 
 export interface Message {
@@ -86,6 +88,7 @@ export interface StoreState {
 
 type Action =
   | { type: "APPEND_MESSAGE"; message: Message }
+  | { type: "UPDATE_WELCOME_META"; partial: Partial<MessageMeta> }
   | { type: "STREAMING_START"; tier: ModelTier }
   | { type: "STREAMING_DELTA"; text: string }
   | { type: "STREAMING_COMMIT" }
@@ -96,6 +99,13 @@ function reducer(state: StoreState, action: Action): StoreState {
   switch (action.type) {
     case "APPEND_MESSAGE":
       return { ...state, messages: [...state.messages, action.message] };
+    case "UPDATE_WELCOME_META": {
+      const idx = state.messages.findIndex((m) => m.type === "welcome");
+      if (idx === -1) return state;
+      const updated = [...state.messages];
+      updated[idx] = { ...updated[idx], meta: { ...updated[idx].meta, ...action.partial } };
+      return { ...state, messages: updated };
+    }
     case "STREAMING_START":
       return { ...state, streamingChunk: "", streamingTier: action.tier, isStreaming: true };
     case "STREAMING_DELTA":

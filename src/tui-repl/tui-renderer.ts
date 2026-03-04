@@ -51,6 +51,12 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("error", message) });
     },
     info(message) {
+      // Merge formatter info into welcome panel instead of separate message
+      if (message.startsWith("Formatters: ")) {
+        const fmts = message.replace("Formatters: ", "").split(", ");
+        dispatch({ type: "UPDATE_WELCOME_META", partial: { formatters: fmts } });
+        return;
+      }
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", message) });
     },
     dim(message) {
@@ -87,8 +93,8 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
     phaseHeader(name, count, parallel) {
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `phase: ${name} (${count} tasks${parallel ? ", parallel" : ""})`) });
     },
-    mcpStatus(serverNames, toolCount) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `mcp: ${serverNames.join(", ")} (${toolCount} tools)`) });
+    mcpStatus(serverNames, _toolCount) {
+      dispatch({ type: "UPDATE_WELCOME_META", partial: { mcpServers: serverNames } });
     },
     mcpScout(names, durationMs) {
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `mcp scout: ${names.join(", ")} (${durationMs}ms)`) });

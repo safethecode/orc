@@ -11,6 +11,8 @@ export function WelcomeScreen({ profiles, meta }: Props) {
   const version = meta?.version ?? "0.1.0";
   const cwd = meta?.cwd ?? process.cwd();
   const defaultTier = meta?.defaultTier ?? "haiku";
+  const mcpServers = meta?.mcpServers ?? [];
+  const formatters = meta?.formatters ?? [];
 
   // Shorten path: ~/... for home directory
   const home = process.env.HOME ?? "";
@@ -37,6 +39,18 @@ export function WelcomeScreen({ profiles, meta }: Props) {
             <text fg="#7dcfff">{names[0] ?? "default"}</text>
           </box>
           <text fg="#565f89">{shortCwd}</text>
+          {mcpServers.length > 0 && (
+            <box flexDirection="row" gap={1} paddingTop={1}>
+              <text fg="#9ece6a">{"\uD83D\uDD0C"}</text>
+              <text fg="#565f89">{mcpServers.join(", ")}</text>
+            </box>
+          )}
+          {formatters.length > 0 && (
+            <box flexDirection="row" gap={1}>
+              <text fg="#7dcfff">{"\uD83D\uDCE6"}</text>
+              <text fg="#565f89">{formatters.join(", ")}</text>
+            </box>
+          )}
         </box>
 
         {/* Vertical divider */}
