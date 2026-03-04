@@ -4,6 +4,7 @@ import { StoreContext, INITIAL_STATE, reducer } from "./store.ts";
 import { MessageArea } from "./components/message-area.tsx";
 import { StatusBar } from "./components/status-bar.tsx";
 import { WorkerHud } from "./components/worker-hud.tsx";
+import { ProjectBar } from "./components/project-bar.tsx";
 import { InputArea } from "./components/input-area.tsx";
 import { createMessage } from "./store.ts";
 
@@ -53,6 +54,7 @@ export function App({ onSubmit, onAbort, dispatchRef }: Props) {
       <box flexDirection="column" width="100%" height="100%" onKeyPress={handleKeyPress}>
         <MessageArea />
         <WorkerHud />
+        <ProjectBar />
         <StatusBar />
         <InputArea onSubmit={handleSubmit} />
       </box>
