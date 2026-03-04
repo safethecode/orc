@@ -125,6 +125,11 @@ After generating UI code, run this self-check. If ANY item is TRUE, **fix it bef
 - **SEMANTIC COLOR CHECK** — Red for non-danger? Green for non-success? → Fix: realign.
 - **TITLE PROPORTION CHECK** — Page title > 24px? → Fix: 20-24px max.
 - **ACTION NOISE CHECK** — Actions permanently visible on every item? → Fix: hide, show on hover.
+- **COLUMN HEIGHT BALANCE CHECK** — Multi-column layout with one column >30% taller? → Fix: stack widgets in short column, add scroll, or restructure grid.
+- **ICON-TEXT ALIGNMENT CHECK** — Every icon+text pair using flex items-center? Icon size proportional to text (+2~4px)? "+" chars replaced with SVG icons? → Fix: flex items-center gap-2, use proper icon components.
+- **COLOR UNITY CHECK** — For every colored text: is adjacent icon the SAME color? Color on parent container, not children? Hover changes both icon and text? → Fix: move color to parent flex container.
+- **SPACING CONSISTENCY CHECK** — In headers/toolbars: all gaps equal? Left padding === right padding? Action icons in single flex with one gap? Header padding matches content padding? → Fix: use flex gap, snap to 4px grid.
+- **CURSOR POINTER CHECK** — Every element with onClick has cursor: pointer? Non-button/a clickable elements have cursor-pointer? Disabled shows not-allowed? → Fix: add cursor-pointer to all clickable elements.
 
 ### Component Library Policy
 
@@ -206,6 +211,26 @@ Red badge for "in progress" status — red universally means danger, not progres
 **FAILURE #8: REPEATING ACTIONS ON EVERY ITEM**
 Buttons on every row = visual noise.
 → Actions hidden by default, show on hover. Critical action = clickable row. Visible buttons <= item count.
+
+**FAILURE #9: MULTI-COLUMN HEIGHT MISMATCH**
+Dashboard with 2+ columns where one is significantly taller. Right column ends early, full-width section below looks "attached" to left but "detached" from right.
+→ Before choosing multi-column: estimate content height. If difference >30%, stack smaller widgets in the short column (like Notion/Linear dashboards), give shorter section fixed height with scroll, or rethink grid entirely. "Scroll test": at any position, do both columns have content visible?
+
+**FAILURE #10: ICON-TEXT VERTICAL MISALIGNMENT**
+Icon and text not vertically centered. Icon sits 1-3px higher/lower than text baseline. Common in buttons ("+ New"), menu items, nav links.
+→ EVERY icon+text pair: `flex items-center gap-2`. Icon size = text size + 2~4px (text-sm 14px → icon 16px). SVG icons must be `display: block` or `flex-shrink-0`. Use proper icon components, never text "+" characters.
+
+**FAILURE #11: PARTIAL COLOR APPLICATION**
+Semantic color on text but NOT on adjacent icon. "Logout" text is red but icon stays gray.
+→ Icon+text = ONE visual unit, same color. Apply color to the CONTAINER (`<div className="text-red-600 flex items-center gap-2">`), not individual children. Hover states must change both together.
+
+**FAILURE #12: INCONSISTENT ELEMENT SPACING & GAPS**
+Header/toolbar elements have uneven gaps (8px here, 12px there, 16px elsewhere). Left padding !== right padding.
+→ Container padding: left === right, always. Use single gap value for all siblings in a row. Action icons in one flex container with consistent gap. Dividers: equal space both sides (mx-2, not ml-2 mr-4). "Ruler test": every gap must be multiple of 4px base unit.
+
+**FAILURE #13: MISSING CURSOR POINTER ON INTERACTIVE ELEMENTS**
+Clickable divs/spans with onClick but no cursor: pointer. User hovers, cursor stays as arrow.
+→ EVERY element with onClick MUST have cursor-pointer. This includes: clickable rows, cards, tabs, icon buttons, custom toggles, breadcrumbs, "show more" links, sidebar nav items. Use `<button>`/`<a>` when possible (free pointer). Disabled = cursor-not-allowed. "Hover sweep test": mentally hover every element — clickable = pointer, not clickable = default.
 
 ---
 
