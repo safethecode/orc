@@ -157,6 +157,7 @@ export class ReplController {
     let agentName: string;
 
     r.phaseUpdate("routing");
+    r.startSpinner("orc", "haiku");
 
     if (this.pinnedAgent) {
       const pinnedProfile = this.orchestrator.getRegistry().get(this.pinnedAgent);

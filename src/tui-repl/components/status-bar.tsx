@@ -46,6 +46,19 @@ export function StatusBar() {
   const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length];
   const elapsed = formatElapsed(elapsedStart);
   const costStr = cost > 0 ? `$${cost.toFixed(4)}` : "";
+  const isPreAgent = phase === "routing" || phase === "classifying" || phase === "decomposing";
+
+  if (isPreAgent) {
+    return (
+      <box height={1} flexShrink={0} flexDirection="row" paddingLeft={1}>
+        <text fg="#7aa2f7">{spinner}</text>
+        <text fg="#7aa2f7">{` ${phase}...`}</text>
+        <box flexGrow={1} />
+        <text fg="#3d4262">{" │ "}</text>
+        <text fg="#e0af68">esc to abort</text>
+      </box>
+    );
+  }
 
   return (
     <box height={1} flexShrink={0} flexDirection="row" paddingLeft={1}>
