@@ -1,3 +1,4 @@
+import { createContext, useContext, useReducer, type Dispatch } from "react";
 import type { ModelTier } from "../config/types.ts";
 
 export type MessageType =
@@ -46,3 +47,45 @@ export function createMessage(
     timestamp: Date.now(),
   };
 }
+
+// ── State ────────────────────────────────────────────────────────────
+
+export interface StoreState {
+  messages: Message[];
+}
+
+// ── Actions ──────────────────────────────────────────────────────────
+
+type Action =
+  | { type: "APPEND_MESSAGE"; message: Message }
+  | { type: "CLEAR" };
+
+function reducer(state: StoreState, action: Action): StoreState {
+  switch (action.type) {
+    case "APPEND_MESSAGE":
+      return { ...state, messages: [...state.messages, action.message] };
+    case "CLEAR":
+      return { ...state, messages: [] };
+    default:
+      return state;
+  }
+}
+
+const INITIAL_STATE: StoreState = { messages: [] };
+
+// ── Context ──────────────────────────────────────────────────────────
+
+interface StoreContextValue {
+  state: StoreState;
+  dispatch: Dispatch<Action>;
+}
+
+const StoreContext = createContext<StoreContextValue | null>(null);
+
+export function useStore(): StoreContextValue {
+  const ctx = useContext(StoreContext);
+  if (!ctx) throw new Error("useStore must be used within StoreProvider");
+  return ctx;
+}
+
+export { StoreContext, INITIAL_STATE, reducer };
