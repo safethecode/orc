@@ -11,24 +11,29 @@ export function InputArea({ onSubmit }: Props) {
 
   const handleKeyPress = useCallback(
     (key: string) => {
-      // Cmd+Enter or Ctrl+Enter to submit
-      if (key === "ctrl+enter" || key === "cmd+enter") {
+      // Enter to submit
+      if (key === "enter") {
         const trimmed = value.trim();
         if (trimmed) {
           onSubmit(trimmed);
           setValue("");
         }
+        return;
+      }
+      // Cmd+Enter or Ctrl+Enter for newline
+      if (key === "ctrl+enter" || key === "cmd+enter") {
+        setValue(value + "\n");
       }
     },
     [value, onSubmit],
   );
 
   return (
-    <box height={5} flexShrink={0} flexDirection="column">
+    <box height={3} flexShrink={0} flexDirection="column">
       <box height={1}>
         <text fg="#7aa2f7" bold>{"❯ "}</text>
         <text fg="#565f89" dim>
-          {value ? "" : "Message… (Cmd+Enter to send)"}
+          {value ? "" : "Enter to send, Cmd+Enter for newline"}
         </text>
       </box>
       <textarea
@@ -36,7 +41,7 @@ export function InputArea({ onSubmit }: Props) {
         value={value}
         onChange={setValue}
         onKeyPress={handleKeyPress}
-        height={4}
+        height={2}
         focused
       />
     </box>
