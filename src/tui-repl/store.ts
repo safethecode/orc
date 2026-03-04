@@ -52,18 +52,39 @@ export function createMessage(
 
 export interface StoreState {
   messages: Message[];
+  streamingChunk: string;
+  streamingTier: ModelTier | null;
+  isStreaming: boolean;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────
 
 type Action =
   | { type: "APPEND_MESSAGE"; message: Message }
+  | { type: "STREAMING_START"; tier: ModelTier }
+  | { type: "STREAMING_DELTA"; text: string }
+  | { type: "STREAMING_COMMIT" }
   | { type: "CLEAR" };
 
 function reducer(state: StoreState, action: Action): StoreState {
   switch (action.type) {
     case "APPEND_MESSAGE":
       return { ...state, messages: [...state.messages, action.message] };
+    case "STREAMING_START":
+      return { ...state, streamingChunk: "", streamingTier: action.tier, isStreaming: true };
+    case "STREAMING_DELTA":
+      return { ...state, streamingChunk: state.streamingChunk + action.text };
+    case "STREAMING_COMMIT": {
+      if (!state.streamingChunk) return { ...state, isStreaming: false, streamingTier: null };
+      const msg = createMessage("assistant", state.streamingChunk, { tier: state.streamingTier ?? undefined });
+      return {
+        ...state,
+        messages: [...state.messages, msg],
+        streamingChunk: "",
+        streamingTier: null,
+        isStreaming: false,
+      };
+    }
     case "CLEAR":
       return { ...state, messages: [] };
     default:
@@ -71,7 +92,12 @@ function reducer(state: StoreState, action: Action): StoreState {
   }
 }
 
-const INITIAL_STATE: StoreState = { messages: [] };
+const INITIAL_STATE: StoreState = {
+  messages: [],
+  streamingChunk: "",
+  streamingTier: null,
+  isStreaming: false,
+};
 
 // ── Context ──────────────────────────────────────────────────────────
 
