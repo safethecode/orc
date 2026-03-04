@@ -173,8 +173,9 @@ async function main() {
     }
 
     case "dashboard": {
-      const { renderDashboard } = await import("./tui/app.tsx");
-      await renderDashboard(orchestrator, config);
+      // Dashboard is now part of the default TUI
+      const { startTuiRepl } = await import("./tui-repl/start.tsx");
+      await startTuiRepl(orchestrator, config);
       break;
     }
 
