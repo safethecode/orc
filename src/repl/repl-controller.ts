@@ -433,6 +433,23 @@ export class ReplController {
         if (result.text) {
           const critique = runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input }, result.text);
           r.qualityGate(critique.passes, critique.issues);
+
+          // Auto-retry on suspiciously short response from non-conversational agents
+          if (!critique.passes && critique.issues.includes("Result is suspiciously short") && attempt < maxAttempts - 1) {
+            r.info("auto-retry: response too short, reinforcing prompt...");
+            const reinforced = input + "\n\n[IMPORTANT: Your previous attempt produced an incomplete response. You MUST use tools (Read, Edit, Bash, etc.) to actually complete the task. Do not just acknowledge — take action immediately.]";
+            this.conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
+            const retryPrompt = this.conversation.buildPrompt(reinforced);
+            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+              prompt: retryPrompt,
+              model: currentProfile.model,
+              systemPrompt,
+              maxTurns: currentProfile.maxTurns,
+              mcpConfig: mcpConfigPath,
+            });
+            lastError = "suspiciously short response";
+            continue;
+          }
         }
 
         if (result.inputTokens > 0 || result.outputTokens > 0) {
