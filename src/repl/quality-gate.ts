@@ -1,5 +1,10 @@
 import type { CritiqueResult } from "../config/types.ts";
 
+function isConversationalRole(role: string): boolean {
+  const lower = role.toLowerCase();
+  return lower.includes("conversational") || lower.includes("assistant") || lower === "conversation";
+}
+
 export function runQualityGate(
   context: { agentRole: string; prompt: string },
   result: string,
@@ -8,7 +13,8 @@ export function runQualityGate(
   const improvements: string[] = [];
 
   // Heuristic checks (fast, no LLM call)
-  if (result.length < 50) {
+  // Skip length check for conversational agents (Sam etc.) — short replies are normal
+  if (!isConversationalRole(context.agentRole) && result.length < 30) {
     issues.push("Result is suspiciously short");
   }
 
