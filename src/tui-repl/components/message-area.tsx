@@ -10,6 +10,7 @@ import { SystemInfo } from "./system-info.tsx";
 import { ErrorMessage } from "./error-message.tsx";
 import { CostDisplay } from "./cost-display.tsx";
 import { HandoffDisplay } from "./handoff-display.tsx";
+import { TaskListDisplay } from "./task-list-display.tsx";
 import type { Message } from "../store.ts";
 
 function renderMessage(msg: Message) {
@@ -32,6 +33,8 @@ function renderMessage(msg: Message) {
       return <CostDisplay key={msg.id} meta={msg.meta} />;
     case "handoff":
       return <HandoffDisplay key={msg.id} from={msg.meta?.agentName ?? ""} to={msg.meta?.reason ?? ""} />;
+    case "task_list":
+      return <TaskListDisplay key={msg.id} meta={msg.meta} />;
     case "separator":
       return (
         <box key={msg.id} border={["top"]} borderColor="#565f89" />

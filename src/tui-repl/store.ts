@@ -11,7 +11,8 @@ export type MessageType =
   | "error"
   | "cost"
   | "handoff"
-  | "separator";
+  | "separator"
+  | "task_list";
 
 export interface MessageMeta {
   agentName?: string;
@@ -31,6 +32,14 @@ export interface MessageMeta {
   defaultTier?: string;
   mcpServers?: string[];
   formatters?: string[];
+  // Task list metadata
+  taskItems?: Array<{
+    id: string;
+    label: string;
+    role: string;
+    status: "pending" | "running" | "passed" | "failed" | "reviewing";
+    durationMs?: number;
+  }>;
 }
 
 export interface Message {
@@ -93,6 +102,7 @@ export interface StoreState {
 type Action =
   | { type: "APPEND_MESSAGE"; message: Message }
   | { type: "UPDATE_WELCOME_META"; partial: Partial<MessageMeta> }
+  | { type: "UPDATE_TASK_LIST"; taskId: string; status: string; durationMs?: number }
   | { type: "STREAMING_START"; tier: ModelTier }
   | { type: "STREAMING_DELTA"; text: string }
   | { type: "STREAMING_COMMIT" }
@@ -108,6 +118,19 @@ function reducer(state: StoreState, action: Action): StoreState {
       if (idx === -1) return state;
       const updated = [...state.messages];
       updated[idx] = { ...updated[idx], meta: { ...updated[idx].meta, ...action.partial } };
+      return { ...state, messages: updated };
+    }
+    case "UPDATE_TASK_LIST": {
+      const idx = state.messages.findLastIndex((m) => m.type === "task_list");
+      if (idx === -1) return state;
+      const msg = state.messages[idx];
+      const items = msg.meta?.taskItems?.map((item) =>
+        item.id === action.taskId
+          ? { ...item, status: action.status as any, durationMs: action.durationMs ?? item.durationMs }
+          : item,
+      );
+      const updated = [...state.messages];
+      updated[idx] = { ...msg, meta: { ...msg.meta, taskItems: items } };
       return { ...state, messages: updated };
     }
     case "STREAMING_START":

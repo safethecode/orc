@@ -144,5 +144,16 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
     phaseUpdate(phase, detail) {
       dispatch({ type: "STATUS_UPDATE", partial: { phase: phase as any, phaseDetail: detail ?? "" } });
     },
+    taskList(items) {
+      dispatch({
+        type: "APPEND_MESSAGE",
+        message: createMessage("task_list", "", {
+          taskItems: items.map((i) => ({ ...i, status: "pending" as const })),
+        }),
+      });
+    },
+    taskUpdate(taskId, status, durationMs) {
+      dispatch({ type: "UPDATE_TASK_LIST", taskId, status, durationMs });
+    },
   };
 }
