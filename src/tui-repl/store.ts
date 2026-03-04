@@ -89,12 +89,18 @@ export interface StatusBarState {
   phaseDetail: string;
 }
 
+export interface ApprovalRequest {
+  command: string;
+  message: string;
+}
+
 export interface StoreState {
   messages: Message[];
   streamingChunk: string;
   streamingTier: ModelTier | null;
   isStreaming: boolean;
   status: StatusBarState;
+  approval: ApprovalRequest | null;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────
@@ -107,6 +113,8 @@ type Action =
   | { type: "STREAMING_DELTA"; text: string }
   | { type: "STREAMING_COMMIT" }
   | { type: "STATUS_UPDATE"; partial: Partial<StatusBarState> }
+  | { type: "SHOW_APPROVAL"; command: string; message: string }
+  | { type: "RESOLVE_APPROVAL" }
   | { type: "CLEAR" };
 
 function reducer(state: StoreState, action: Action): StoreState {
@@ -150,6 +158,10 @@ function reducer(state: StoreState, action: Action): StoreState {
     }
     case "STATUS_UPDATE":
       return { ...state, status: { ...state.status, ...action.partial } };
+    case "SHOW_APPROVAL":
+      return { ...state, approval: { command: action.command, message: action.message } };
+    case "RESOLVE_APPROVAL":
+      return { ...state, approval: null };
     case "CLEAR":
       return { ...state, messages: [] };
     default:
@@ -162,6 +174,7 @@ const INITIAL_STATE: StoreState = {
   streamingChunk: "",
   streamingTier: null,
   isStreaming: false,
+  approval: null,
   status: {
     agentState: "idle",
     agentName: "",

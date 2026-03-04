@@ -18,6 +18,9 @@ export async function startTuiRepl(
   // Mutable ref: populated once App mounts and useReducer dispatch is available
   const dispatchRef: { current: ((action: any) => void) | null } = { current: null };
 
+  // Mutable ref: populated when an approval is pending, resolved by App's Y/N handler
+  const approvalRef: { current: { resolve: (approved: boolean) => void } | null } = { current: null };
+
   let controller: ReplController | null = null;
 
   const rendererOpts = {
@@ -26,10 +29,20 @@ export async function startTuiRepl(
     defaultTier: config.defaultTier ?? "haiku",
   };
 
+  // Approval callback: dispatches SHOW_APPROVAL, waits for user Y/N via Promise
+  const approveCallback = async (command: string, message: string): Promise<boolean> => {
+    return new Promise<boolean>((resolve) => {
+      approvalRef.current = { resolve };
+      if (dispatchRef.current) {
+        dispatchRef.current({ type: "SHOW_APPROVAL", command, message });
+      }
+    });
+  };
+
   const handleSubmit = async (text: string) => {
     if (!controller && dispatchRef.current) {
       const tuiRenderer = createTuiRenderer(dispatchRef.current, rendererOpts);
-      controller = new ReplController({ orchestrator, config, renderer: tuiRenderer });
+      controller = new ReplController({ orchestrator, config, renderer: tuiRenderer, approve: approveCallback });
       await controller.initialize();
     }
     if (controller) {
@@ -43,13 +56,20 @@ export async function startTuiRepl(
   };
 
   const root = createRoot(cliRenderer);
-  root.render(<App onSubmit={handleSubmit} onAbort={handleAbort} dispatchRef={dispatchRef} />);
+  root.render(
+    <App
+      onSubmit={handleSubmit}
+      onAbort={handleAbort}
+      dispatchRef={dispatchRef}
+      approvalRef={approvalRef}
+    />,
+  );
 
   // Initialize controller immediately once dispatch is available
   setTimeout(async () => {
     if (dispatchRef.current) {
       const tuiRenderer = createTuiRenderer(dispatchRef.current, rendererOpts);
-      controller = new ReplController({ orchestrator, config, renderer: tuiRenderer });
+      controller = new ReplController({ orchestrator, config, renderer: tuiRenderer, approve: approveCallback });
       await controller.initialize();
     }
   }, 100);

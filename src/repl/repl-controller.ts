@@ -332,6 +332,8 @@ export class ReplController {
     let currentProviderConfig = providerConfig;
     let lastError: string | null = null;
 
+    const enforcer = this.orchestrator.getHarnessEnforcer();
+
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (cancellation.cancelled) break;
 
@@ -343,6 +345,7 @@ export class ReplController {
       const streamer = new AgentStreamer();
       this.currentStreamer = streamer;
       let boxOpen = false;
+      let pendingApproval: { command: string; message: string } | null = null;
 
       streamer.on("text_delta", (delta: string) => {
         if (!boxOpen) { r.stopSpinner(); r.startBox(route.model); boxOpen = true; }
@@ -366,6 +369,31 @@ export class ReplController {
         else r.toolUse(tool.name, detail, false);
         r.startSpinner(agentName, route.model);
         eventBus.publish({ type: "agent:tool", agent: agentName, tool: tool.name, detail });
+
+        // Harness enforcer: pre-execution validation
+        const enforcement = enforcer.check(tool.name, inp as Record<string, unknown>);
+
+        if (enforcement.askRequired) {
+          const cmd = (inp.command as string) ?? tool.name;
+          const v = enforcement.violations.find(v => v.severity === "ask");
+          pendingApproval = { command: cmd, message: v?.message ?? cmd };
+          r.stopSpinner();
+          if (boxOpen) { r.endBox(); boxOpen = false; }
+          streamer.abort();
+          return;
+        }
+
+        if (!enforcement.allowed) {
+          for (const v of enforcement.violations.filter(v => v.severity === "block")) {
+            r.error(`ENFORCER [${v.ruleId}]: ${v.message}`);
+          }
+        }
+
+        for (const v of enforcement.violations.filter(v => v.severity === "warn")) {
+          r.info(`${v.ruleId}: ${v.message}`);
+        }
+
+        enforcer.record(tool.name, inp as Record<string, unknown>);
       });
 
       streamer.on("error", (msg: string) => {
@@ -380,6 +408,26 @@ export class ReplController {
         r.stopSpinner();
         const durationMs = Date.now() - startTime;
         if (boxOpen) r.endBox();
+
+        // Enforcer approval flow: abort-ask-retry
+        if (pendingApproval) {
+          const { command, message } = pendingApproval;
+          r.error(`ENFORCER [command-safety]: ${message}`);
+          r.info(command.slice(0, 200));
+
+          const approved = await this.approve(command, message);
+          if (approved) {
+            enforcer.approve(command);
+            r.info("Approved. Retrying...");
+            pendingApproval = null;
+            attempt--; // Retry same attempt
+            continue;
+          } else {
+            r.info("Denied. Command was not executed.");
+            this.conversation.add({ role: "assistant" as const, content: "(user denied the command)", agentName, tier: route.model, timestamp: new Date().toISOString() });
+            return;
+          }
+        }
 
         // Quality gate
         if (result.text) {
@@ -399,6 +447,26 @@ export class ReplController {
         this.lastAgent = agentName;
         break; // success
       } catch (e) {
+        // If aborted for approval, don't count as error
+        if (pendingApproval) {
+          const { command, message } = pendingApproval;
+          r.error(`ENFORCER [command-safety]: ${message}`);
+          r.info(command.slice(0, 200));
+
+          const approved = await this.approve(command, message);
+          if (approved) {
+            enforcer.approve(command);
+            r.info("Approved. Retrying...");
+            pendingApproval = null;
+            attempt--; // Retry same attempt
+            continue;
+          } else {
+            r.info("Denied. Command was not executed.");
+            this.conversation.add({ role: "assistant" as const, content: "(user denied the command)", agentName, tier: route.model, timestamp: new Date().toISOString() });
+            return;
+          }
+        }
+
         lastError = (e as Error).message;
         r.stopSpinner();
         if (boxOpen) r.endBox();
