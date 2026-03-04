@@ -58,6 +58,7 @@ export class ReplController {
   private currentStreamer: AgentStreamer | null = null;
   private currentCancellation: CancellationToken | null = null;
   private pinnedAgent: string | null = null;
+  private lastAgent: string | null = null;
 
   constructor(opts: ReplControllerOptions) {
     this.orchestrator = opts.orchestrator;
@@ -185,7 +186,7 @@ export class ReplController {
       }
 
       r.phaseUpdate("classifying");
-      const classification = await classifyWithSam(input);
+      const classification = await classifyWithSam(input, this.lastAgent ?? undefined);
       agentName = classification.agent;
       r.info(classification.reason);
 
@@ -395,6 +396,7 @@ export class ReplController {
         this.conversation.add(assistantTurn);
         this.forkManager.addTurn(assistantTurn);
         this.rollout.append({ type: "turn", timestamp: assistantTurn.timestamp, data: assistantTurn });
+        this.lastAgent = agentName;
         break; // success
       } catch (e) {
         lastError = (e as Error).message;
@@ -510,7 +512,15 @@ export class ReplController {
       parentTaskId: "repl",
       isWorker: false,
     });
-    let sp = harness.systemPrompt;
+    // Project context (CLAUDE.md, CONVENTIONS.md) goes FIRST for highest priority
+    const ctxInjector = o.getContextInjector();
+    const ctxFiles = ctxInjector.collect(process.cwd());
+    const ctxContent = ctxFiles.length > 0 ? ctxInjector.formatForPrompt(ctxFiles) : "";
+
+    let sp = "";
+    if (ctxContent) sp += ctxContent + "\n\n";
+
+    sp += harness.systemPrompt;
     sp += `\n\nYou are working in the project at: ${process.cwd()}`;
     if (profile.systemPrompt) sp += "\n\n" + profile.systemPrompt;
     if (skillBodies.length > 0) sp += "\n\n" + skillBodies.join("\n\n");
@@ -526,13 +536,6 @@ export class ReplController {
     if (decisions.length > 0) sp += "\n\n" + o.getDecisions().formatForPrompt(decisions);
 
     if (this.planMode.isActive()) sp += "\n\n" + this.planMode.getSystemPromptAddition();
-
-    const ctxInjector = o.getContextInjector();
-    const ctxFiles = ctxInjector.collect(process.cwd());
-    if (ctxFiles.length > 0) {
-      const ctxContent = ctxInjector.formatForPrompt(ctxFiles);
-      if (ctxContent) sp += "\n\n" + ctxContent;
-    }
 
     if (route.model === "haiku") sp += "\nKeep responses concise and under 200 words.";
 

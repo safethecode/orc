@@ -66,15 +66,21 @@ const CLASSIFY_TIMEOUT_MS = 15_000; // 15s — CLI spawn + haiku API needs headr
 /**
  * Use Sam (haiku) to classify a prompt via LLM with timeout.
  */
-export async function classifyWithSam(prompt: string): Promise<Classification> {
+export async function classifyWithSam(prompt: string, previousAgent?: string): Promise<Classification> {
+  const contextLine = previousAgent && previousAgent !== "Sam"
+    ? `\nContext: The previous task was handled by "${previousAgent}". Short follow-ups like "continue", "fix that", "next", "go ahead", "계속", "수정해", "다음" should route to the SAME agent, not Sam.`
+    : "";
+
   const classifyPrompt = [
     `Classify this user prompt. Reply with ONLY a JSON object, nothing else.`,
     `{"type":"development"|"conversation","agent":"Sam"|"coder"|"architect"|"design"}`,
     `Rules:`,
-    `- "conversation" → greetings, questions, status, explanations, general chat → agent "Sam"`,
-    `- "development" standard → code changes, bugs, tests, refactor, implement → agent "coder"`,
+    `- "conversation" → ONLY pure greetings, thanks, or questions completely unrelated to any task → agent "Sam"`,
+    `- "development" standard → code changes, bugs, tests, refactor, implement, follow-ups to coding work → agent "coder"`,
     `- "development" complex → system architecture, security audit, migration, infrastructure → agent "architect"`,
     `- "development" design → UI/UX design, styling, visual improvements, layout, colors, fonts, components, usability, look and feel, CSS, frontend appearance → agent "design"`,
+    `- IMPORTANT: Short or ambiguous follow-ups that reference previous work (e.g. "fix that", "continue", "next", "keep going", "수정해", "계속", "다음") are development, NOT conversation.`,
+    contextLine,
     ``,
     `User prompt: ${prompt}`,
   ].join("\n");
@@ -114,7 +120,10 @@ export async function classifyWithSam(prompt: string): Promise<Classification> {
     return { type, agent, reason: `Sam: ${type} → ${agent}` };
   } catch (e) {
     const errMsg = (e as Error).message;
-    // Fallback: short prompts → chat, long → coder
+    // Fallback: if previous agent was a dev agent, stay with it
+    if (previousAgent && previousAgent !== "Sam") {
+      return { type: "development", agent: previousAgent, reason: `fallback → previous agent (${errMsg})` };
+    }
     if (prompt.length < 80) {
       return { type: "conversation", agent: "Sam", reason: `fallback (${errMsg})` };
     }
