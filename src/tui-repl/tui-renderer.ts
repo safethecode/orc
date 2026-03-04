@@ -141,5 +141,8 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
     researchComplete(durationMs) {
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `research complete (${(durationMs / 1000).toFixed(1)}s)`) });
     },
+    phaseUpdate(phase, detail) {
+      dispatch({ type: "STATUS_UPDATE", partial: { phase: phase as any, phaseDetail: detail ?? "" } });
+    },
   };
 }

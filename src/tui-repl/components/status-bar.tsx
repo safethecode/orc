@@ -15,7 +15,7 @@ function formatElapsed(startMs: number): string {
 
 export function StatusBar() {
   const { state } = useStore();
-  const { agentState, agentName, tier, cost, elapsedStart } = state.status;
+  const { agentState, agentName, tier, cost, elapsedStart, phase, phaseDetail } = state.status;
   const [frame, setFrame] = useState(0);
 
   // Spinner + elapsed ticker
@@ -52,6 +52,13 @@ export function StatusBar() {
       <text fg={tierColor}>{spinner}</text>
       <text fg={tierColor}>{` ${agentName}`}</text>
       {tier && <text fg="#565f89">{` (${tier})`}</text>}
+      {phase && phase !== "idle" && phase !== "done" && (
+        <box flexDirection="row">
+          <text fg="#3d4262">{" │ "}</text>
+          <text fg="#7aa2f7">{phase}</text>
+          {phaseDetail ? <text fg="#565f89">{` ${phaseDetail}`}</text> : null}
+        </box>
+      )}
       {costStr && (
         <box flexDirection="row">
           <text fg="#3d4262">{" │ "}</text>

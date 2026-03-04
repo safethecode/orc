@@ -67,6 +67,8 @@ export interface WorkerEntry {
   lastTool?: string;
 }
 
+export type WorkflowPhase = "idle" | "routing" | "classifying" | "decomposing" | "executing" | "reviewing" | "done";
+
 export interface StatusBarState {
   agentState: AgentState;
   agentName: string;
@@ -74,6 +76,8 @@ export interface StatusBarState {
   cost: number;
   elapsedStart: number;
   workers: Map<string, WorkerEntry>;
+  phase: WorkflowPhase;
+  phaseDetail: string;
 }
 
 export interface StoreState {
@@ -142,6 +146,8 @@ const INITIAL_STATE: StoreState = {
     cost: 0,
     elapsedStart: 0,
     workers: new Map(),
+    phase: "idle",
+    phaseDetail: "",
   },
 };
 

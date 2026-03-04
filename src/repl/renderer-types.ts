@@ -39,4 +39,5 @@ export interface RendererPort {
   researchStart(round: number): void;
   researchProgress(phase: string, detail?: string): void;
   researchComplete(durationMs: number): void;
+  phaseUpdate(phase: string, detail?: string): void;
 }
