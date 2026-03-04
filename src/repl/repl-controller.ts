@@ -139,6 +139,7 @@ export class ReplController {
     try {
       await this.handleNaturalInput(resolvedInput, cancellation);
     } finally {
+      this.renderer.phaseUpdate("done");
       this.renderer.notifyIdle();
       this.currentStreamer = null;
       this.currentCancellation = null;
@@ -154,6 +155,8 @@ export class ReplController {
     const r = this.renderer;
     let route: RouteResult;
     let agentName: string;
+
+    r.phaseUpdate("routing");
 
     if (this.pinnedAgent) {
       const pinnedProfile = this.orchestrator.getRegistry().get(this.pinnedAgent);
@@ -179,7 +182,7 @@ export class ReplController {
         r.costEstimate(costEst.singleAgent.estimatedCostUsd, costEst.multiAgent.estimatedCostUsd, costEst.recommendation);
       }
 
-      r.info("Classifying...");
+      r.phaseUpdate("classifying");
       const classification = await classifyWithSam(input);
       agentName = classification.agent;
       r.info(classification.reason);
@@ -201,6 +204,7 @@ export class ReplController {
     if (!providerConfig) { r.error(`No provider config for "${profile.provider}".`); return; }
 
     const displayModel = (profile.model as ModelTier) ?? route.model;
+    r.phaseUpdate("executing", agentName);
     eventBus.publish({ type: "agent:start", agent: agentName, tier: displayModel, reason: route.reason });
     r.agentHeader(agentName, displayModel, route.reason);
     r.startSpinner(agentName, displayModel);
@@ -407,7 +411,7 @@ export class ReplController {
     cancellation: CancellationToken,
   ): Promise<void> {
     const r = this.renderer;
-    r.info("Decomposing task...");
+    r.phaseUpdate("decomposing");
     const taskId = `repl-${Date.now().toString(36)}`;
     const decomposition = await decomposeWithSam(input, taskId);
 
@@ -432,10 +436,17 @@ export class ReplController {
     }
 
     r.planSummary(decomposition.subtasks, { phases: [{ subtaskIds: decomposition.subtasks.map(s => s.id), parallel: true }], estimatedDurationMin: 0 } as any);
+    r.taskList(decomposition.subtasks.map(st => ({
+      id: st.id,
+      label: st.prompt.slice(0, 60),
+      role: st.agentRole,
+    })));
 
     // Execute subtasks in parallel
+    r.phaseUpdate("executing", `0/${decomposition.subtasks.length} tasks`);
     const collector = new ResultCollector(decomposition.subtasks.map(s => s.id));
     const propagator = new ContextPropagator();
+    let completedCount = 0;
 
     await Promise.all(
       decomposition.subtasks.map(async (st) => {
@@ -460,13 +471,19 @@ export class ReplController {
           r.workerToolUse(name, tool.name, detail);
         });
 
+        r.taskUpdate(st.id, "running");
+        const workerStart = Date.now();
         try {
           const result = await streamer.run(cmd, cancellation.signal);
           collector.collect(st.id, { text: result.text, cost: result.costUsd, inputTokens: result.inputTokens, outputTokens: result.outputTokens });
+          completedCount++;
+          r.taskUpdate(st.id, "passed", Date.now() - workerStart);
+          r.phaseUpdate("executing", `${completedCount}/${decomposition.subtasks.length} tasks`);
           if (result.inputTokens > 0) {
             r.cost(result.costUsd, result.inputTokens, result.outputTokens);
           }
         } catch (e) {
+          r.taskUpdate(st.id, "failed", Date.now() - workerStart);
           r.error(`Worker ${name} failed: ${(e as Error).message}`);
         }
       }),
