@@ -32,7 +32,7 @@ export function WelcomeScreen({ profiles, meta }: Props) {
       <box flexDirection="row">
         {/* Left column: logo + model + project */}
         <box flexDirection="column" flexGrow={1} paddingTop={1} paddingBottom={1} paddingLeft={1}>
-          <asciifont text="orc" font="slick" color="#bb9af7" />
+          <ascii-font text="orc" font="slick" color="#bb9af7" />
           <box paddingTop={1} flexDirection="row" gap={1}>
             <text fg="#9ece6a">{defaultTier}</text>
             <text fg="#565f89">{"·"}</text>
