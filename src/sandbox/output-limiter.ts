@@ -5,8 +5,8 @@ export interface OutputLimits {
 }
 
 export const DEFAULT_LIMITS: OutputLimits = {
-  maxBytesPerStream: 1_048_576,
-  maxLines: 10_000,
+  maxBytesPerStream: 10_485_760, // 10 MiB
+  maxLines: 50_000,
   stderrRatio: 0.67,
 };
 

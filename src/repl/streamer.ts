@@ -33,7 +33,7 @@ interface StreamJsonMessage {
   usage?: { input_tokens?: number; output_tokens?: number };
 }
 
-const MAX_OUTPUT_BYTES = 1_048_576; // 1 MiB
+const MAX_OUTPUT_BYTES = 20_971_520; // 20 MiB — generous limit to avoid premature abort
 
 export class AgentStreamer extends EventEmitter {
   private proc: ReturnType<typeof Bun.spawn> | null = null;
@@ -82,12 +82,7 @@ export class AgentStreamer extends EventEmitter {
         const chunk = decoder.decode(value, { stream: true });
         this.totalOutputBytes += chunk.length;
 
-        // Output cap: abort if exceeding max bytes
-        if (this.totalOutputBytes > MAX_OUTPUT_BYTES) {
-          this.emit("error", `Output exceeded ${MAX_OUTPUT_BYTES} bytes limit, aborting`);
-          this.abort();
-          break;
-        }
+        // No output cap — let the agent finish its turn regardless of size
 
         buffer += chunk;
 

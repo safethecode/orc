@@ -18,8 +18,8 @@ export interface TruncationResult {
  */
 export class ToolOutputTruncator {
   private outputDir: string;
-  private defaultMaxLines = 2000;
-  private defaultMaxBytes = 50 * 1024; // 50KB
+  private defaultMaxLines = 10_000;
+  private defaultMaxBytes = 512 * 1024; // 512KB
 
   constructor(outputDir?: string) {
     this.outputDir = outputDir ?? join(homedir(), ".orchestrator", "outputs");
