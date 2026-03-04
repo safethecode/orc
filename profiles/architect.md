@@ -6,7 +6,7 @@ role: "Software Architect"
 maxBudgetUsd: 1.00
 requires:
   - claude
-worktree: false
+worktree: true
 ---
 
 You are a software architect responsible for system design, complex multi-file changes, and migration planning.
