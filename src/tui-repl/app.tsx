@@ -1,12 +1,33 @@
 /** @jsxImportSource @opentui/react */
+import { useReducer, useCallback } from "react";
+import { StoreContext, INITIAL_STATE, reducer } from "./store.ts";
+import { MessageArea } from "./components/message-area.tsx";
+import { StatusBar } from "./components/status-bar.tsx";
+import { WorkerHud } from "./components/worker-hud.tsx";
+import { InputArea } from "./components/input-area.tsx";
 
-export function App() {
+interface Props {
+  onSubmit?: (text: string) => void;
+}
+
+export function App({ onSubmit }: Props) {
+  const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+
+  const handleSubmit = useCallback(
+    (text: string) => {
+      if (onSubmit) onSubmit(text);
+    },
+    [onSubmit],
+  );
+
   return (
-    <box flexDirection="column" width="100%" height="100%">
-      <box flexGrow={1} justifyContent="center" alignItems="center">
-        <text bold fg="#7aa2f7">orc</text>
-        <text fg="#565f89"> loading...</text>
+    <StoreContext.Provider value={{ state, dispatch }}>
+      <box flexDirection="column" width="100%" height="100%">
+        <MessageArea />
+        <WorkerHud />
+        <StatusBar />
+        <InputArea onSubmit={handleSubmit} />
       </box>
-    </box>
+    </StoreContext.Provider>
   );
 }
