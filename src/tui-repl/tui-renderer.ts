@@ -5,10 +5,23 @@ import { createMessage } from "./store.ts";
 
 type Action = Parameters<Dispatch<any>>[0];
 
-export function createTuiRenderer(dispatch: (action: any) => void): RendererPort {
+export interface TuiRendererOptions {
+  version?: string;
+  cwd?: string;
+  defaultTier?: string;
+}
+
+export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRendererOptions = {}): RendererPort {
   return {
     welcome(profiles) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("welcome", profiles.join(", ")) });
+      dispatch({
+        type: "APPEND_MESSAGE",
+        message: createMessage("welcome", profiles.join(", "), {
+          version: opts.version,
+          cwd: opts.cwd,
+          defaultTier: opts.defaultTier,
+        }),
+      });
     },
     agentHeader(name, tier, reason) {
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("agent_header", name, { agentName: name, tier, reason }) });

@@ -1,29 +1,59 @@
 /** @jsxImportSource @opentui/react */
+import type { MessageMeta } from "../store.ts";
 
 interface Props {
   profiles: string;
+  meta?: MessageMeta;
 }
 
-export function WelcomeScreen({ profiles }: Props) {
+export function WelcomeScreen({ profiles, meta }: Props) {
   const names = profiles.split(", ").filter(Boolean);
+  const version = meta?.version ?? "0.1.0";
+  const cwd = meta?.cwd ?? process.cwd();
+  const defaultTier = meta?.defaultTier ?? "haiku";
+
+  // Shorten path: ~/... for home directory
+  const home = process.env.HOME ?? "";
+  const shortCwd = home && cwd.startsWith(home) ? "~" + cwd.slice(home.length) : cwd;
 
   return (
-    <box flexDirection="column" paddingBottom={1}>
-      <box flexDirection="row" gap={1} paddingLeft={2}>
-        <text fg="#c0caf5" bold>orc</text>
-        <text fg="#565f89">interactive orchestrator</text>
-      </box>
-      <box flexDirection="row" paddingLeft={2}>
-        <text fg="#565f89">{"agents: "}</text>
-        <text fg="#7dcfff">{names.join(", ")}</text>
-      </box>
-      <box height={1}>
-        <text fg="#565f89">{"─".repeat(60)}</text>
-      </box>
-      <box paddingLeft={2}>
-        <text fg="#565f89">{"type naturally or "}</text>
-        <text fg="#c0caf5">/help</text>
-        <text fg="#565f89">{" for commands"}</text>
+    <box
+      border
+      borderStyle="rounded"
+      borderColor="#3d4262"
+      title={` orc v${version} `}
+      titleAlignment="left"
+      flexDirection="column"
+      paddingLeft={1}
+      paddingRight={1}
+    >
+      <box flexDirection="row">
+        {/* Left column: logo + model + project */}
+        <box flexDirection="column" flexGrow={1} paddingTop={1} paddingBottom={1} paddingLeft={1}>
+          <asciifont text="orc" font="slick" color="#bb9af7" />
+          <box paddingTop={1} flexDirection="row" gap={1}>
+            <text fg="#9ece6a">{defaultTier}</text>
+            <text fg="#565f89">{"·"}</text>
+            <text fg="#7dcfff">{names[0] ?? "default"}</text>
+          </box>
+          <text fg="#565f89">{shortCwd}</text>
+        </box>
+
+        {/* Vertical divider */}
+        <box width={1} paddingTop={1} paddingBottom={1}>
+          <text fg="#3d4262">{"│"}</text>
+        </box>
+
+        {/* Right column: tips + agents */}
+        <box flexDirection="column" width={30} paddingTop={1} paddingBottom={1} paddingLeft={2}>
+          <text fg="#c0caf5" bold>Getting started</text>
+          <text fg="#565f89">type naturally or <text fg="#bb9af7">/help</text></text>
+          <box height={1} paddingTop={1}>
+            <text fg="#3d4262">{"─".repeat(26)}</text>
+          </box>
+          <text fg="#c0caf5" bold>Agents</text>
+          <text fg="#7dcfff">{names.length > 4 ? names.slice(0, 4).join(", ") + ", ..." : names.join(", ")}</text>
+        </box>
       </box>
     </box>
   );

@@ -20,9 +20,15 @@ export async function startTuiRepl(
 
   let controller: ReplController | null = null;
 
+  const rendererOpts = {
+    version: "0.1.0",
+    cwd: process.cwd(),
+    defaultTier: config.defaultTier ?? "haiku",
+  };
+
   const handleSubmit = async (text: string) => {
     if (!controller && dispatchRef.current) {
-      const tuiRenderer = createTuiRenderer(dispatchRef.current);
+      const tuiRenderer = createTuiRenderer(dispatchRef.current, rendererOpts);
       controller = new ReplController({ orchestrator, config, renderer: tuiRenderer });
       await controller.initialize();
     }
@@ -42,7 +48,7 @@ export async function startTuiRepl(
   // Initialize controller immediately once dispatch is available
   setTimeout(async () => {
     if (dispatchRef.current) {
-      const tuiRenderer = createTuiRenderer(dispatchRef.current);
+      const tuiRenderer = createTuiRenderer(dispatchRef.current, rendererOpts);
       controller = new ReplController({ orchestrator, config, renderer: tuiRenderer });
       await controller.initialize();
     }

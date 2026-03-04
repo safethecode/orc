@@ -25,6 +25,10 @@ export interface MessageMeta {
   durationMs?: number;
   passed?: boolean;
   issues?: string[];
+  // Welcome panel metadata
+  version?: string;
+  cwd?: string;
+  defaultTier?: string;
 }
 
 export interface Message {

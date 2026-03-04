@@ -15,7 +15,7 @@ import type { Message } from "../store.ts";
 function renderMessage(msg: Message) {
   switch (msg.type) {
     case "welcome":
-      return <WelcomeScreen key={msg.id} profiles={msg.content} />;
+      return <WelcomeScreen key={msg.id} profiles={msg.content} meta={msg.meta} />;
     case "user":
       return <UserMessage key={msg.id} content={msg.content} />;
     case "assistant":
