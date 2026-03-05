@@ -123,6 +123,7 @@ import { StuckDetector } from "./stuck-detector.ts";
 import { EscalationManager } from "./escalation-manager.ts";
 import { DistributedTracer } from "./distributed-trace.ts";
 import { HarnessEnforcer } from "./harness-enforcer.ts";
+import { autoCommit } from "./auto-commit.ts";
 
 const MAX_AGENT_DEPTH = 5;
 
@@ -718,6 +719,23 @@ export class Orchestrator {
   async stopAgent(agentName: string): Promise<void> {
     this.agentDepth = Math.max(0, this.agentDepth - 1);
     await this.sessionManager.destroySession(agentName);
+
+    // Auto-commit any uncommitted changes left by the agent
+    const worktrees = await this.worktree.list();
+    const agentWorktree = worktrees.find((w) => w.agentName === agentName);
+    const commitCwd = agentWorktree?.path ?? process.cwd();
+
+    const commitResult = await autoCommit(agentName, commitCwd);
+    if (commitResult.committed) {
+      this.logger.log({
+        ts: new Date().toISOString(),
+        agent: agentName,
+        task: "",
+        event: "auto_commit",
+        data: { hash: commitResult.hash, message: commitResult.message },
+      });
+    }
+
     this.store.unlockByAgent(agentName);
     this.ownership.release(agentName);
     await this.worktree.removeByAgent(agentName);
@@ -1351,7 +1369,8 @@ const GLOBAL_COMMIT_RULES = `
 - One logical change per commit.
 - Always add: \`Co-Authored-By: orc-agent <hello@sson.tech>\`
 - Push after each commit.
-- You are responsible for your own commits. Do NOT delegate to other agents.`;
+- You are responsible for your own commits. Do NOT delegate to other agents.
+- If you finish without committing, the orchestrator will auto-commit your changes. Prefer committing yourself for better messages.`;
 
 function appendGlobalRules(systemPrompt: string): string {
   return systemPrompt + GLOBAL_COMMIT_RULES;
