@@ -230,6 +230,7 @@ export class Orchestrator {
   private escalationManager: EscalationManager;
   private distributedTracer: DistributedTracer;
   private harnessEnforcer: HarnessEnforcer;
+  private agentEnforcers: Map<string, HarnessEnforcer> = new Map();
   private ghostSha: string | null = null;
   private agentDepth = 0;
   private commitWatchers: Map<string, () => void> = new Map();
@@ -704,6 +705,10 @@ export class Orchestrator {
     this.store.updateAgentStatus(profile.name, "running");
     this.health.registerAgent(profile.name);
 
+    // Create per-agent HarnessEnforcer with correct role
+    const agentEnforcer = new HarnessEnforcer(profile.role ?? "coder");
+    this.agentEnforcers.set(profile.name, agentEnforcer);
+
     if (profile.worktree) {
       const taskId = crypto.randomUUID();
       await this.worktree.create(profile.name, taskId);
@@ -765,6 +770,7 @@ export class Orchestrator {
     this.store.unlockByAgent(agentName);
     this.ownership.release(agentName);
     await this.worktree.removeByAgent(agentName);
+    this.agentEnforcers.delete(agentName);
     this.store.updateAgentStatus(agentName, "terminated");
     this.health.unregisterAgent(agentName);
 
@@ -848,6 +854,29 @@ export class Orchestrator {
             current &&
             (current.status === "completed" || current.status === "failed")
           ) {
+            // Auto-continue if agent finished with remaining TODOs
+            if (current.status === "completed" && current.result) {
+              // Check output quality via per-agent enforcer
+              const enforcer = this.agentEnforcers.get(agentName);
+              if (enforcer) {
+                const outputCheck = enforcer.checkOutput(current.result);
+                if (outputCheck.injection) {
+                  this.store.updateTask(taskId, { status: "running" });
+                  await this.sessionManager.sendInput(agentName, outputCheck.injection);
+                  continue;
+                }
+              }
+
+              if (this.todoContinuation.shouldContinue(current.result)) {
+                const detection = this.todoContinuation.detect(current.result);
+                const continuationPrompt = this.todoContinuation.buildContinuationPrompt(detection);
+                this.todoContinuation.recordContinuation();
+                this.store.updateTask(taskId, { status: "running" });
+                await this.sessionManager.sendInput(agentName, continuationPrompt);
+                continue;
+              }
+            }
+
             this.tracer.endSpan(
               span.spanId,
               current.status === "completed" ? "completed" : "error",
@@ -1353,6 +1382,10 @@ export class Orchestrator {
 
   getHarnessEnforcer(): HarnessEnforcer {
     return this.harnessEnforcer;
+  }
+
+  getAgentEnforcer(agentName: string): HarnessEnforcer | undefined {
+    return this.agentEnforcers.get(agentName);
   }
 
   async shutdown(): Promise<void> {
