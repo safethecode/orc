@@ -142,7 +142,7 @@ shadcn/ui is GENERIC. When every AI UI uses shadcn defaults, they all look the s
 
 Override these defaults:
 - `ring-2 ring-ring ring-offset-2` → `border-accent shadow-sm`
-- `h-10` → `h-8` (32px for dense SaaS)
+- `h-10` → `h-12` (48px default), `h-8` (32px minimum for compact/dense)
 - `text-sm` everywhere → vary: 12px labels, 13px cells, 14px body
 - `gap-4` → `gap-2` or `gap-3` for related items
 - `p-6` card padding → `p-4`
@@ -619,11 +619,11 @@ Full-width, auto-sliding, 400-500px height, dot indicators bottom-center, gradie
 
 ### Forms
 
-- Input: `h-11 rounded-md border border-gray-300 px-3 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500`
+- Input: `h-12 rounded-md border border-gray-300 px-3 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500` (48px default, minimum 32px/h-8 for compact/dense UI)
 - Label: above input, `text-sm font-medium text-gray-700 mb-1.5`
 - Error: `text-xs text-red-500 mt-1` below input, border turns `border-red-500`
-- Button primary: `h-11 rounded-md bg-primary-500 text-white font-medium px-6 hover:bg-primary-600 active:bg-primary-700 transition-colors`
-- Button secondary: `h-11 rounded-md border border-gray-300 bg-white font-medium px-6 hover:bg-gray-50`
+- Button primary: `h-12 rounded-md bg-primary-500 text-white font-medium px-6 hover:bg-primary-600 active:bg-primary-700 transition-colors` (48px default, minimum 32px/h-8 for compact/dense UI)
+- Button secondary: `h-12 rounded-md border border-gray-300 bg-white font-medium px-6 hover:bg-gray-50`
 
 ## Animation Patterns
 
