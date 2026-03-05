@@ -27,6 +27,7 @@ import { ResultCollector } from "./result-collector.ts";
 import { WorkerBus } from "./worker-bus.ts";
 import { ContextPropagator } from "./context-propagator.ts";
 import { FeedbackLoop } from "./feedback-loop.ts";
+import { TodoContinuationEnforcer } from "./todo-continuation.ts";
 import { eventBus } from "./events.ts";
 import { reviewSpec, reviewQuality } from "./review-gate.ts";
 import type { DistributedTracer, TraceContext } from "./distributed-trace.ts";
@@ -64,6 +65,7 @@ export class Supervisor {
   private contextPropagator: ContextPropagator;
   private feedbackLoop: FeedbackLoop;
   private multiTurnConfig: Required<MultiTurnConfig>;
+  private todoContinuation: TodoContinuationEnforcer;
   private tracer: DistributedTracer | null = null;
 
   constructor(deps: SupervisorDeps, options?: SupervisorOptions) {
@@ -97,6 +99,9 @@ export class Supervisor {
       progressPollIntervalMs: mt?.progressPollIntervalMs ?? 3000,
       idleTimeoutMs: mt?.idleTimeoutMs ?? 120000,
     };
+
+    // Initialize TodoContinuation for worker output checking
+    this.todoContinuation = new TodoContinuationEnforcer();
 
     // Initialize WorkerBus
     this.workerBus = new WorkerBus(deps.inbox, deps.sessionManager, deps.store);
@@ -510,7 +515,7 @@ export class Supervisor {
         this.feedbackLoop.startMonitoring(worker.id, subtask);
 
         // 8. Wait for result (event-driven with polling fallback)
-        const outcome = await this.waitForWorkerCompletion(
+        let outcome = await this.waitForWorkerCompletion(
           worker.id, agentName, this.options.workerTimeoutMs,
         );
 
@@ -518,6 +523,22 @@ export class Supervisor {
         this.feedbackLoop.stopMonitoring(worker.id);
 
         if (outcome) {
+          // Auto-continue if worker finished with remaining TODOs
+          if (this.todoContinuation.shouldContinue(outcome.result)) {
+            const detection = this.todoContinuation.detect(outcome.result);
+            const continuationPrompt = this.todoContinuation.buildContinuationPrompt(detection);
+            this.todoContinuation.recordContinuation();
+            await this.deps.sessionManager.sendInput(agentName, continuationPrompt);
+
+            // Wait again for updated result
+            const continued = await this.waitForWorkerCompletion(
+              worker.id, agentName, this.options.workerTimeoutMs,
+            );
+            if (continued) {
+              outcome = continued;
+            }
+          }
+
           // Only mark completed if FeedbackLoop hasn't already done so
           const currentState = this.pool.get(worker.id);
           if (currentState?.status !== "completed") {
