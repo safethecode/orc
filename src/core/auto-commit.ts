@@ -1,4 +1,8 @@
 import { $ } from "bun";
+import { writeFile, chmod, mkdir } from "node:fs/promises";
+import { join } from "node:path";
+
+// ── Types ───────────────────────────────────────────────────────────────
 
 export interface AutoCommitResult {
   committed: boolean;
@@ -6,6 +10,65 @@ export interface AutoCommitResult {
   message?: string;
   error?: string;
 }
+
+// ── Co-author constants ─────────────────────────────────────────────────
+
+const CO_AUTHOR = "Co-Authored-By: orc-agent <hello@sson.tech>";
+const CO_AUTHOR_PATTERN = /Co-Authored-By:.*$/gim;
+
+// ── Git commit-msg hook ─────────────────────────────────────────────────
+
+const COMMIT_MSG_HOOK = `#!/bin/sh
+# orc: enforce co-author tag on every commit
+MSG_FILE="$1"
+
+# Strip all existing Co-Authored-By lines
+sed -i '' '/^Co-Authored-By:/d' "$MSG_FILE" 2>/dev/null || sed -i '/^Co-Authored-By:/d' "$MSG_FILE"
+
+# Strip trailing blank lines
+sed -i '' -e :a -e '/^\\n*$/{$d;N;ba' -e '}' "$MSG_FILE" 2>/dev/null || sed -i -e :a -e '/^\\n*$/{$d;N;ba' -e '}' "$MSG_FILE"
+
+# Append our co-author
+printf '\\n\\n${CO_AUTHOR}' >> "$MSG_FILE"
+`;
+
+/**
+ * Install a commit-msg git hook that forces the orc-agent co-author tag.
+ * Strips any existing Co-Authored-By (Claude, Codex, etc.) and appends ours.
+ */
+export async function installCommitHook(repoDir: string): Promise<void> {
+  const hooksDir = join(repoDir, ".git", "hooks");
+  const hookPath = join(hooksDir, "commit-msg");
+
+  await mkdir(hooksDir, { recursive: true });
+  await writeFile(hookPath, COMMIT_MSG_HOOK, "utf-8");
+  await chmod(hookPath, 0o755);
+}
+
+// ── Periodic commit watcher ─────────────────────────────────────────────
+
+const COMMIT_INTERVAL_MS = 30_000; // check every 30 seconds
+
+/**
+ * Watches for uncommitted changes and auto-commits them periodically.
+ * Returns a stop function to clear the interval.
+ */
+export function startCommitWatcher(
+  agentName: string,
+  cwd: string,
+  onCommit?: (result: AutoCommitResult) => void,
+): () => void {
+  const timer = setInterval(async () => {
+    const result = await autoCommit(agentName, cwd);
+    if (result.committed && onCommit) {
+      onCommit(result);
+    }
+  }, COMMIT_INTERVAL_MS);
+
+  return () => clearInterval(timer);
+}
+
+// ── One-shot auto-commit ────────────────────────────────────────────────
 
 /**
  * Auto-commit any uncommitted changes left by an agent.
@@ -25,22 +88,22 @@ export async function autoCommit(
     // Build commit message from changed files
     const lines = status.trim().split("\n");
     const summary = buildCommitSummary(lines);
-    const message = `${summary}\n\nCo-Authored-By: orc-agent <hello@sson.tech>`;
+    const message = `${summary}\n\n${CO_AUTHOR}`;
 
     // Stage all changes
     await $`git -C ${cwd} add -A`.quiet();
 
-    // Commit
-    await $`git -C ${cwd} commit -m ${message}`.quiet();
+    // Commit (--no-verify to skip our own hook since we already have the right co-author)
+    await $`git -C ${cwd} commit --no-verify -m ${message}`.quiet();
 
     // Get the commit hash
     const hash = (await $`git -C ${cwd} rev-parse --short HEAD`.text()).trim();
 
-    // Push (best-effort, don't fail if push fails)
+    // Push (best-effort)
     try {
       await $`git -C ${cwd} push`.quiet();
     } catch {
-      // push failure is non-fatal (might be offline, no remote, etc.)
+      // push failure is non-fatal
     }
 
     return { committed: true, hash, message: summary };
@@ -52,9 +115,8 @@ export async function autoCommit(
   }
 }
 
-/**
- * Derive a Karma-style commit message from `git status --porcelain` output.
- */
+// ── Commit message generation ───────────────────────────────────────────
+
 function buildCommitSummary(statusLines: string[]): string {
   const added: string[] = [];
   const modified: string[] = [];
@@ -72,7 +134,6 @@ function buildCommitSummary(statusLines: string[]): string {
     }
   }
 
-  // Detect dominant action
   const total = added.length + modified.length + deleted.length;
   if (total === 0) return "chore: update files";
 
