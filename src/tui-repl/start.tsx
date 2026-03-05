@@ -11,6 +11,13 @@ export async function startTuiRepl(
   orchestrator: Orchestrator,
   config: OrchestratorConfig,
 ): Promise<void> {
+  // Polyfill Bun.stripANSI — OpenTUI's KeyHandler.processPaste() calls it
+  // but it doesn't exist in current Bun versions, silently killing paste events
+  if (typeof (Bun as any).stripANSI !== "function") {
+    (Bun as any).stripANSI = (str: string) =>
+      str.replace(/\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?(?:\x07|\x1b\\)/g, "");
+  }
+
   // Save real stdout.write before OpenTUI intercepts it (OTUI_OVERRIDE_STDOUT=true)
   const realWrite = process.stdout.write.bind(process.stdout);
 
