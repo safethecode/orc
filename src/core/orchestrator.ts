@@ -123,7 +123,7 @@ import { StuckDetector } from "./stuck-detector.ts";
 import { EscalationManager } from "./escalation-manager.ts";
 import { DistributedTracer } from "./distributed-trace.ts";
 import { HarnessEnforcer } from "./harness-enforcer.ts";
-import { autoCommit } from "./auto-commit.ts";
+import { autoCommit, installCommitHook, startCommitWatcher } from "./auto-commit.ts";
 
 const MAX_AGENT_DEPTH = 5;
 
@@ -232,6 +232,7 @@ export class Orchestrator {
   private harnessEnforcer: HarnessEnforcer;
   private ghostSha: string | null = null;
   private agentDepth = 0;
+  private commitWatchers: Map<string, () => void> = new Map();
   private config: OrchestratorConfig;
 
   constructor(config: OrchestratorConfig) {
@@ -566,6 +567,9 @@ export class Orchestrator {
     });
     this.fileWatcher.start();
 
+    // Install commit-msg hook to enforce co-author tag on all commits
+    await installCommitHook(process.cwd()).catch(() => {});
+
     // Ghost commit: snapshot working tree at session start
     this.ghostSha = await createGhostCommit("orc session start");
 
@@ -705,6 +709,21 @@ export class Orchestrator {
       await this.worktree.create(profile.name, taskId);
     }
 
+    // Start periodic commit watcher for this agent
+    const watchCwd = profile.worktree
+      ? (await this.worktree.list()).find((w) => w.agentName === profile.name)?.path ?? process.cwd()
+      : process.cwd();
+    const stopWatcher = startCommitWatcher(profile.name, watchCwd, (result) => {
+      this.logger.log({
+        ts: new Date().toISOString(),
+        agent: profile.name,
+        task: "",
+        event: "auto_commit",
+        data: { hash: result.hash, message: result.message },
+      });
+    });
+    this.commitWatchers.set(profile.name, stopWatcher);
+
     this.logger.log({
       ts: new Date().toISOString(),
       agent: profile.name,
@@ -720,7 +739,14 @@ export class Orchestrator {
     this.agentDepth = Math.max(0, this.agentDepth - 1);
     await this.sessionManager.destroySession(agentName);
 
-    // Auto-commit any uncommitted changes left by the agent
+    // Stop the periodic commit watcher for this agent
+    const stopWatcher = this.commitWatchers.get(agentName);
+    if (stopWatcher) {
+      stopWatcher();
+      this.commitWatchers.delete(agentName);
+    }
+
+    // Final auto-commit for any remaining uncommitted changes
     const worktrees = await this.worktree.list();
     const agentWorktree = worktrees.find((w) => w.agentName === agentName);
     const commitCwd = agentWorktree?.path ?? process.cwd();
@@ -1330,6 +1356,10 @@ export class Orchestrator {
   }
 
   async shutdown(): Promise<void> {
+    // Stop all commit watchers
+    for (const stop of this.commitWatchers.values()) stop();
+    this.commitWatchers.clear();
+
     this.fileWatcher.stop();
     this.vcsMonitor.stop();
     this.gitWorktree.cleanupAll().catch(() => {});
