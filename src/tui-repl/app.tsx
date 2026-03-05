@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import { useReducer, useCallback, useEffect, useRef } from "react";
+import { useKeyboard } from "@opentui/react";
 import { StoreContext, INITIAL_STATE, reducer } from "./store.ts";
 import { MessageArea } from "./components/message-area.tsx";
 import { StatusBar } from "./components/status-bar.tsx";
@@ -18,8 +19,10 @@ interface Props {
 
 export function App({ onSubmit, onAbort, dispatchRef, approvalRef }: Props) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
-  const approvalRefLocal = useRef(approvalRef);
-  approvalRefLocal.current = approvalRef;
+
+  // Refs for stable access inside useKeyboard callback
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // Expose dispatch to outer scope so controller can send actions
   useEffect(() => {
@@ -28,6 +31,8 @@ export function App({ onSubmit, onAbort, dispatchRef, approvalRef }: Props) {
   }, [dispatch, dispatchRef]);
 
   const isAgentRunning = state.status.agentState !== "idle";
+  const isAgentRunningRef = useRef(isAgentRunning);
+  isAgentRunningRef.current = isAgentRunning;
 
   const handleSubmit = useCallback(
     (text: string) => {
@@ -47,38 +52,42 @@ export function App({ onSubmit, onAbort, dispatchRef, approvalRef }: Props) {
     approvalRef?.current?.resolve(false);
   }, [approvalRef]);
 
-  // Global keyboard shortcuts
-  const handleKeyPress = useCallback(
-    (key: string) => {
-      // Approval dialog: Y/N keys
-      if (state.approval) {
-        if (key === "y" || key === "Y") {
-          handleApprove();
-          return;
-        }
-        if (key === "n" || key === "N" || key === "escape") {
-          handleDeny();
-          return;
-        }
-        return; // Block other keys while approval is active
+  // Global keyboard handler via useKeyboard (fires before focused renderables)
+  useKeyboard((key: any) => {
+    // Approval dialog: Y/N/Escape
+    if (stateRef.current.approval) {
+      if (key.name === "y") {
+        handleApprove();
+        key.stopPropagation();
+        return;
       }
+      if (key.name === "n" || key.name === "escape") {
+        handleDeny();
+        key.stopPropagation();
+        return;
+      }
+      // Block all other keys while approval is active
+      key.stopPropagation();
+      return;
+    }
 
-      // Escape: abort running agent
-      if (key === "escape" && isAgentRunning && onAbort) {
-        onAbort();
-        dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", "Generation aborted.") });
-      }
-      // Ctrl+L: clear messages
-      if (key === "ctrl+l") {
-        dispatch({ type: "CLEAR" });
-      }
-    },
-    [isAgentRunning, onAbort, state.approval, handleApprove, handleDeny],
-  );
+    // Escape: abort running agent
+    if (key.name === "escape" && isAgentRunningRef.current && onAbort) {
+      onAbort();
+      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", "Generation aborted.") });
+      key.stopPropagation();
+    }
+
+    // Ctrl+L: clear messages
+    if (key.name === "l" && key.ctrl) {
+      dispatch({ type: "CLEAR" });
+      key.stopPropagation();
+    }
+  });
 
   return (
     <StoreContext.Provider value={{ state, dispatch }}>
-      <box flexDirection="column" width="100%" height="100%" onKeyPress={handleKeyPress}>
+      <box flexDirection="column" width="100%" height="100%">
         <MessageArea />
         <WorkerHud />
         <ProjectBar />
