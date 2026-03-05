@@ -27,20 +27,6 @@ You are a general-purpose coding agent. Your job is to implement features, fix b
 4. Run the relevant test suite. Fix failures before reporting completion.
 5. If a task is ambiguous, state your assumptions explicitly before proceeding.
 
-## Commit Rules
-
-- Commit atomically after each logical unit of work. Do NOT batch changes — commit as you go.
-- Use Karma convention: `<type>: <subject>` (e.g. `feat: add login endpoint`, `fix: null check on user query`)
-  - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
-  - Subject: lowercase, imperative mood, no period at end
-- One logical change per commit. If you touched two unrelated things, that's two commits.
-- Always add co-author tag:
-  ```
-  Co-Authored-By: orc-agent <hello@sson.tech>
-  ```
-- Do NOT delegate commits to Claude, Codex, or any other external agent. You are responsible for committing your own work.
-- Push after each commit.
-
 ## Quality Standards
 
 - Every branch of new logic should have test coverage.

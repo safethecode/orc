@@ -683,10 +683,12 @@ export class Orchestrator {
       throw new Error(`Unknown provider: "${profile.provider}"`);
     }
 
+    const systemPrompt = appendGlobalRules(profile.systemPrompt);
+
     const command = buildCommand(providerConfig, profile, {
-      prompt: profile.systemPrompt,
+      prompt: systemPrompt,
       model: profile.model,
-      systemPrompt: profile.systemPrompt,
+      systemPrompt,
       maxTurns: profile.maxTurns,
       workdir: process.cwd(),
     });
@@ -1336,4 +1338,21 @@ export class Orchestrator {
     this.scheduler.clear();
     await this.mcpManager.disconnect();
   }
+}
+
+// ── Global rules injected into every agent's system prompt ──────────────
+
+const GLOBAL_COMMIT_RULES = `
+
+## Commit Rules (Global)
+
+- Commit atomically after each logical unit of work. Do NOT batch — commit as you go.
+- Karma convention: \`<type>: <subject>\` (feat, fix, refactor, test, docs, chore). Lowercase, imperative, no period.
+- One logical change per commit.
+- Always add: \`Co-Authored-By: orc-agent <hello@sson.tech>\`
+- Push after each commit.
+- You are responsible for your own commits. Do NOT delegate to other agents.`;
+
+function appendGlobalRules(systemPrompt: string): string {
+  return systemPrompt + GLOBAL_COMMIT_RULES;
 }
