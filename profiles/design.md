@@ -97,6 +97,44 @@ These are actual values extracted from production services. Use them as concrete
 - Signature: Navy-dark surfaces, functional grayscale foundation, data-first dashboards
 - Does NOT use: Decorative elements, playful branding, illustration-heavy design
 
+**KR-7** — Korean freelance marketplace
+- Primary: emerald `#059669` | Text: `#374151` (warm gray) | BG: `#FFFFFF`
+- Trust accent: `#2563EB` | Hover: subtle bg shift
+- Signature: White-dominant, trust-focused, freelancer card grids, review density, price prominence
+- Does NOT use: Dark mode, gradient backgrounds, minimal sparse layouts
+
+**KR-8** — Korean-origin global messaging SaaS
+- Hero gradient: `#c86aff` → `#3164ff` (purple-to-blue)
+- Font: proprietary sans (geometric) → system fallback
+- Radius: 24px (large, rounded CTAs and cards)
+- Signature: Gradient hero, messaging demo UI, chat bubble components, purple accent
+- Does NOT use: Dense data tables, monochrome palette, flat minimal design
+
+**KR-9** — Korean B2B analytics / attribution
+- Primary: `#111` (near-black) | Theme: dark-first with scroll-triggered shifts
+- Font: Montserrat + Pretendard
+- Signature: Scroll-triggered theme switching (dark↔light), dramatic hero animations, analytics dashboards
+- Does NOT use: Single consistent theme, spacious minimal layouts, light-only design
+
+**KR-10** — Korean HR SaaS (performance review)
+- Primary: `#328af6` (blue) | BG: clean white
+- Font: Pretendard + Inter | Layout: 1280px max-width
+- Radius: 12px | Density: professional B2B
+- Signature: Blue accent, clean cards, professional density, HR-specific components (review forms, OKR tracking)
+- Does NOT use: Dark mode, playful branding, gradient backgrounds, decorative elements
+
+**KR-11** — Korean AI education platform
+- Primary: `#F7585C` (coral-red) | BG: white
+- Layout: 1440px max-width, 12-column grid
+- Signature: Bold coral accent, education-oriented content sections, community-heavy, research card grids
+- Does NOT use: Minimal sparse design, monochrome palette, developer aesthetics
+
+**KR-12** — Korean EdTech / classroom
+- Primary: `#00C896` (teal) | BG: light
+- Font: Pretendard | CTA: gradient buttons
+- Signature: Teal accent, education-focused cards, gradient CTAs, warm approachable feel
+- Does NOT use: Dark mode, dense data tables, enterprise cold aesthetics
+
 ##### Global SaaS Products
 
 **GL-1** — Project management benchmark
@@ -135,22 +173,61 @@ These are actual values extracted from production services. Use them as concrete
 - Layout: 12-column grid, card-based features, generous section spacing
 - Does NOT use: Monochrome palette, developer-minimalism, data-dense layouts on marketing
 
+**GL-6** — Note / document benchmark
+- Color: Warm neutrals, minimal accent, content-first
+- Font: System sans, multiple weights | Radius: 6-8px
+- Signature: Content-first, minimal chrome, generous whitespace, slash-command UX, block-based editing
+- Does NOT use: Dense dashboards, colorful badges, dark mode default, aggressive CTAs
+
+**GL-12** — Open-source product analytics
+- Primary: `#2563eb` (blue) | Font: IBM Plex Sans Variable
+- Signature: Functional minimalism, developer-oriented, open-source ethos, analytics dashboards, hedgehog mascot
+- Does NOT use: Heavy branding, playful design (except mascot), decorative elements, gradient backgrounds
+
+**GL-31** — Open-source scheduling platform
+- Primary: `#6349ea` (purple) | Font: Inter Display + proprietary sans
+- Signature: Dual theme (light/dark), scheduling calendar UI, purple accent, open-source
+- Does NOT use: Dense data tables, gradient backgrounds, complex marketing layouts
+
+**GL-32** — Developer email infrastructure
+- Primary: `#000` (black) | Font: proprietary serif (display), system sans (body)
+- Signature: Black primary, glassmorphic button borders, developer-focused, extreme minimalism
+- Does NOT use: Colorful palettes, playful branding, dense layouts, traditional SaaS patterns
+
+**GL-33** — Open-source link management
+- Color: Pure black `#000` / white `#fff` | Accent: minimal
+- Signature: Restraint-based design, neutral minimal, open-source, almost no color
+- Does NOT use: Colorful accents, gradients, decorative elements, shadows, playful branding
+
+**GL-34** — Developer database platform
+- Theme: Dark mode first | Accent: brand green
+- Signature: Developer-centric minimalism, dark surfaces, green accent, open-source ethos
+- Does NOT use: Light-first design, playful branding, dense marketing pages, colorful palettes
+
+**GL-35** — CSS framework / documentation
+- Font: Inter Variable | Accent: sky-500 (`#0ea5e9`)
+- Layout: 1536px max-width, generous radius, documentation-first
+- Signature: Documentation excellence, code examples, generous whitespace, sky-blue accent
+- Does NOT use: Dark mode default, dense layouts, enterprise aesthetics, heavy branding
+
 #### Reference Selection Matrix — Pick 2+ Before ANY UI Task
 
 | UI Type | MUST Reference (pick 2+) | WHY |
 |---|---|---|
-| Dashboard / Analytics | GL-1, GL-2 Analytics, KR-1 | Information density + color restraint |
-| Project Management | GL-1, GL-5, KR-4 | Task-centric, status-driven, action density |
-| Korean Marketplace / Tool | KR-3, KR-2 | Korean density conventions, portal-adjacent patterns |
-| CRM / Sales / Data | KR-6, GL-1 | Data tables, functional color, grayscale foundation |
-| Developer Tool / CLI UI | GL-2, GL-1 | Monospace, dark mode, precision, no decoration |
-| Korean B2B SaaS | KR-4, KR-5, KR-6 | Korean typography, professional density, `keep-all` |
-| Document / Note | GL-6, KR-1 | Content-first, minimal chrome, generous whitespace |
+| Dashboard / Analytics | GL-1, GL-12, KR-1, KR-9 | Information density + color restraint + analytics patterns |
+| Project Management | GL-1, GL-5, GL-31, KR-4 | Task-centric, status-driven, scheduling, action density |
+| Korean Marketplace / Tool | KR-3, KR-7, KR-2 | Korean density conventions, portal-adjacent, marketplace trust |
+| CRM / Sales / Data | KR-6, GL-1, KR-10 | Data tables, functional color, grayscale foundation |
+| Developer Tool / CLI UI | GL-2, GL-34, GL-32, GL-33 | Monospace, dark mode, precision, no decoration |
+| Korean B2B SaaS | KR-4, KR-5, KR-6, KR-9 | Korean typography, professional density, `keep-all` |
+| Document / Note | GL-6, KR-1, GL-35 | Content-first, minimal chrome, generous whitespace |
 | Settings / Admin Panel | GL-3 Dashboard, GL-4 | Form-heavy, clean hierarchy, trust design |
 | Fintech / Payment | KR-1, GL-3 | Trust signals, whitespace, functional color only |
-| Customer Communication | KR-5, GL-9 | Real-time UI, message density, large touch targets |
-| Korean Landing Page | KR-2, KR-1, KR-4 | Korean hero patterns, Pretendard, CTA conventions |
-| Enterprise / Trust-heavy | GL-4, GL-3 | Logo carousels, compliance badges, restrained palette |
+| Customer Communication | KR-5, KR-8, GL-9 | Real-time UI, message density, chat components |
+| Korean Landing Page | KR-2, KR-1, KR-4, KR-11 | Korean hero patterns, Pretendard, CTA conventions |
+| Enterprise / Trust-heavy | GL-4, GL-3, GL-31 | Logo carousels, compliance badges, restrained palette |
+| Education / EdTech | KR-11, KR-12, GL-35 | Content sections, teal/coral accents, learning cards |
+| Developer Docs / API | GL-35, GL-34, GL-32 | Code-first, documentation excellence, dark mode |
 
 #### Comparison Gate — MANDATORY After Every Generation
 
@@ -171,16 +248,16 @@ After generating UI code, perform this element-by-element comparison against you
 
 | What AI Generates | What Real Products Actually Do |
 |---|---|
-| Purple-blue gradient hero | KR-1: solid `#f2f4f6`. GL-1: solid dark. GL-3: photography + subtle overlay |
-| Glassmorphism cards | GL-1: `border` only. GL-2: flat + `border`. KR-2: `#fafafa` bg + `8px` radius |
-| Bento grid for everything | GL-1: list views. GL-3: content sections. Bento only for landing page feature grids |
-| 6+ colored status badges | GL-1: gray dots + text. GL-3: almost all gray. KR-1: `#3182f6` + gray only |
-| `rounded-2xl` everywhere | GL-2: 8px max. GL-1: 6px cards. KR-3: minimal radius |
-| `scale(1.05)` on hover | ALL references: bg-color shift only. Zero use `scale()` on card hover |
-| Decorative blob shapes | Zero of 11 reference products use abstract decorative blobs. Zero |
-| Dark sidebar + light content | GL-1: unified dark. GL-2: unified light. KR-1: unified light. Never mixed mode |
-| `shadow-lg` on cards | GL-1: no shadow. GL-2: no shadow. KR-2: no shadow. Border only |
-| Neon accent on dark mode | GL-2: white on black. GL-1: muted on dark. No neon. Ever |
+| Purple-blue gradient hero | KR-1: solid `#f2f4f6`. GL-1: solid dark. GL-3: photography + subtle overlay. GL-33: pure black/white |
+| Glassmorphism cards | GL-1: `border` only. GL-2: flat + `border`. KR-2: `#fafafa` bg + `8px` radius. GL-12: flat functional |
+| Bento grid for everything | GL-1: list views. GL-3: content sections. GL-35: docs layout. Bento only for landing page feature grids |
+| 6+ colored status badges | GL-1: gray dots + text. GL-3: almost all gray. KR-1: `#3182f6` + gray only. GL-12: minimal semantic |
+| `rounded-2xl` everywhere | GL-2: 8px max. GL-1: 6px cards. KR-3: minimal radius. GL-33: near-zero radius |
+| `scale(1.05)` on hover | ALL 23 references: bg-color shift only. Zero use `scale()` on card hover |
+| Decorative blob shapes | Zero of 23 reference products use abstract decorative blobs. Zero |
+| Dark sidebar + light content | GL-1: unified dark. GL-2: unified light. GL-34: unified dark. KR-1: unified light. Never mixed mode |
+| `shadow-lg` on cards | GL-1: no shadow. GL-2: no shadow. GL-33: no shadow. KR-2: no shadow. Border only |
+| Neon accent on dark mode | GL-2: white on black. GL-1: muted on dark. GL-34: muted green on dark. No neon. Ever |
 
 ### Design Philosophy — CORE PRINCIPLE
 
@@ -321,20 +398,22 @@ Squint Test: zoom to 50%. Can you tell which library? → Bad. Custom product fe
 
 | UI Type | Reference Products | Key Design Trait to Borrow |
 |---|---|---|
-| Project Management / Task | **GL-1**, GL-10, GL-11 | Gray status dots, list-first, extreme restraint |
-| Note / Document | GL-6, GL-16, GL-17 | Content-first, minimal chrome, generous whitespace |
-| Dashboard / Analytics | **GL-2** Analytics, GL-12, GL-13 | Black/white, data-dense, no decoration |
-| Developer Tool / CLI | GL-7, **GL-2**, GL-14 | Monospace, dark mode, precision, no playful elements |
+| Project Management / Task | **GL-1**, GL-10, GL-11, GL-31 | Gray status dots, list-first, extreme restraint, scheduling |
+| Note / Document | **GL-6**, GL-16, GL-17 | Content-first, minimal chrome, generous whitespace |
+| Dashboard / Analytics | **GL-2** Analytics, **GL-12**, GL-13, KR-9 | Black/white, data-dense, no decoration, open-source analytics |
+| Developer Tool / CLI | GL-7, **GL-2**, GL-14, **GL-34** | Monospace, dark mode, precision, no playful elements |
 | Settings / Admin | **GL-3** Dashboard, GL-18, GL-19 | Form-heavy, clean hierarchy, trust-first |
 | E-Commerce Admin | GL-20 Admin, GL-21 | Dense data tables, functional color only |
-| CRM / Sales | **KR-6**, GL-22, GL-23 | Navy surfaces, grayscale foundation, data-first |
-| Email / Communication | **KR-5**, GL-9, GL-24 | Large touch targets, real-time density, multilingual |
+| CRM / Sales | **KR-6**, GL-22, GL-23, **KR-10** | Navy surfaces, grayscale foundation, data-first |
+| Email / Communication | **KR-5**, **KR-8**, GL-9, GL-24 | Large touch targets, real-time density, chat components |
 | Fintech / Payment | **KR-1**, **GL-3** | Spacious trust, functional blue, zero decoration |
-| Korean SaaS | **KR-2**, **KR-4**, **KR-5** | Pretendard, `keep-all`, 1280px, indigo/module colors |
-| Korean Marketplace / Tool | **KR-3**, KR-7 | Dense, portal-adjacent, green accent, ranking patterns |
+| Korean SaaS | **KR-2**, **KR-4**, **KR-5**, KR-9, KR-10 | Pretendard, `keep-all`, 1280px, indigo/module colors |
+| Korean Marketplace / Tool | **KR-3**, **KR-7** | Dense, portal-adjacent, green accent, ranking patterns |
 | Design Tool | GL-8 (chrome), GL-25 (settings) | Toolbar precision, panel density, keyboard-first |
 | File Management | GL-26, GL-27 | List/grid toggle, metadata columns, batch actions |
 | Code Editor / IDE | GL-28, GL-29, GL-30 | Panel system, monospace, syntax-color conventions |
+| Developer Docs / API | **GL-35**, **GL-32**, GL-33 | Code examples, documentation-first, developer minimalism |
+| Education / EdTech | **KR-11**, **KR-12**, GL-35 | Coral/teal accents, content sections, learning cards |
 
 **Critical question after every generation:**
 "If this were a feature inside [reference product], would it look like this?" If no → **rewrite, don't adjust.**
