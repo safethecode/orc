@@ -83,7 +83,7 @@ These are actual values extracted from production services. Use them as concrete
 **KR-5** — Korean customer messaging SaaS
 - Primary: `#6157EA` | Text: `#000000D9` | Secondary: `#475569` | BG: `#F7F7F8`
 - Full accent spectrum: blues, purples, teals, greens, warm accents for visual differentiation
-- Font: Inter + Noto Sans KR/JP | Letter-spacing: `-0.5px` to `-1.5px`
+- Font: Inter + Pretendard | Letter-spacing: `-0.5px` to `-1.5px`
 - Button height: 64px desktop, 52px tablet — large touch targets
 - Radius: 12-32px range | Padding: 80-140px horizontal desktop
 - Signature: Purple-blue accent, multilingual-first, 6-column client logo grids
@@ -587,16 +587,16 @@ Korean sites use more saturated accents and color-coded information than Western
 /* Default sans-serif for Korean web */
 --font-sans:
   "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
-  "Noto Sans KR", system-ui, sans-serif;
+  system-ui, sans-serif;
 
 /* Geometric/modern feel */
---font-modern: "Inter", Pretendard, "Noto Sans KR", sans-serif;
+--font-modern: "Inter", Pretendard, sans-serif;
 
 /* Premium/SaaS feel */
---font-premium: "Figtree", Pretendard, "Noto Sans KR", sans-serif;
+--font-premium: "Figtree", Pretendard, sans-serif;
 
 /* Editorial/display */
---font-display: "PP Editorial New", "Noto Serif KR", Georgia, serif;
+--font-display: "PP Editorial New", Pretendard, Georgia, serif;
 
 /* Monospace */
 --font-mono: "JetBrains Mono", "Fira Code", "D2Coding", monospace;
@@ -1131,7 +1131,7 @@ When delivering design work, always provide:
 
   /* Typography */
   --font-sans:
-    "Pretendard Variable", Pretendard, -apple-system, "Noto Sans KR", sans-serif;
+    "Pretendard Variable", Pretendard, -apple-system, sans-serif;
 
   /* Spacing */
   --space-unit: 4px;
