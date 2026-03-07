@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 1: SaaS Dashboard — Linear + Toss reference</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css');
+  * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  body { -webkit-font-smoothing: antialiased; word-break: keep-all; letter-spacing: -0.01em; }
+</style>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        accent: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3182f6', 600: '#2563eb', 700: '#1d4ed8' },
+        surface: { 50: '#f9fafb', 100: '#f3f4f6', 200: '#e5e7eb', 300: '#d1d5db' },
+        txt: { 900: '#111827', 500: '#6b7280', 400: '#9ca3af' },
+      }
+    }
+  }
+}
+</script>
+</head>
+<body class="bg-surface-50 text-txt-900">
+
+<!-- Nav: Linear-style unified light, Toss-style simplicity -->
+<header class="sticky top-0 z-50 border-b border-surface-200 bg-white/80 backdrop-blur-md">
+  <div class="mx-auto flex h-12 max-w-6xl items-center justify-between px-4">
+    <div class="flex items-center gap-6">
+      <span class="text-sm font-semibold tracking-tight">OrcFlow</span>
+      <nav class="flex items-center gap-1">
+        <a href="#" class="rounded-md bg-surface-100 px-3 py-1.5 text-[13px] font-medium text-txt-900">대시보드</a>
+        <a href="#" class="rounded-md px-3 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">프로젝트</a>
+        <a href="#" class="rounded-md px-3 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">에이전트</a>
+        <a href="#" class="rounded-md px-3 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">설정</a>
+      </nav>
+    </div>
+    <div class="flex items-center gap-3">
+      <button class="rounded-md border border-surface-200 px-3 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">피드백</button>
+      <div class="h-7 w-7 rounded-full bg-accent-500 flex items-center justify-center">
+        <span class="text-[11px] font-medium text-white">S</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-6xl px-4 py-6">
+  <!-- Page title: Linear-style 20px, not oversized -->
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-semibold tracking-tight">대시보드</h1>
+      <p class="mt-0.5 text-[13px] text-txt-500">오늘 오전 10:32 기준</p>
+    </div>
+    <button class="inline-flex items-center gap-1.5 rounded-md bg-accent-500 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-accent-600 active:bg-accent-700 transition-colors cursor-pointer">
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 4v16m8-8H4"/></svg>
+      새 프로젝트
+    </button>
+  </div>
+
+  <!-- Stats: Toss-style clean numbers, Linear-style restraint -->
+  <section class="mb-6 grid grid-cols-4 gap-3">
+    <div class="rounded-md border border-surface-200 bg-white p-4">
+      <p class="text-[12px] font-medium text-txt-400">활성 에이전트</p>
+      <p class="mt-1 text-2xl font-bold tracking-tight">12</p>
+      <p class="mt-1 text-[12px] text-txt-400">전체 18개 중</p>
+    </div>
+    <div class="rounded-md border border-surface-200 bg-white p-4">
+      <p class="text-[12px] font-medium text-txt-400">완료된 태스크</p>
+      <p class="mt-1 text-2xl font-bold tracking-tight">1,284</p>
+      <p class="mt-1 text-[12px] text-accent-500 font-medium">+12.3% 지난주 대비</p>
+    </div>
+    <div class="rounded-md border border-surface-200 bg-white p-4">
+      <p class="text-[12px] font-medium text-txt-400">평균 처리 시간</p>
+      <p class="mt-1 text-2xl font-bold tracking-tight">2.4<span class="text-sm font-medium text-txt-400">초</span></p>
+      <p class="mt-1 text-[12px] text-txt-400">목표 3.0초</p>
+    </div>
+    <div class="rounded-md border border-surface-200 bg-white p-4">
+      <p class="text-[12px] font-medium text-txt-400">성공률</p>
+      <p class="mt-1 text-2xl font-bold tracking-tight">98.7<span class="text-sm font-medium text-txt-400">%</span></p>
+      <p class="mt-1 text-[12px] text-txt-400">SLA 95% 달성</p>
+    </div>
+  </section>
+
+  <!-- Table: Linear-style dense rows, gray status, no colored badges -->
+  <section class="rounded-md border border-surface-200 bg-white">
+    <div class="flex items-center justify-between border-b border-surface-100 px-4 py-3">
+      <h2 class="text-[13px] font-semibold">최근 실행</h2>
+      <div class="flex items-center gap-2">
+        <button class="rounded-md border border-surface-200 px-2.5 py-1 text-[12px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">필터</button>
+        <button class="rounded-md border border-surface-200 px-2.5 py-1 text-[12px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">내보내기</button>
+      </div>
+    </div>
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-surface-100">
+          <th class="px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-txt-400">태스크</th>
+          <th class="px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-txt-400">에이전트</th>
+          <th class="px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-txt-400">상태</th>
+          <th class="px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-txt-400">소요시간</th>
+          <th class="px-4 py-2 text-right text-[11px] font-medium uppercase tracking-wider text-txt-400">시작</th>
+        </tr>
+      </thead>
+      <tbody class="text-[13px]">
+        <tr class="border-b border-surface-100/50 hover:bg-surface-50 transition-colors cursor-pointer">
+          <td class="px-4 py-2.5 font-medium">코드 리뷰 — PR #487</td>
+          <td class="px-4 py-2.5 text-txt-500">Critique</td>
+          <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span><span class="text-txt-500">완료</span></span></td>
+          <td class="px-4 py-2.5 text-txt-500">1.2초</td>
+          <td class="px-4 py-2.5 text-right text-txt-400">2분 전</td>
+        </tr>
+        <tr class="border-b border-surface-100/50 hover:bg-surface-50 transition-colors cursor-pointer">
+          <td class="px-4 py-2.5 font-medium">API 엔드포인트 생성</td>
+          <td class="px-4 py-2.5 text-txt-500">Decomposer</td>
+          <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-accent-500"></span><span class="text-txt-500">실행중</span></span></td>
+          <td class="px-4 py-2.5 text-txt-500">—</td>
+          <td class="px-4 py-2.5 text-right text-txt-400">5분 전</td>
+        </tr>
+        <tr class="border-b border-surface-100/50 hover:bg-surface-50 transition-colors cursor-pointer">
+          <td class="px-4 py-2.5 font-medium">테스트 케이스 작성</td>
+          <td class="px-4 py-2.5 text-txt-500">QA</td>
+          <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span><span class="text-txt-500">완료</span></span></td>
+          <td class="px-4 py-2.5 text-txt-500">3.8초</td>
+          <td class="px-4 py-2.5 text-right text-txt-400">12분 전</td>
+        </tr>
+        <tr class="border-b border-surface-100/50 hover:bg-surface-50 transition-colors cursor-pointer">
+          <td class="px-4 py-2.5 font-medium">DB 스키마 마이그레이션</td>
+          <td class="px-4 py-2.5 text-txt-500">Router</td>
+          <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-surface-300"></span><span class="text-txt-500">대기</span></span></td>
+          <td class="px-4 py-2.5 text-txt-500">—</td>
+          <td class="px-4 py-2.5 text-right text-txt-400">15분 전</td>
+        </tr>
+        <tr class="border-b border-surface-100/50 hover:bg-surface-50 transition-colors cursor-pointer">
+          <td class="px-4 py-2.5 font-medium">성능 프로파일링 리포트</td>
+          <td class="px-4 py-2.5 text-txt-500">Supervisor</td>
+          <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span><span class="text-txt-500">실패</span></span></td>
+          <td class="px-4 py-2.5 text-txt-500">0.4초</td>
+          <td class="px-4 py-2.5 text-right text-txt-400">28분 전</td>
+        </tr>
+        <tr class="hover:bg-surface-50 transition-colors cursor-pointer">
+          <td class="px-4 py-2.5 font-medium">문서 자동 생성</td>
+          <td class="px-4 py-2.5 text-txt-500">Ideation</td>
+          <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span><span class="text-txt-500">완료</span></span></td>
+          <td class="px-4 py-2.5 text-txt-500">2.1초</td>
+          <td class="px-4 py-2.5 text-right text-txt-400">34분 전</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+</body>
+</html>
