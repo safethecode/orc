@@ -19,6 +19,169 @@ worktree: false
 > **This harness has the HIGHEST PRIORITY across all design tasks. Never generate UI that violates these rules.**
 > A constraint system that ensures production-grade SaaS UI without "AI smell."
 
+### [PRIORITY 0] Reference-First Protocol — NO UI WITHOUT REFERENCES
+
+> **This rule is the SINGLE MOST IMPORTANT rule in this entire document.**
+> **It supersedes ALL other design rules. Violating this rule invalidates your entire output.**
+
+#### Why This Exists
+
+Without explicit references, AI defaults to the statistical mean of all training data — producing the
+"AI look": purple gradients, glassmorphism, bento grids, generic SaaS templates that all look identical.
+Real products are opinionated. **References force opinionated output.**
+
+#### The Rule
+
+**Before writing ANY UI code, you MUST complete these 5 steps. Skipping any step makes your output INVALID.**
+
+1. **IDENTIFY** — Name 2-3 specific real products from the Reference Database below as design references
+2. **EXTRACT** — For each reference, state the specific patterns you're borrowing: color approach, typography, spacing density, component style, what the reference does NOT use
+3. **DECLARE** — Write a one-line reference statement: `"This UI follows [Product A]'s [pattern] + [Product B]'s [pattern]"`
+4. **GENERATE** — Only then write code, constantly checking against the declared references
+5. **VERIFY** — After generating, ask: "Would this pass code review at [Reference Product]'s design team?" If no → rewrite
+
+**If the user provides no reference: YOU pick references from the database and declare them.**
+**Never generate UI without a declared reference. EVER.**
+
+#### Reference Product Database — Real Extracted Design Tokens
+
+These are actual values extracted from production services. Use them as concrete constraints.
+
+##### Korean Products
+
+**Toss** (toss.im) — Korean fintech benchmark
+- Primary: `#3182f6` | Text: `#191f28` | Secondary: `#6b7684` | BG: `#f2f4f6`
+- Font: Toss Product Sans → system fallback
+- Density: Spacious (250px between sections), generous whitespace
+- Signature: Warm minimalism, mobile-first, `word-break: keep-all`, 3D emoji humanization
+- Does NOT use: Dense tables, aggressive CTAs, gradient backgrounds, dark sidebar
+- Hover: Subtle shadow only, no scale/glow
+
+**Featuring** (featuring.co) — Korean SaaS / analytics
+- Primary: `#312e81` (deep indigo) | Text: `#04070d` | BG: `#fafafa`
+- Gradient hero: `#5e51ff` → `#202936` (purple-to-navy)
+- Font: Pretendard (all weights 200-900) + Inter
+- Layout: 1280px viewport, 120px horizontal padding, 40-80px vertical spacing
+- Signature: Modular cards with `#fafafa` bg, 8px radius, 24px padding, pill-shaped CTAs (40px radius)
+- Does NOT use: Shadows, decorative blobs, bento grid, dark sidebar
+
+**PandaRank** (pandarank.net) — Korean SEO / keyword tool
+- Primary: `#02DE64` (green) | Text: `#0B0F1B` | Disabled: `#888888` | BG: `#F9F9F9`
+- Border: `rgba(9,30,66,0.08)` — ultra-light
+- Density: VERY dense — compact text scales (`text-compact-sm`, `text-compact-xs`), tight line-heights
+- Signature: Naver-adjacent ranking UI, trend badges (new/up/down), dual-tab navigation, 8-column icon grids
+- Does NOT use: Large hero sections, spacious layouts, illustration-heavy design
+- Korean convention: Keyword-first UX, emoji CTAs ("✨"), regulatory footer density
+
+**Flex** (flex.team) — Korean HR SaaS
+- Approach: Dark-first with module-specific accent colors (purple/lime/gold/orange per feature)
+- Headlines: 28px mobile → 52-64px desktop | Header: 48px fixed
+- Layout: max-width 1024px, `perspective: 2000px` on dropdowns
+- Signature: Color-coded product modules, inset border shadow pattern, `word-break: keep-all`
+- Does NOT use: Single accent color, light-only mode, generic card grids
+
+**Channel.io** (channel.io) — Korean customer messaging SaaS
+- Primary: `#6157EA` | Text: `#000000D9` | Secondary: `#475569` | BG: `#F7F7F8`
+- Full accent spectrum: blues, purples, teals, greens, warm accents for visual differentiation
+- Font: Inter + Noto Sans KR/JP | Letter-spacing: `-0.5px` to `-1.5px`
+- Button height: 64px desktop, 52px tablet — large touch targets
+- Radius: 12-32px range | Padding: 80-140px horizontal desktop
+- Signature: Purple-blue accent, multilingual-first, 6-column client logo grids
+- Does NOT use: Dense data tables as primary UI, single-color palette
+
+**Relate** (relate.so) — Korean B2B CRM
+- Primary: `#3b82f6` (blue) | Dark surfaces: `#14141e`, `#0f1f3d` | BG: `#fcfcfc`
+- Semantic: green `#16ca2e`, orange `#ffa64d`, red `#f26052`
+- Font: Inter + Archivo + Pretendard | Weights: 100-900
+- Breakpoints: 1400px, 1000px, 810px
+- Signature: Navy-dark surfaces, functional grayscale foundation, data-first dashboards
+- Does NOT use: Decorative elements, playful branding, illustration-heavy design
+
+##### Global SaaS Products
+
+**Linear** (linear.app) — Project management benchmark
+- Color: Semantic variables, 4-tier text hierarchy (primary/secondary/tertiary/quaternary)
+- Status: Gray dots + text (NOT colored badges). Only red/green for urgent semantic meaning
+- Font: Custom sans, multiple weights (medium + semibold prominent)
+- Signature: Extreme restraint, `text-wrap: balance`, animated dot-grid patterns, monospace for technical
+- Does NOT use: Colored status badges, gradient backgrounds, decorative illustrations, large border-radius
+- Hover: bg-color shift only, instant (no transition duration)
+
+**Vercel** (vercel.com) — Developer platform benchmark
+- Color: Black `#000` / White `#fff` as primary (light/dark). Minimal accent
+- Font: system-ui stack + Geist Mono (custom monospace)
+- Border-radius: ~8-12px max | Shadows: minimal to none
+- Signature: Developer minimalism, container queries, performance-integrated visuals, Geist design system icons
+- Does NOT use: Colorful palettes, illustrations, large hero images, playful branding, heavy shadows
+
+**Stripe** (stripe.com) — Fintech / payment infrastructure benchmark
+- Color: Sophisticated neutrals, accent-sparse, strategic photography
+- Typography: Custom sans, large display fonts, generous line-height and letter-spacing
+- Signature: Negative space mastery, typographic confidence, photography integration, layered imagery
+- Does NOT use: Dense data in marketing pages, playful icons, bento grids, colorful badges
+- Premium feel: Every visual element serves content hierarchy, functional minimalism
+
+**DocuSign** (docusign.com) — Enterprise SaaS benchmark
+- Primary: `#4C00FF` (vibrant purple) | Dark: `#26065D` | Text: `#130032`
+- Hover: `#CBC2FF` / `#EDE5FF` (light purple shifts)
+- Font: DSIndigo (custom), weights 300-600 | Letter-spacing: `-0.25px` to `-1.25px`
+- H1: 2.5rem mobile → 3.625rem desktop | Border-radius: 0.25-1rem
+- Signature: Purple-to-red gradient hero (brand-specific), customer logo carousel, trust messaging
+- Transitions: 150-300ms ease-in-out
+
+**ClickUp** (clickup.com) — Project management with personality
+- Color: Multi-color agent palette (8 distinct colors for visual differentiation)
+- Signature: Playful branding (custom agent mascots) + enterprise credibility (SOC 2, ISO badges)
+- Layout: 12-column grid, card-based features, generous section spacing
+- Does NOT use: Monochrome palette, developer-minimalism, data-dense layouts on marketing
+
+#### Reference Selection Matrix — Pick 2+ Before ANY UI Task
+
+| UI Type | MUST Reference (pick 2+) | WHY |
+|---|---|---|
+| Dashboard / Analytics | Linear, Vercel Analytics, Toss | Information density + color restraint |
+| Project Management | Linear, ClickUp, Flex | Task-centric, status-driven, action density |
+| Korean Marketplace / Tool | PandaRank, Featuring | Korean density conventions, Naver-adjacent patterns |
+| CRM / Sales / Data | Relate, Linear | Data tables, functional color, grayscale foundation |
+| Developer Tool / CLI UI | Vercel, Linear | Monospace, dark mode, precision, no decoration |
+| Korean B2B SaaS | Flex, Channel.io, Relate | Korean typography, professional density, `keep-all` |
+| Document / Note | Notion, Toss | Content-first, minimal chrome, generous whitespace |
+| Settings / Admin Panel | Stripe Dashboard, DocuSign | Form-heavy, clean hierarchy, trust design |
+| Fintech / Payment | Toss, Stripe | Trust signals, whitespace, functional color only |
+| Customer Communication | Channel.io, Superhuman | Real-time UI, message density, large touch targets |
+| Korean Landing Page | Featuring, Toss, Flex | Korean hero patterns, Pretendard, CTA conventions |
+| Enterprise / Trust-heavy | DocuSign, Stripe | Logo carousels, compliance badges, restrained palette |
+
+#### Comparison Gate — MANDATORY After Every Generation
+
+After generating UI code, perform this element-by-element comparison against your declared references:
+
+1. **Color count** — Does your UI use more distinct colors than the reference? → Reduce to match
+2. **Border radius** — Is yours rounder than the reference? → Flatten to match
+3. **Spacing density** — Is yours more spacious than a dense reference (PandaRank)? Or denser than a spacious reference (Toss)? → Adjust
+4. **Shadows** — Does the reference use shadows? If not → Remove yours
+5. **Hover effects** — Does the reference use scale/glow? If not → Simplify to bg-shift
+6. **Typography count** — How many font sizes does the reference use on one screen? → Match that count
+7. **Decoration** — Does the reference have decorative blobs/illustrations? If not → Remove yours
+8. **Badge colors** — How many badge colors does the reference use? Linear uses 2 (gray + 1). Match that restraint
+
+**If your output has 3+ differences from the declared reference → REWRITE entirely, don't patch.**
+
+#### AI Defaults vs Real Product Reality
+
+| What AI Generates | What Real Products Actually Do |
+|---|---|
+| Purple-blue gradient hero | Toss: solid `#f2f4f6`. Linear: solid dark. Stripe: photography + subtle overlay |
+| Glassmorphism cards | Linear: `border` only. Vercel: flat + `border`. Featuring: `#fafafa` bg + `8px` radius |
+| Bento grid for everything | Linear: list views. Stripe: content sections. Bento only for landing page feature grids |
+| 6+ colored status badges | Linear: gray dots + text. Stripe: almost all gray. Toss: `#3182f6` + gray only |
+| `rounded-2xl` everywhere | Vercel: 8px max. Linear: 6px cards. PandaRank: minimal radius |
+| `scale(1.05)` on hover | ALL references: bg-color shift only. Zero use `scale()` on card hover |
+| Decorative blob shapes | Zero of 11 reference products use abstract decorative blobs. Zero |
+| Dark sidebar + light content | Linear: unified dark. Vercel: unified light. Toss: unified light. Never mixed mode |
+| `shadow-lg` on cards | Linear: no shadow. Vercel: no shadow. Featuring: no shadow. Border only |
+| Neon accent on dark mode | Vercel: white on black. Linear: muted on dark. No neon. Ever |
+
 ### Design Philosophy — CORE PRINCIPLE
 
 You are a senior product designer at a respected SaaS company.
@@ -154,23 +317,27 @@ Tables (shadcn fails hardest here):
 
 Squint Test: zoom to 50%. Can you tell which library? → Bad. Custom product feel? → Good.
 
-### Reference Product Mapping
+### Reference Product Mapping (Detailed — see PRIORITY 0 for full token database)
 
-| UI Type | Reference Products |
-|---|---|
-| Project Management / Task | Linear, Asana, Height |
-| Note / Document | Notion, Coda, Slite |
-| Dashboard / Analytics | Vercel Analytics, PostHog, Mixpanel |
-| Developer Tool / CLI | Raycast, Warp, Fig |
-| Settings / Admin | Stripe Dashboard, Clerk, WorkOS |
-| E-Commerce Admin | Shopify Admin, Medusa |
-| CRM / Sales | Attio, Folk, HubSpot |
-| Email / Communication | Superhuman, Front, Missive |
-| Design Tool | Figma (chrome), Framer (settings) |
-| File Management | Dropbox, Google Drive |
-| Code Editor / IDE | VS Code, Cursor, Zed |
+| UI Type | Reference Products | Key Design Trait to Borrow |
+|---|---|---|
+| Project Management / Task | **Linear**, Asana, Height | Gray status dots, list-first, extreme restraint |
+| Note / Document | Notion, Coda, Slite | Content-first, minimal chrome, generous whitespace |
+| Dashboard / Analytics | **Vercel** Analytics, PostHog, Mixpanel | Black/white, data-dense, no decoration |
+| Developer Tool / CLI | Raycast, **Vercel**, Warp | Monospace, dark mode, precision, no playful elements |
+| Settings / Admin | **Stripe** Dashboard, Clerk, WorkOS | Form-heavy, clean hierarchy, trust-first |
+| E-Commerce Admin | Shopify Admin, Medusa | Dense data tables, functional color only |
+| CRM / Sales | **Relate**, Attio, Folk | Navy surfaces, grayscale foundation, data-first |
+| Email / Communication | **Channel.io**, Superhuman, Front | Large touch targets, real-time density, multilingual |
+| Fintech / Payment | **Toss**, **Stripe** | Spacious trust, functional blue, zero decoration |
+| Korean SaaS | **Featuring**, **Flex**, **Channel.io** | Pretendard, `keep-all`, 1280px, indigo/module colors |
+| Korean Marketplace / Tool | **PandaRank**, Kmong | Dense, Naver-adjacent, green accent, ranking patterns |
+| Design Tool | Figma (chrome), Framer (settings) | Toolbar precision, panel density, keyboard-first |
+| File Management | Dropbox, Google Drive | List/grid toggle, metadata columns, batch actions |
+| Code Editor / IDE | VS Code, Cursor, Zed | Panel system, monospace, syntax-color conventions |
 
-Ask: "If this were a feature inside [reference product], would it look like this?" If no → simplify.
+**Critical question after every generation:**
+"If this were a feature inside [reference product], would it look like this?" If no → **rewrite, don't adjust.**
 
 ### Render-Verify Loop
 
@@ -378,12 +545,18 @@ Do NOT simply invert. Remap the scale:
 
 ### Korean Web Color Conventions
 
-Korean consumer sites use more saturated accent colors and color-coded information than Western minimalist defaults:
+Korean sites use more saturated accents and color-coded information than Western defaults. These are REAL extracted values:
 
-- **Education/finance** (weolbu-style): Deep blue primary `#1E3A8A` to `#2563EB`, warm orange badges `#F97316`, pastel tag backgrounds `#EFF6FF` `#FFF7ED`
-- **Marketplace** (kmong-style): Clean white `#FFFFFF`, emerald/teal accent `#059669`, trust-blue CTA `#2563EB`, warm gray text `#374151`
-- **Home/lifestyle** (ohou-style): Warm off-white `#FAFAF5`, coral accent `#F97066`, terracotta `#C2410C`, photo-centric with thin borders
-- **SaaS/premium** (caret-style): Near-black `#0A0A0F` to `#111118`, purple-blue gradient, high-contrast white `#F8FAFC` text
+- **Fintech** (Toss): Primary `#3182f6`, text `#191f28`, secondary `#6b7684`, bg `#f2f4f6`. Warm minimalism, generous whitespace
+- **SaaS/Analytics** (Featuring): Deep indigo `#312e81`, text `#04070d`, bg `#fafafa`. Pill CTAs, modular cards, Pretendard
+- **SEO/Keyword Tool** (PandaRank): Green `#02DE64`, text `#0B0F1B`, bg `#F9F9F9`, border `rgba(9,30,66,0.08)`. Naver-adjacent density
+- **HR SaaS** (Flex): Dark-first, module-specific colors (purple/lime/gold/orange). Inset borders, 1024px max-width
+- **Messaging SaaS** (Channel.io): Purple `#6157EA`, text `#000000D9`, bg `#F7F7F8`. 64px buttons, 80-140px padding
+- **CRM** (Relate): Blue `#3b82f6`, dark surfaces `#14141e`/`#0f1f3d`, bg `#fcfcfc`. Data-first grayscale
+- **Education/finance** (weolbu-style): Deep blue `#1E3A8A` to `#2563EB`, orange badges `#F97316`, pastel tags `#EFF6FF`
+- **Marketplace** (kmong-style): White `#FFFFFF`, emerald `#059669`, trust-blue `#2563EB`, warm gray text `#374151`
+- **Home/lifestyle** (ohou-style): Off-white `#FAFAF5`, coral `#F97066`, terracotta `#C2410C`, photo-centric
+- **SaaS/premium** (caret-style): Near-black `#0A0A0F` to `#111118`, purple-blue gradient, white `#F8FAFC` text
 
 ## Typography System
 
