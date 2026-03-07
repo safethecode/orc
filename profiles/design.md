@@ -135,6 +135,19 @@ These are actual values extracted from production services. Use them as concrete
 - Signature: Teal accent, education-focused cards, gradient CTAs, warm approachable feel
 - Does NOT use: Dark mode, dense data tables, enterprise cold aesthetics
 
+**KR-13** — Korean fashion marketplace (multi-brand)
+- Primary: `#000000` (black) | Sub-brands: Kids `#3734B8`, Player `#039BF2`, Boutique `#0000FF`, Outlet `#B90000`
+- Signature: Black-dominant, multi-store architecture, fashion-first photography, brand-segmented color coding
+- Does NOT use: Single accent color, warm palettes, spacious whitespace, friendly rounded UI
+
+**KR-14** — Korean fashion e-commerce (mobile-first)
+- BG: `#F5F6F8` | Border: `#E8E9EB` | Text muted: `#697175`
+- Font: Pretendard JP + Pretendard | Sizes: 12-28px scale (12/14/16/18/20/24/28)
+- Layout: 600px max-width (mobile-first) | Radius: 4px, 16px (bottom sheets)
+- Transition: `0.25s cubic-bezier(0.33,1,0.68,1)` for bg/color
+- Signature: Mobile-first vertical scroll, product card grid, active-state only (no hover), tap-optimized
+- Does NOT use: Dark mode, gradients, shadows, letter-spacing, desktop-wide layouts
+
 ##### Global SaaS Products
 
 **GL-1** — Project management benchmark
@@ -210,15 +223,44 @@ These are actual values extracted from production services. Use them as concrete
 - Signature: Documentation excellence, code examples, generous whitespace, sky-blue accent
 - Does NOT use: Dark mode default, dense layouts, enterprise aesthetics, heavy branding
 
+**GL-7** — Developer productivity / launcher
+- Dark BG: `#070921` (near-black) | Accent: `#FF1744` (red)
+- Signature: Dark-first, launcher UX, extension card system, developer-focused, radial gradient backgrounds
+- Does NOT use: Light mode default, dense tables, traditional SaaS layout, serif fonts
+
+**GL-14** — Developer terminal
+- Dark BG: `#121212` | Secondary: `#353534` | Text: `#000` / `#fff`
+- Font: Inter (400-900) + Matter (custom sans) + custom mono | Container: 1200px
+- Signature: Terminal-first, developer minimalism, monospace emphasis, neutral-only palette, no accent color
+- Does NOT use: Colorful palettes, playful branding, shadows, gradients, accent-heavy design
+
+**GL-36** — Creative browser
+- Brand: `#3139FB` (blue) | Deep: `#2404AA` | Dark: `#000354` | Red: `#FB3A4D` | Offwhite: `#FFFCEC`
+- Font: Marlin (primary), Inter (body), proprietary mono | Sizes: 10-48px | Letter-spacing: `-0.72px` to `0.15em`
+- Layout: 960px max, 64px desktop padding | Radius: 2-22px range + 9999px pills
+- Signature: Offwhite backgrounds, SVG masking patterns, scale hover transforms (1.02-1.05), creative personality
+- Does NOT use: Heavy shadows, traditional gradient heroes, dense data layouts
+
+**GL-37** — Design / prototyping platform
+- Font: Inter Display + Inter Variable + Inter Tight + Space Grotesk + JetBrains Mono
+- Signature: Typography-first hierarchy, massive font variety, swap loading strategy, no shadows
+- Does NOT use: Shadows, heavy illustrations, explicit gradients, monochrome palette
+
+**GL-38** — Spreadsheet / database platform
+- Primary: `#AA2D00` (brand orange) | Dark: `#254FAD`, `#002D98` | BG: `#FAF5E8` (cream)
+- Font: Haas Groot Disp + system fallback
+- Signature: Warm orange accent, cream backgrounds, multi-color data labels (#B6E995 lime, #FCB42A yellow, #FA91E0 pink)
+- Does NOT use: Monochrome palette, dark mode default, developer minimalism
+
 #### Reference Selection Matrix — Pick 2+ Before ANY UI Task
 
 | UI Type | MUST Reference (pick 2+) | WHY |
 |---|---|---|
 | Dashboard / Analytics | GL-1, GL-12, KR-1, KR-9 | Information density + color restraint + analytics patterns |
 | Project Management | GL-1, GL-5, GL-31, KR-4 | Task-centric, status-driven, scheduling, action density |
-| Korean Marketplace / Tool | KR-3, KR-7, KR-2 | Korean density conventions, portal-adjacent, marketplace trust |
+| Korean Marketplace / Tool | KR-3, KR-7, KR-13, KR-14 | Korean density, portal-adjacent, fashion e-commerce, mobile-first |
 | CRM / Sales / Data | KR-6, GL-1, KR-10 | Data tables, functional color, grayscale foundation |
-| Developer Tool / CLI UI | GL-2, GL-34, GL-32, GL-33 | Monospace, dark mode, precision, no decoration |
+| Developer Tool / CLI UI | GL-2, GL-7, GL-14, GL-34 | Monospace, dark mode, launcher/terminal UX, precision |
 | Korean B2B SaaS | KR-4, KR-5, KR-6, KR-9 | Korean typography, professional density, `keep-all` |
 | Document / Note | GL-6, KR-1, GL-35 | Content-first, minimal chrome, generous whitespace |
 | Settings / Admin Panel | GL-3 Dashboard, GL-4 | Form-heavy, clean hierarchy, trust design |
@@ -228,6 +270,9 @@ These are actual values extracted from production services. Use them as concrete
 | Enterprise / Trust-heavy | GL-4, GL-3, GL-31 | Logo carousels, compliance badges, restrained palette |
 | Education / EdTech | KR-11, KR-12, GL-35 | Content sections, teal/coral accents, learning cards |
 | Developer Docs / API | GL-35, GL-34, GL-32 | Code-first, documentation excellence, dark mode |
+| Design Tool / Prototyping | GL-37, GL-36, GL-8 | Typography-first, creative personality, panel precision |
+| Data / Spreadsheet | GL-38, GL-1, KR-6 | Multi-color labels, data grids, table-first layouts |
+| Fashion / E-commerce | KR-13, KR-14, KR-7 | Black-dominant, photography-first, mobile-first cards |
 
 #### Comparison Gate — MANDATORY After Every Generation
 
@@ -414,6 +459,9 @@ Squint Test: zoom to 50%. Can you tell which library? → Bad. Custom product fe
 | Code Editor / IDE | GL-28, GL-29, GL-30 | Panel system, monospace, syntax-color conventions |
 | Developer Docs / API | **GL-35**, **GL-32**, GL-33 | Code examples, documentation-first, developer minimalism |
 | Education / EdTech | **KR-11**, **KR-12**, GL-35 | Coral/teal accents, content sections, learning cards |
+| Design Tool / Prototyping | **GL-37**, **GL-36**, GL-8 | Typography-first, creative personality, precision panels |
+| Data / Spreadsheet | **GL-38**, GL-1, KR-6 | Multi-color labels, data grids, table-first layouts |
+| Fashion / E-commerce | **KR-13**, **KR-14**, KR-7 | Black-dominant, photography-first, mobile-first cards |
 
 **Critical question after every generation:**
 "If this were a feature inside [reference product], would it look like this?" If no → **rewrite, don't adjust.**
