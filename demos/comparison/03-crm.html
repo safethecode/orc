@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparison: CRM Data View — AI Default vs Reference-based</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css');
+  * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  body { -webkit-font-smoothing: antialiased; word-break: keep-all; }
+</style>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        surface: { 50: '#fafafa', 100: '#f5f5f5', 200: '#e5e7eb', 300: '#d1d5db' },
+        txt: { 900: '#111827', 700: '#374151', 500: '#6b7280', 400: '#9ca3af' },
+        navy: { 900: '#14141e', 800: '#1a1a2e', 700: '#1e1e2e' },
+      }
+    }
+  }
+}
+</script>
+</head>
+<body class="bg-gray-100">
+
+<!-- Comparison Header -->
+<div class="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-3">
+  <div class="max-w-[1800px] mx-auto flex items-center justify-between">
+    <h1 class="text-[15px] font-bold tracking-tight">CRM Data View Comparison</h1>
+    <div class="flex items-center gap-6 text-[12px]">
+      <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-red-400"></span>AI Default — 레퍼런스 없이 생성</span>
+      <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Reference-based — KR-6 + GL-1 참조</span>
+    </div>
+  </div>
+</div>
+
+<div class="max-w-[1800px] mx-auto grid grid-cols-2 gap-4 p-4">
+
+<!-- ===== LEFT: AI DEFAULT ===== -->
+<div class="rounded-xl border-2 border-red-200 overflow-hidden">
+  <div class="bg-red-50 px-4 py-2 text-[12px] font-semibold text-red-700 border-b border-red-200">
+    AI Default — 카드 레이아웃, 레인보우 뱃지, shadow, 과도한 장식
+  </div>
+
+  <div class="bg-gray-50 min-h-[600px]">
+    <!-- AI: Uses cards instead of table for tabular data -->
+    <div class="p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold">🤖 에이전트 관리</h1>
+        <button class="rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/25 hover:scale-105 transition-transform">+ 새 에이전트</button>
+      </div>
+
+      <!-- AI: Card grid instead of data table (Failure #5) -->
+      <div class="grid grid-cols-3 gap-4">
+        <div class="rounded-2xl bg-white p-5 shadow-md hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer border border-gray-100">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-lg font-bold">Critique Agent</span>
+            <span class="rounded-full bg-green-100 text-green-700 px-3 py-1 text-xs font-bold">Active</span>
+          </div>
+          <p class="text-sm text-gray-500 mb-4">코드 품질 검증 및 리뷰</p>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-gray-400">모델: Claude</span>
+            <span class="font-semibold text-blue-600">98.5%</span>
+          </div>
+          <div class="mt-3 h-2 rounded-full bg-gray-100">
+            <div class="h-2 rounded-full bg-gradient-to-r from-green-400 to-emerald-500" style="width:98.5%"></div>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-white p-5 shadow-md hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer border border-gray-100">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-lg font-bold">Router Agent</span>
+            <span class="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-bold">Running</span>
+          </div>
+          <p class="text-sm text-gray-500 mb-4">태스크 라우팅 및 분배</p>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-gray-400">모델: GPT-4</span>
+            <span class="font-semibold text-blue-600">94.2%</span>
+          </div>
+          <div class="mt-3 h-2 rounded-full bg-gray-100">
+            <div class="h-2 rounded-full bg-gradient-to-r from-blue-400 to-indigo-500" style="width:94.2%"></div>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-white p-5 shadow-md hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer border border-gray-100">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-lg font-bold">QA Agent</span>
+            <span class="rounded-full bg-purple-100 text-purple-700 px-3 py-1 text-xs font-bold">Testing</span>
+          </div>
+          <p class="text-sm text-gray-500 mb-4">테스트 케이스 생성 및 실행</p>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-gray-400">모델: Claude</span>
+            <span class="font-semibold text-purple-600">91.7%</span>
+          </div>
+          <div class="mt-3 h-2 rounded-full bg-gray-100">
+            <div class="h-2 rounded-full bg-gradient-to-r from-purple-400 to-pink-500" style="width:91.7%"></div>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-white p-5 shadow-md hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer border border-gray-100">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-lg font-bold">Ideation Agent</span>
+            <span class="rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-xs font-bold">Idle</span>
+          </div>
+          <p class="text-sm text-gray-500 mb-4">요구사항 분석 및 전략 수립</p>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-gray-400">모델: Claude</span>
+            <span class="font-semibold text-amber-600">87.3%</span>
+          </div>
+          <div class="mt-3 h-2 rounded-full bg-gray-100">
+            <div class="h-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500" style="width:87.3%"></div>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-white p-5 shadow-md hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer border border-gray-100">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-lg font-bold">Supervisor</span>
+            <span class="rounded-full bg-red-100 text-red-700 px-3 py-1 text-xs font-bold">Error</span>
+          </div>
+          <p class="text-sm text-gray-500 mb-4">워크플로우 감독 및 조율</p>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-gray-400">모델: GPT-4</span>
+            <span class="font-semibold text-red-600">72.1%</span>
+          </div>
+          <div class="mt-3 h-2 rounded-full bg-gray-100">
+            <div class="h-2 rounded-full bg-gradient-to-r from-red-400 to-rose-500" style="width:72.1%"></div>
+          </div>
+        </div>
+
+        <div class="rounded-2xl bg-white p-5 shadow-md hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer border border-gray-100">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-lg font-bold">Decomposer</span>
+            <span class="rounded-full bg-teal-100 text-teal-700 px-3 py-1 text-xs font-bold">Standby</span>
+          </div>
+          <p class="text-sm text-gray-500 mb-4">태스크 분해 및 의존성 분석</p>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-gray-400">모델: Claude</span>
+            <span class="font-semibold text-teal-600">95.8%</span>
+          </div>
+          <div class="mt-3 h-2 rounded-full bg-gray-100">
+            <div class="h-2 rounded-full bg-gradient-to-r from-teal-400 to-cyan-500" style="width:95.8%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== RIGHT: REFERENCE-BASED (KR-6 + GL-1) ===== -->
+<div class="rounded-xl border-2 border-emerald-200 overflow-hidden">
+  <div class="bg-emerald-50 px-4 py-2 text-[12px] font-semibold text-emerald-700 border-b border-emerald-200">
+    Reference-based — KR-6 다크 서피스 + GL-1 dot 상태. 데이터 테이블, 기능적 색상만
+  </div>
+
+  <div class="bg-navy-900 min-h-[600px] text-white">
+    <!-- Reference: Dark unified mode, functional design -->
+    <header class="border-b border-white/5 px-5 py-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-6">
+          <span class="text-[14px] font-semibold text-white/90">OrcFlow</span>
+          <nav class="flex items-center gap-1">
+            <a class="rounded-md px-3 py-1.5 text-[13px] text-white/40 hover:bg-white/5 transition-colors cursor-pointer">대시보드</a>
+            <a class="rounded-md bg-white/8 px-3 py-1.5 text-[13px] font-medium text-white/90">에이전트</a>
+            <a class="rounded-md px-3 py-1.5 text-[13px] text-white/40 hover:bg-white/5 transition-colors cursor-pointer">실행 로그</a>
+          </nav>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <input type="text" placeholder="검색..." class="h-8 w-48 rounded-md border border-white/10 bg-white/5 px-3 text-[13px] text-white/80 placeholder-white/30 focus:border-white/20 focus:outline-none">
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="p-5">
+      <div class="mb-4 flex items-center justify-between">
+        <h1 class="text-[16px] font-semibold text-white/90">에이전트 목록</h1>
+        <div class="flex items-center gap-2">
+          <button class="rounded-md border border-white/10 px-2.5 py-1 text-[12px] text-white/50 hover:bg-white/5 transition-colors cursor-pointer">필터</button>
+          <button class="rounded-md bg-blue-600 px-3 py-1 text-[12px] font-medium text-white hover:bg-blue-700 transition-colors cursor-pointer">에이전트 추가</button>
+        </div>
+      </div>
+
+      <!-- Reference: Data table, not cards -->
+      <div class="rounded-md border border-white/5 overflow-hidden">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b border-white/5 bg-white/[0.02]">
+              <th class="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-white/30">에이전트</th>
+              <th class="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-white/30">상태</th>
+              <th class="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-white/30">모델</th>
+              <th class="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-white/30">태스크</th>
+              <th class="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-white/30">성공률</th>
+              <th class="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-white/30">마지막 실행</th>
+            </tr>
+          </thead>
+          <tbody class="text-[13px]">
+            <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium text-white/90">Critique Agent</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="text-white/50">활성</span></span></td>
+              <td class="px-4 py-2.5"><span class="font-mono text-[12px] text-white/40">claude-opus</span></td>
+              <td class="px-4 py-2.5 text-white/50">1,847</td>
+              <td class="px-4 py-2.5 text-right text-white/70">98.5%</td>
+              <td class="px-4 py-2.5 text-right text-white/30">2분 전</td>
+            </tr>
+            <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium text-white/90">Router Agent</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-blue-400"></span><span class="text-white/50">실행중</span></span></td>
+              <td class="px-4 py-2.5"><span class="font-mono text-[12px] text-white/40">gpt-4o</span></td>
+              <td class="px-4 py-2.5 text-white/50">923</td>
+              <td class="px-4 py-2.5 text-right text-white/70">94.2%</td>
+              <td class="px-4 py-2.5 text-right text-white/30">방금</td>
+            </tr>
+            <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium text-white/90">QA Agent</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="text-white/50">활성</span></span></td>
+              <td class="px-4 py-2.5"><span class="font-mono text-[12px] text-white/40">claude-sonnet</span></td>
+              <td class="px-4 py-2.5 text-white/50">2,341</td>
+              <td class="px-4 py-2.5 text-right text-white/70">91.7%</td>
+              <td class="px-4 py-2.5 text-right text-white/30">5분 전</td>
+            </tr>
+            <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium text-white/90">Ideation Agent</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-white/20"></span><span class="text-white/50">대기</span></span></td>
+              <td class="px-4 py-2.5"><span class="font-mono text-[12px] text-white/40">claude-opus</span></td>
+              <td class="px-4 py-2.5 text-white/50">567</td>
+              <td class="px-4 py-2.5 text-right text-white/70">87.3%</td>
+              <td class="px-4 py-2.5 text-right text-white/30">18분 전</td>
+            </tr>
+            <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium text-white/90">Supervisor</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-red-400"></span><span class="text-white/50">오류</span></span></td>
+              <td class="px-4 py-2.5"><span class="font-mono text-[12px] text-white/40">gpt-4o</span></td>
+              <td class="px-4 py-2.5 text-white/50">3,102</td>
+              <td class="px-4 py-2.5 text-right"><span class="text-red-400">72.1%</span></td>
+              <td class="px-4 py-2.5 text-right text-white/30">32분 전</td>
+            </tr>
+            <tr class="hover:bg-white/[0.02] transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium text-white/90">Decomposer Agent</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="text-white/50">활성</span></span></td>
+              <td class="px-4 py-2.5"><span class="font-mono text-[12px] text-white/40">claude-opus</span></td>
+              <td class="px-4 py-2.5 text-white/50">1,205</td>
+              <td class="px-4 py-2.5 text-right text-white/70">95.8%</td>
+              <td class="px-4 py-2.5 text-right text-white/30">8분 전</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</div>
+
+</div>
+
+<!-- Annotation -->
+<div class="max-w-[1800px] mx-auto px-4 pb-8">
+  <div class="rounded-lg border border-gray-200 bg-white p-6">
+    <h2 class="text-[15px] font-bold mb-4">차이점 분석</h2>
+    <div class="grid grid-cols-2 gap-6 text-[13px]">
+      <div>
+        <h3 class="font-semibold text-red-600 mb-2">AI Default 문제점</h3>
+        <ul class="space-y-1 text-txt-700">
+          <li>1. 카드 그리드 (테이블 데이터에 카드 = Failure #5)</li>
+          <li>2. 레인보우 뱃지 6색 (green/blue/purple/amber/red/teal)</li>
+          <li>3. 카드마다 다른 그라디언트 프로그레스 바</li>
+          <li>4. shadow-md + hover:shadow-xl + scale</li>
+          <li>5. rounded-2xl 과도한 radius</li>
+          <li>6. 그라디언트 CTA 버튼 + shadow</li>
+          <li>7. 이모지 타이틀 (🤖)</li>
+          <li>8. 라이트 모드 (CRM은 보통 다크 or 뉴트럴)</li>
+          <li>9. 3+ 속성 데이터인데 카드로 표현</li>
+          <li>10. 프로그레스 바 = 불필요한 장식</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="font-semibold text-emerald-600 mb-2">Reference-based 해결</h3>
+        <ul class="space-y-1 text-txt-700">
+          <li>1. 데이터 테이블 (6개 컬럼, 정렬 가능한 구조)</li>
+          <li>2. dot 상태 3색만 (green/blue/red + gray)</li>
+          <li>3. 수치 텍스트만 (프로그레스 바 없음)</li>
+          <li>4. 그림자 없음 — border-white/5 only</li>
+          <li>5. rounded-md (6px)</li>
+          <li>6. 솔리드 blue-600 단색 버튼</li>
+          <li>7. 텍스트만 (16px font-semibold)</li>
+          <li>8. KR-6 스타일 다크 모드 (#14141e)</li>
+          <li>9. 테이블 = 올바른 데이터 표현</li>
+          <li>10. 기능적 정보만 (monospace 모델명)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

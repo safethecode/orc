@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparison: Dashboard — AI Default vs Reference-based</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css');
+  * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  body { -webkit-font-smoothing: antialiased; word-break: keep-all; }
+</style>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        accent: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3182f6', 600: '#2563eb', 700: '#1d4ed8' },
+        surface: { 50: '#f9fafb', 100: '#f3f4f6', 200: '#e5e7eb', 300: '#d1d5db' },
+        txt: { 900: '#111827', 700: '#374151', 500: '#6b7280', 400: '#9ca3af' },
+      }
+    }
+  }
+}
+</script>
+</head>
+<body class="bg-gray-100">
+
+<!-- Comparison Header -->
+<div class="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-3">
+  <div class="max-w-[1800px] mx-auto flex items-center justify-between">
+    <h1 class="text-[15px] font-bold tracking-tight">Dashboard Comparison</h1>
+    <div class="flex items-center gap-6 text-[12px]">
+      <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-red-400"></span>AI Default — 레퍼런스 없이 생성</span>
+      <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Reference-based — GL-1 + KR-1 참조</span>
+    </div>
+  </div>
+</div>
+
+<div class="max-w-[1800px] mx-auto grid grid-cols-2 gap-4 p-4">
+
+<!-- ===== LEFT: AI DEFAULT (everything wrong) ===== -->
+<div class="rounded-xl border-2 border-red-200 overflow-hidden">
+  <div class="bg-red-50 px-4 py-2 text-[12px] font-semibold text-red-700 border-b border-red-200">
+    AI Default — 문제점: 그라디언트, 과도한 색상, 큰 radius, shadow, scale hover, 컬러 뱃지
+  </div>
+
+  <div class="bg-white">
+    <!-- AI: Dark sidebar + light content (mood mismatch) -->
+    <div class="flex min-h-[600px]">
+      <!-- AI: Dark sidebar -->
+      <aside class="w-56 bg-gradient-to-b from-indigo-900 to-purple-900 text-white p-5">
+        <div class="text-lg font-bold mb-8">🚀 OrcFlow</div>
+        <nav class="space-y-2">
+          <a class="flex items-center gap-3 bg-white/10 rounded-xl px-3 py-2.5 text-sm font-medium backdrop-blur-sm">
+            <span>📊</span> 대시보드
+          </a>
+          <a class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/70 hover:bg-white/5">
+            <span>📁</span> 프로젝트
+          </a>
+          <a class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/70 hover:bg-white/5">
+            <span>🤖</span> 에이전트
+          </a>
+          <a class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/70 hover:bg-white/5">
+            <span>⚙️</span> 설정
+          </a>
+        </nav>
+        <!-- AI: Duplicate CTA in sidebar -->
+        <button class="mt-8 w-full rounded-xl bg-gradient-to-r from-pink-500 to-purple-500 py-2.5 text-sm font-bold text-white shadow-lg shadow-purple-500/30">+ 새 프로젝트</button>
+      </aside>
+
+      <!-- AI: Light content area -->
+      <main class="flex-1 bg-gray-50 p-6">
+        <!-- AI: Oversized title -->
+        <h1 class="text-3xl font-bold text-gray-900 mb-6">📊 대시보드</h1>
+
+        <!-- AI: Cards with shadows, gradients, scale hover, too many colors -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+          <div class="rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 p-5 text-white shadow-xl shadow-blue-500/20 hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-sm opacity-80">활성 에이전트</p>
+            <p class="text-3xl font-bold mt-1">12</p>
+            <p class="text-xs opacity-60 mt-1">전체 18개 중</p>
+          </div>
+          <div class="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-5 text-white shadow-xl shadow-emerald-500/20 hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-sm opacity-80">완료된 태스크</p>
+            <p class="text-3xl font-bold mt-1">1,284</p>
+            <p class="text-xs opacity-60 mt-1">+12.3% 지난주 대비</p>
+          </div>
+          <div class="rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 p-5 text-white shadow-xl shadow-orange-500/20 hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-sm opacity-80">평균 처리 시간</p>
+            <p class="text-3xl font-bold mt-1">2.4초</p>
+            <p class="text-xs opacity-60 mt-1">목표 3.0초</p>
+          </div>
+          <div class="rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 p-5 text-white shadow-xl shadow-purple-500/20 hover:scale-105 transition-transform cursor-pointer">
+            <p class="text-sm opacity-80">성공률</p>
+            <p class="text-3xl font-bold mt-1">98.7%</p>
+            <p class="text-xs opacity-60 mt-1">SLA 95% 달성</p>
+          </div>
+        </div>
+
+        <!-- AI: Table with colored badges (rainbow syndrome) -->
+        <div class="rounded-2xl bg-white shadow-lg p-5">
+          <h2 class="text-lg font-bold mb-4">최근 실행</h2>
+          <table class="w-full">
+            <thead>
+              <tr class="border-b-2 border-gray-200">
+                <th class="text-left py-3 px-4 text-sm font-semibold">태스크</th>
+                <th class="text-left py-3 px-4 text-sm font-semibold">에이전트</th>
+                <th class="text-left py-3 px-4 text-sm font-semibold">상태</th>
+                <th class="text-left py-3 px-4 text-sm font-semibold">소요시간</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b hover:bg-blue-50 hover:scale-[1.01] transition-all">
+                <td class="py-3 px-4 text-sm font-medium">코드 리뷰 — PR #487</td>
+                <td class="py-3 px-4 text-sm">Critique</td>
+                <td class="py-3 px-4"><span class="rounded-full bg-green-100 text-green-700 px-3 py-1 text-xs font-bold">완료</span></td>
+                <td class="py-3 px-4 text-sm">1.2초</td>
+              </tr>
+              <tr class="border-b hover:bg-blue-50 hover:scale-[1.01] transition-all">
+                <td class="py-3 px-4 text-sm font-medium">API 엔드포인트 생성</td>
+                <td class="py-3 px-4 text-sm">Decomposer</td>
+                <td class="py-3 px-4"><span class="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-bold">실행중</span></td>
+                <td class="py-3 px-4 text-sm">—</td>
+              </tr>
+              <tr class="border-b hover:bg-blue-50 hover:scale-[1.01] transition-all">
+                <td class="py-3 px-4 text-sm font-medium">테스트 케이스 작성</td>
+                <td class="py-3 px-4 text-sm">QA</td>
+                <td class="py-3 px-4"><span class="rounded-full bg-purple-100 text-purple-700 px-3 py-1 text-xs font-bold">리뷰중</span></td>
+                <td class="py-3 px-4 text-sm">3.8초</td>
+              </tr>
+              <tr class="border-b hover:bg-blue-50 hover:scale-[1.01] transition-all">
+                <td class="py-3 px-4 text-sm font-medium">DB 스키마 마이그레이션</td>
+                <td class="py-3 px-4 text-sm">Router</td>
+                <td class="py-3 px-4"><span class="rounded-full bg-amber-100 text-amber-700 px-3 py-1 text-xs font-bold">대기</span></td>
+                <td class="py-3 px-4 text-sm">—</td>
+              </tr>
+              <tr class="hover:bg-blue-50 hover:scale-[1.01] transition-all">
+                <td class="py-3 px-4 text-sm font-medium">성능 프로파일링 리포트</td>
+                <td class="py-3 px-4 text-sm">Supervisor</td>
+                <td class="py-3 px-4"><span class="rounded-full bg-red-100 text-red-700 px-3 py-1 text-xs font-bold">실패</span></td>
+                <td class="py-3 px-4 text-sm">0.4초</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+
+<!-- ===== RIGHT: REFERENCE-BASED (GL-1 + KR-1) ===== -->
+<div class="rounded-xl border-2 border-emerald-200 overflow-hidden">
+  <div class="bg-emerald-50 px-4 py-2 text-[12px] font-semibold text-emerald-700 border-b border-emerald-200">
+    Reference-based — GL-1 절제 + KR-1 깔끔한 수치. 단일 모드, border only, dot 상태
+  </div>
+
+  <div class="bg-surface-50 min-h-[600px]">
+    <!-- Reference: Unified light mode, no sidebar -->
+    <header class="sticky top-10 z-40 border-b border-surface-200 bg-white/80 backdrop-blur-md">
+      <div class="mx-auto flex h-12 max-w-[960px] items-center justify-between px-4">
+        <div class="flex items-center gap-6">
+          <span class="text-sm font-semibold tracking-tight">OrcFlow</span>
+          <nav class="flex items-center gap-1">
+            <a class="rounded-md bg-surface-100 px-3 py-1.5 text-[13px] font-medium text-txt-900">대시보드</a>
+            <a class="rounded-md px-3 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">프로젝트</a>
+            <a class="rounded-md px-3 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">에이전트</a>
+            <a class="rounded-md px-3 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">설정</a>
+          </nav>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="rounded-md border border-surface-200 px-3 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">피드백</button>
+          <div class="h-7 w-7 rounded-full bg-accent-500 flex items-center justify-center">
+            <span class="text-[11px] font-medium text-white">S</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-[960px] px-4 py-6">
+      <div class="mb-6 flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold tracking-tight">대시보드</h1>
+          <p class="mt-0.5 text-[13px] text-txt-500">오늘 오전 10:32 기준</p>
+        </div>
+        <button class="inline-flex items-center gap-1.5 rounded-md bg-accent-500 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-accent-600 transition-colors cursor-pointer">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 4v16m8-8H4"/></svg>
+          새 프로젝트
+        </button>
+      </div>
+
+      <!-- Reference: Border-only cards, no shadow, no gradient -->
+      <section class="mb-6 grid grid-cols-4 gap-3">
+        <div class="rounded-md border border-surface-200 bg-white p-4">
+          <p class="text-[12px] font-medium text-txt-400">활성 에이전트</p>
+          <p class="mt-1 text-2xl font-bold tracking-tight">12</p>
+          <p class="mt-1 text-[12px] text-txt-400">전체 18개 중</p>
+        </div>
+        <div class="rounded-md border border-surface-200 bg-white p-4">
+          <p class="text-[12px] font-medium text-txt-400">완료된 태스크</p>
+          <p class="mt-1 text-2xl font-bold tracking-tight">1,284</p>
+          <p class="mt-1 text-[12px] text-accent-500 font-medium">+12.3% 지난주 대비</p>
+        </div>
+        <div class="rounded-md border border-surface-200 bg-white p-4">
+          <p class="text-[12px] font-medium text-txt-400">평균 처리 시간</p>
+          <p class="mt-1 text-2xl font-bold tracking-tight">2.4<span class="text-sm font-medium text-txt-400">초</span></p>
+          <p class="mt-1 text-[12px] text-txt-400">목표 3.0초</p>
+        </div>
+        <div class="rounded-md border border-surface-200 bg-white p-4">
+          <p class="text-[12px] font-medium text-txt-400">성공률</p>
+          <p class="mt-1 text-2xl font-bold tracking-tight">98.7<span class="text-sm font-medium text-txt-400">%</span></p>
+          <p class="mt-1 text-[12px] text-txt-400">SLA 95% 달성</p>
+        </div>
+      </section>
+
+      <!-- Reference: Dot statuses, gray-dominant, dense rows -->
+      <section class="rounded-md border border-surface-200 bg-white">
+        <div class="flex items-center justify-between border-b border-surface-100 px-4 py-3">
+          <h2 class="text-[13px] font-semibold">최근 실행</h2>
+          <div class="flex items-center gap-2">
+            <button class="rounded-md border border-surface-200 px-2.5 py-1 text-[12px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">필터</button>
+            <button class="rounded-md border border-surface-200 px-2.5 py-1 text-[12px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">내보내기</button>
+          </div>
+        </div>
+        <table class="w-full">
+          <thead>
+            <tr class="border-b border-surface-100">
+              <th class="px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-txt-400">태스크</th>
+              <th class="px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-txt-400">에이전트</th>
+              <th class="px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-txt-400">상태</th>
+              <th class="px-4 py-2 text-right text-[11px] font-medium uppercase tracking-wider text-txt-400">소요시간</th>
+            </tr>
+          </thead>
+          <tbody class="text-[13px]">
+            <tr class="border-b border-surface-100/50 hover:bg-surface-50 transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium">코드 리뷰 — PR #487</td>
+              <td class="px-4 py-2.5 text-txt-500">Critique</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span><span class="text-txt-500">완료</span></span></td>
+              <td class="px-4 py-2.5 text-right text-txt-400">1.2초</td>
+            </tr>
+            <tr class="border-b border-surface-100/50 hover:bg-surface-50 transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium">API 엔드포인트 생성</td>
+              <td class="px-4 py-2.5 text-txt-500">Decomposer</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-accent-500"></span><span class="text-txt-500">실행중</span></span></td>
+              <td class="px-4 py-2.5 text-right text-txt-400">—</td>
+            </tr>
+            <tr class="border-b border-surface-100/50 hover:bg-surface-50 transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium">테스트 케이스 작성</td>
+              <td class="px-4 py-2.5 text-txt-500">QA</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span><span class="text-txt-500">완료</span></span></td>
+              <td class="px-4 py-2.5 text-right text-txt-400">3.8초</td>
+            </tr>
+            <tr class="border-b border-surface-100/50 hover:bg-surface-50 transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium">DB 스키마 마이그레이션</td>
+              <td class="px-4 py-2.5 text-txt-500">Router</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-surface-300"></span><span class="text-txt-500">대기</span></span></td>
+              <td class="px-4 py-2.5 text-right text-txt-400">—</td>
+            </tr>
+            <tr class="hover:bg-surface-50 transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium">성능 프로파일링 리포트</td>
+              <td class="px-4 py-2.5 text-txt-500">Supervisor</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span><span class="text-txt-500">실패</span></span></td>
+              <td class="px-4 py-2.5 text-right text-txt-400">0.4초</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+</div>
+
+</div>
+
+<!-- Annotation: Differences -->
+<div class="max-w-[1800px] mx-auto px-4 pb-8">
+  <div class="rounded-lg border border-gray-200 bg-white p-6">
+    <h2 class="text-[15px] font-bold mb-4">차이점 분석</h2>
+    <div class="grid grid-cols-2 gap-6 text-[13px]">
+      <div>
+        <h3 class="font-semibold text-red-600 mb-2">AI Default 문제점</h3>
+        <ul class="space-y-1 text-txt-700">
+          <li>1. 다크 사이드바 + 라이트 콘텐츠 = 무드 불일치</li>
+          <li>2. 그라디언트 배경 카드 (4가지 색상)</li>
+          <li>3. shadow-xl + shadow-color 과다</li>
+          <li>4. hover:scale-105 카드, scale-[1.01] 테이블 행</li>
+          <li>5. rounded-2xl 과도한 radius</li>
+          <li>6. 레인보우 뱃지 (5가지 색상: green/blue/purple/amber/red)</li>
+          <li>7. 32px 타이틀 = 랜딩 페이지 느낌</li>
+          <li>8. 사이드바 + 헤더에 CTA 중복</li>
+          <li>9. 이모지 아이콘 (🚀📊📁🤖)</li>
+          <li>10. 그라디언트 CTA 버튼 (pink→purple)</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="font-semibold text-emerald-600 mb-2">Reference-based 해결</h3>
+        <ul class="space-y-1 text-txt-700">
+          <li>1. 통일된 라이트 모드 (GL-1 방식)</li>
+          <li>2. border-only 카드, 배경색 없음</li>
+          <li>3. 그림자 없음 — border border-surface-200</li>
+          <li>4. hover:bg-surface-50 만 (bg-color shift only)</li>
+          <li>5. rounded-md (6px) 일관 적용</li>
+          <li>6. dot 상태 표시 (GL-1): gray/green/blue/red 4색만</li>
+          <li>7. 20px 타이틀 (text-xl) — 도구 느낌</li>
+          <li>8. CTA 한 곳에만 (헤더 우측)</li>
+          <li>9. SVG 아이콘 또는 텍스트만</li>
+          <li>10. 솔리드 accent-500 단색 버튼</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
