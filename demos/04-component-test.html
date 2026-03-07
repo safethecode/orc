@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Component Library Test — design-components.md 검증</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css');
+  * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  body { -webkit-font-smoothing: antialiased; word-break: keep-all; letter-spacing: -0.01em; }
+  .section-label {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 2px 8px;
+    margin-bottom: 12px;
+  }
+</style>
+</head>
+<body class="bg-white text-gray-900">
+
+<!-- ============================================================
+     SECTION 1: Navigation Components
+     ============================================================ -->
+<div class="border-b border-gray-100 px-6 py-4 bg-gray-50">
+  <span class="section-label">1. Navigation</span>
+  <h2 class="text-[15px] font-semibold mt-1">Top Nav variants from design-components.md</h2>
+</div>
+
+<!-- Nav: Sticky Light (GL-1, KR-1, KR-2) -->
+<div class="mb-1">
+  <div class="px-6 py-1.5 text-[11px] text-gray-400 bg-gray-50/50">GL-1 / KR-1 — Sticky Light (h-12, backdrop-blur)</div>
+  <header class="border-b border-gray-200 bg-white/80 backdrop-blur-md">
+    <div class="mx-auto flex h-12 max-w-6xl items-center justify-between px-4">
+      <div class="flex items-center gap-6">
+        <span class="text-sm font-semibold tracking-tight">Brand</span>
+        <nav class="flex items-center gap-1">
+          <a class="rounded-md bg-gray-100 px-3 py-1.5 text-[13px] font-medium text-gray-900">Active</a>
+          <a class="rounded-md px-3 py-1.5 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">Item</a>
+          <a class="rounded-md px-3 py-1.5 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">Item</a>
+        </nav>
+      </div>
+      <div class="flex items-center gap-3">
+        <button class="rounded-md border border-gray-200 px-3 py-1.5 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">Action</button>
+        <div class="h-7 w-7 rounded-full bg-blue-500 flex items-center justify-center">
+          <span class="text-[11px] font-medium text-white">U</span>
+        </div>
+      </div>
+    </div>
+  </header>
+</div>
+
+<!-- Nav: Marketing (KR-2, GL-3) -->
+<div class="mb-1">
+  <div class="px-6 py-1.5 text-[11px] text-gray-400 bg-gray-50/50">KR-2 / GL-3 — Marketing (h-14, pill CTA)</div>
+  <header class="border-b border-gray-200/60 bg-white/80 backdrop-blur-md">
+    <div class="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
+      <div class="flex items-center gap-8">
+        <span class="text-[15px] font-bold tracking-tight text-indigo-800">Brand</span>
+        <nav class="flex items-center gap-6">
+          <a class="text-[13px] text-gray-500 hover:text-gray-900 transition-colors cursor-pointer">기능</a>
+          <a class="text-[13px] text-gray-500 hover:text-gray-900 transition-colors cursor-pointer">가격</a>
+          <a class="text-[13px] text-gray-500 hover:text-gray-900 transition-colors cursor-pointer">문서</a>
+        </nav>
+      </div>
+      <div class="flex items-center gap-3">
+        <a class="text-[13px] text-gray-500 hover:text-gray-900 transition-colors cursor-pointer">로그인</a>
+        <button class="rounded-full bg-indigo-800 px-4 py-2 text-[13px] font-medium text-white hover:bg-indigo-900 transition-colors cursor-pointer">무료로 시작하기</button>
+      </div>
+    </div>
+  </header>
+</div>
+
+<!-- Nav: Dark (KR-6, GL-34) -->
+<div class="mb-8">
+  <div class="px-6 py-1.5 text-[11px] text-gray-400 bg-gray-50/50">KR-6 / GL-34 — Dark (border-white/5, white/opacity)</div>
+  <header class="border-b border-white/5 bg-[#14141e] px-5 py-3">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-6">
+        <span class="text-[14px] font-semibold text-white/90">Brand</span>
+        <nav class="flex items-center gap-1">
+          <a class="rounded-md px-3 py-1.5 text-[13px] text-white/40 hover:bg-white/5 transition-colors cursor-pointer">Item</a>
+          <a class="rounded-md bg-white/[0.08] px-3 py-1.5 text-[13px] font-medium text-white/90">Active</a>
+          <a class="rounded-md px-3 py-1.5 text-[13px] text-white/40 hover:bg-white/5 transition-colors cursor-pointer">Item</a>
+        </nav>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <input type="text" placeholder="검색..." class="h-8 w-48 rounded-md border border-white/10 bg-white/5 px-3 text-[13px] text-white/80 placeholder-white/30 focus:border-white/20 focus:outline-none">
+        </div>
+      </div>
+    </div>
+  </header>
+</div>
+
+<!-- ============================================================
+     SECTION 2: Buttons
+     ============================================================ -->
+<div class="border-b border-gray-100 px-6 py-4 bg-gray-50">
+  <span class="section-label">2. Buttons</span>
+  <h2 class="text-[15px] font-semibold mt-1">모든 버튼 variant — 사이즈, 스타일, 다크모드</h2>
+</div>
+
+<div class="px-6 py-6 space-y-6">
+  <!-- Light buttons -->
+  <div>
+    <p class="text-[12px] text-gray-400 mb-3">Light Mode</p>
+    <div class="flex items-center gap-3 flex-wrap">
+      <button class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-blue-700 transition-colors cursor-pointer">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 4v16m8-8H4"/></svg>
+        Primary Solid
+      </button>
+      <button class="rounded-full bg-indigo-800 px-6 py-2.5 text-[14px] font-medium text-white hover:bg-indigo-900 transition-colors cursor-pointer">Primary Pill</button>
+      <button class="rounded-md border border-gray-200 px-3 py-1.5 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">Secondary</button>
+      <button class="rounded-md px-3 py-1.5 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">Ghost</button>
+      <button class="rounded-full border border-gray-300 px-6 py-2.5 text-[14px] font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">Secondary Pill</button>
+    </div>
+  </div>
+
+  <!-- Sizes -->
+  <div>
+    <p class="text-[12px] text-gray-400 mb-3">Sizes: compact (h-7) / default (h-8) / comfortable (h-9)</p>
+    <div class="flex items-end gap-3">
+      <button class="h-7 rounded-md bg-blue-600 px-2.5 text-[12px] font-medium text-white hover:bg-blue-700 transition-colors cursor-pointer">h-7 Compact</button>
+      <button class="h-8 rounded-md bg-blue-600 px-3 text-[13px] font-medium text-white hover:bg-blue-700 transition-colors cursor-pointer">h-8 Default</button>
+      <button class="h-9 rounded-md bg-blue-600 px-4 text-[13px] font-medium text-white hover:bg-blue-700 transition-colors cursor-pointer">h-9 Comfortable</button>
+    </div>
+  </div>
+
+  <!-- Dark buttons -->
+  <div class="rounded-lg bg-[#14141e] p-4">
+    <p class="text-[12px] text-white/30 mb-3">Dark Mode</p>
+    <div class="flex items-center gap-3">
+      <button class="rounded-md bg-blue-600 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-blue-700 transition-colors cursor-pointer">Primary</button>
+      <button class="rounded-md border border-white/10 px-2.5 py-1 text-[12px] text-white/50 hover:bg-white/5 transition-colors cursor-pointer">Secondary</button>
+      <button class="rounded-md px-2.5 py-1 text-[12px] text-white/40 hover:bg-white/5 transition-colors cursor-pointer">Ghost</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SECTION 3: Cards
+     ============================================================ -->
+<div class="border-b border-gray-100 px-6 py-4 bg-gray-50">
+  <span class="section-label">3. Cards</span>
+  <h2 class="text-[15px] font-semibold mt-1">Stat Card, Feature Card, Dark Card</h2>
+</div>
+
+<div class="px-6 py-6 space-y-6">
+  <!-- Stat Cards -->
+  <div>
+    <p class="text-[12px] text-gray-400 mb-3">Stat Card — Light (KR-1, GL-1): border-only, no shadow</p>
+    <div class="grid grid-cols-4 gap-3">
+      <div class="rounded-md border border-gray-200 bg-white p-4">
+        <p class="text-[12px] font-medium text-gray-400">활성 에이전트</p>
+        <p class="mt-1 text-2xl font-bold tracking-tight">12</p>
+        <p class="mt-1 text-[12px] text-gray-400">전체 18개 중</p>
+      </div>
+      <div class="rounded-md border border-gray-200 bg-white p-4">
+        <p class="text-[12px] font-medium text-gray-400">완료된 태스크</p>
+        <p class="mt-1 text-2xl font-bold tracking-tight">1,284</p>
+        <p class="mt-1 text-[12px] text-blue-500 font-medium">+12.3% 지난주 대비</p>
+      </div>
+      <div class="rounded-md border border-gray-200 bg-white p-4">
+        <p class="text-[12px] font-medium text-gray-400">평균 처리 시간</p>
+        <p class="mt-1 text-2xl font-bold tracking-tight">2.4<span class="text-sm font-medium text-gray-400">초</span></p>
+        <p class="mt-1 text-[12px] text-gray-400">목표 3.0초</p>
+      </div>
+      <div class="rounded-md border border-gray-200 bg-white p-4">
+        <p class="text-[12px] font-medium text-gray-400">성공률</p>
+        <p class="mt-1 text-2xl font-bold tracking-tight">98.7<span class="text-sm font-medium text-gray-400">%</span></p>
+        <p class="mt-1 text-[12px] text-gray-400">SLA 95% 달성</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature Cards -->
+  <div>
+    <p class="text-[12px] text-gray-400 mb-3">Feature Card — Light (KR-2): icon container + border-only</p>
+    <div class="grid grid-cols-3 gap-3">
+      <article class="rounded-md border border-gray-200 bg-white p-5">
+        <div class="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-indigo-50 text-indigo-800">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        </div>
+        <h3 class="text-[14px] font-semibold">Ideation Agent</h3>
+        <p class="mt-1.5 text-[13px] leading-relaxed text-gray-500">요구사항을 분석하고 구현 전략을 제안합니다. 컨텍스트를 이해하고 최적의 접근법을 도출합니다.</p>
+      </article>
+      <article class="rounded-md border border-gray-200 bg-white p-5">
+        <div class="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-indigo-50 text-indigo-800">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </div>
+        <h3 class="text-[14px] font-semibold">Router Agent</h3>
+        <p class="mt-1.5 text-[13px] leading-relaxed text-gray-500">태스크를 적합한 에이전트에 분배합니다. 역량과 부하를 고려해 최적 라우팅을 수행합니다.</p>
+      </article>
+      <article class="rounded-md border border-gray-200 bg-white p-5">
+        <div class="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-indigo-50 text-indigo-800">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        </div>
+        <h3 class="text-[14px] font-semibold">Critique Agent</h3>
+        <p class="mt-1.5 text-[13px] leading-relaxed text-gray-500">코드 품질을 검증하고 개선점을 제안합니다. 보안, 성능, 가독성을 종합적으로 평가합니다.</p>
+      </article>
+    </div>
+  </div>
+
+  <!-- Dark Cards -->
+  <div>
+    <p class="text-[12px] text-gray-400 mb-3">Card on Dark (KR-6): border-white/5, bg-white/[0.02]</p>
+    <div class="grid grid-cols-4 gap-3 rounded-lg bg-[#14141e] p-4">
+      <div class="rounded-md border border-white/5 bg-white/[0.02] p-4">
+        <p class="text-[12px] text-white/30">에이전트</p>
+        <p class="mt-1 text-xl font-bold text-white/90">12</p>
+      </div>
+      <div class="rounded-md border border-white/5 bg-white/[0.02] p-4">
+        <p class="text-[12px] text-white/30">태스크</p>
+        <p class="mt-1 text-xl font-bold text-white/90">1,284</p>
+      </div>
+      <div class="rounded-md border border-white/5 bg-white/[0.02] p-4">
+        <p class="text-[12px] text-white/30">처리 시간</p>
+        <p class="mt-1 text-xl font-bold text-white/90">2.4<span class="text-sm text-white/40">초</span></p>
+      </div>
+      <div class="rounded-md border border-white/5 bg-white/[0.02] p-4">
+        <p class="text-[12px] text-white/30">성공률</p>
+        <p class="mt-1 text-xl font-bold text-white/90">98.7<span class="text-sm text-white/40">%</span></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SECTION 4: Data Tables
+     ============================================================ -->
+<div class="border-b border-gray-100 px-6 py-4 bg-gray-50">
+  <span class="section-label">4. Data Tables</span>
+  <h2 class="text-[15px] font-semibold mt-1">Light Table + Dark Table + Status Dots</h2>
+</div>
+
+<div class="px-6 py-6 space-y-6">
+  <!-- Light Table -->
+  <div>
+    <p class="text-[12px] text-gray-400 mb-3">Light Table (GL-1, KR-1): 11px uppercase header, 13px cells, dot status</p>
+    <section class="rounded-md border border-gray-200 bg-white">
+      <div class="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+        <h2 class="text-[13px] font-semibold">최근 실행</h2>
+        <div class="flex items-center gap-2">
+          <button class="rounded-md border border-gray-200 px-2.5 py-1 text-[12px] text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">필터</button>
+          <button class="rounded-md border border-gray-200 px-2.5 py-1 text-[12px] text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">내보내기</button>
+        </div>
+      </div>
+      <table class="w-full">
+        <thead>
+          <tr class="border-b border-gray-100">
+            <th class="px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-gray-400">태스크</th>
+            <th class="px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-gray-400">에이전트</th>
+            <th class="px-4 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-gray-400">상태</th>
+            <th class="px-4 py-2 text-right text-[11px] font-medium uppercase tracking-wider text-gray-400">소요시간</th>
+          </tr>
+        </thead>
+        <tbody class="text-[13px]">
+          <tr class="border-b border-gray-100/50 hover:bg-gray-50 transition-colors cursor-pointer">
+            <td class="px-4 py-2.5 font-medium">코드 리뷰 — PR #487</td>
+            <td class="px-4 py-2.5 text-gray-500">Critique</td>
+            <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span><span class="text-gray-500">완료</span></span></td>
+            <td class="px-4 py-2.5 text-right text-gray-400">1.2초</td>
+          </tr>
+          <tr class="border-b border-gray-100/50 hover:bg-gray-50 transition-colors cursor-pointer">
+            <td class="px-4 py-2.5 font-medium">API 엔드포인트 생성</td>
+            <td class="px-4 py-2.5 text-gray-500">Decomposer</td>
+            <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span><span class="text-gray-500">실행중</span></span></td>
+            <td class="px-4 py-2.5 text-right text-gray-400">—</td>
+          </tr>
+          <tr class="border-b border-gray-100/50 hover:bg-gray-50 transition-colors cursor-pointer">
+            <td class="px-4 py-2.5 font-medium">DB 스키마 마이그레이션</td>
+            <td class="px-4 py-2.5 text-gray-500">Router</td>
+            <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-gray-300"></span><span class="text-gray-500">대기</span></span></td>
+            <td class="px-4 py-2.5 text-right text-gray-400">—</td>
+          </tr>
+          <tr class="hover:bg-gray-50 transition-colors cursor-pointer">
+            <td class="px-4 py-2.5 font-medium">성능 프로파일링</td>
+            <td class="px-4 py-2.5 text-gray-500">Supervisor</td>
+            <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span><span class="text-gray-500">실패</span></span></td>
+            <td class="px-4 py-2.5 text-right text-gray-400">0.4초</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <!-- Dark Table -->
+  <div>
+    <p class="text-[12px] text-gray-400 mb-3">Dark Table (KR-6): white/opacity text hierarchy, monospace for technical</p>
+    <div class="rounded-lg bg-[#14141e] p-4">
+      <div class="rounded-md border border-white/5 overflow-hidden">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b border-white/5 bg-white/[0.02]">
+              <th class="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-white/30">에이전트</th>
+              <th class="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-white/30">상태</th>
+              <th class="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-white/30">모델</th>
+              <th class="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-wider text-white/30">성공률</th>
+            </tr>
+          </thead>
+          <tbody class="text-[13px]">
+            <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium text-white/90">Critique Agent</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="text-white/50">활성</span></span></td>
+              <td class="px-4 py-2.5"><span class="font-mono text-[12px] text-white/40">claude-opus</span></td>
+              <td class="px-4 py-2.5 text-right text-white/70">98.5%</td>
+            </tr>
+            <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium text-white/90">Router Agent</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-blue-400"></span><span class="text-white/50">실행중</span></span></td>
+              <td class="px-4 py-2.5"><span class="font-mono text-[12px] text-white/40">gpt-4o</span></td>
+              <td class="px-4 py-2.5 text-right text-white/70">94.2%</td>
+            </tr>
+            <tr class="hover:bg-white/[0.02] transition-colors cursor-pointer">
+              <td class="px-4 py-2.5 font-medium text-white/90">Supervisor</td>
+              <td class="px-4 py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-red-400"></span><span class="text-white/50">오류</span></span></td>
+              <td class="px-4 py-2.5"><span class="font-mono text-[12px] text-white/40">gpt-4o</span></td>
+              <td class="px-4 py-2.5 text-right"><span class="text-red-400">72.1%</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SECTION 5: Inputs
+     ============================================================ -->
+<div class="border-b border-gray-100 px-6 py-4 bg-gray-50">
+  <span class="section-label">5. Input Fields</span>
+  <h2 class="text-[15px] font-semibold mt-1">Text, Search (light + dark), with labels</h2>
+</div>
+
+<div class="px-6 py-6 space-y-6">
+  <div class="max-w-md space-y-4">
+    <div>
+      <label class="block text-[13px] font-medium text-gray-700 mb-1.5">프로젝트 이름</label>
+      <input type="text" placeholder="예: 웹사이트 리디자인" class="h-9 w-full rounded-md border border-gray-200 bg-white px-3 text-[13px] text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-colors">
+      <p class="mt-1 text-[12px] text-gray-400">영문, 한글, 숫자를 조합하여 입력하세요</p>
+    </div>
+    <div>
+      <label class="block text-[13px] font-medium text-gray-700 mb-1.5">에이전트 모델</label>
+      <input type="text" value="claude-opus-4" class="h-9 w-full rounded-md border border-gray-200 bg-white px-3 text-[13px] text-gray-900 font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-colors">
+    </div>
+    <div>
+      <label class="block text-[13px] font-medium text-red-600 mb-1.5">오류 상태</label>
+      <input type="text" value="잘못된 값" class="h-9 w-full rounded-md border border-red-300 bg-white px-3 text-[13px] text-gray-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500/20 transition-colors">
+      <p class="mt-1 text-[12px] text-red-500">유효하지 않은 형식입니다</p>
+    </div>
+  </div>
+
+  <!-- Search inputs -->
+  <div class="flex items-center gap-4">
+    <div>
+      <p class="text-[12px] text-gray-400 mb-2">Search — Light (GL-1)</p>
+      <div class="relative">
+        <svg class="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" placeholder="검색..." class="h-8 w-64 rounded-md border border-gray-200 bg-gray-50 pl-8 pr-3 text-[13px] placeholder-gray-400 focus:bg-white focus:border-gray-300 focus:outline-none transition-colors">
+      </div>
+    </div>
+    <div>
+      <p class="text-[12px] text-gray-400 mb-2">Search — Dark (KR-6)</p>
+      <div class="rounded-lg bg-[#14141e] p-3">
+        <input type="text" placeholder="검색..." class="h-8 w-48 rounded-md border border-white/10 bg-white/5 px-3 text-[13px] text-white/80 placeholder-white/30 focus:border-white/20 focus:outline-none">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SECTION 6: Badges & Tags
+     ============================================================ -->
+<div class="border-b border-gray-100 px-6 py-4 bg-gray-50">
+  <span class="section-label">6. Badges & Tags</span>
+  <h2 class="text-[15px] font-semibold mt-1">Dot status, Pill badge, Gray-default badges</h2>
+</div>
+
+<div class="px-6 py-6 space-y-6">
+  <!-- Status dots -->
+  <div>
+    <p class="text-[12px] text-gray-400 mb-3">Status Dots (GL-1) — 4색만 사용</p>
+    <div class="flex items-center gap-6">
+      <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span><span class="text-[13px] text-gray-500">완료 / 활성</span></span>
+      <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span><span class="text-[13px] text-gray-500">실행중</span></span>
+      <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-gray-300"></span><span class="text-[13px] text-gray-500">대기 / 비활성</span></span>
+      <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-red-500"></span><span class="text-[13px] text-gray-500">실패 / 오류</span></span>
+    </div>
+  </div>
+
+  <!-- Pill badge -->
+  <div>
+    <p class="text-[12px] text-gray-400 mb-3">Pill Badge (KR-2) — 버전, 알림용</p>
+    <div class="flex items-center gap-3">
+      <div class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1">
+        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+        <span class="text-[12px] font-medium text-gray-500">v2.0 출시</span>
+      </div>
+      <div class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1">
+        <span class="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+        <span class="text-[12px] font-medium text-gray-500">Beta</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gray-default badges -->
+  <div>
+    <p class="text-[12px] text-gray-400 mb-3">Gray-Default Badges — 대부분 gray, 시맨틱 색상은 2개까지만</p>
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="rounded-sm bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">Draft</span>
+      <span class="rounded-sm bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">Pending</span>
+      <span class="rounded-sm bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">Archived</span>
+      <span class="rounded-sm bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">In Review</span>
+      <span class="rounded-sm bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">Failed</span>
+      <span class="rounded-sm bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">Success</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SECTION 7: Modal
+     ============================================================ -->
+<div class="border-b border-gray-100 px-6 py-4 bg-gray-50">
+  <span class="section-label">7. Modal</span>
+  <h2 class="text-[15px] font-semibold mt-1">Static modal preview (not interactive)</h2>
+</div>
+
+<div class="px-6 py-6">
+  <div class="relative rounded-lg bg-black/50 p-12 flex items-center justify-center">
+    <div class="w-full max-w-md rounded-lg border border-gray-200 bg-white">
+      <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <h3 class="text-[15px] font-semibold">에이전트 삭제</h3>
+        <button class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors cursor-pointer">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="px-5 py-4">
+        <p class="text-[13px] text-gray-500 leading-relaxed">이 에이전트를 삭제하면 관련된 모든 실행 기록이 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.</p>
+      </div>
+      <div class="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3">
+        <button class="rounded-md border border-gray-200 px-3 py-1.5 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">취소</button>
+        <button class="rounded-md bg-red-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-red-700 transition-colors cursor-pointer">삭제</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SECTION 8: Toast
+     ============================================================ -->
+<div class="border-b border-gray-100 px-6 py-4 bg-gray-50">
+  <span class="section-label">8. Toast</span>
+  <h2 class="text-[15px] font-semibold mt-1">Bottom-right toast (shadow-sm 허용 예외)</h2>
+</div>
+
+<div class="px-6 py-6">
+  <div class="flex items-start gap-4">
+    <div class="inline-flex items-center gap-3 rounded-md border border-gray-200 bg-white px-4 py-3 text-[13px] shadow-sm">
+      <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+      <span class="text-gray-700">에이전트가 성공적으로 생성되었습니다.</span>
+      <button class="ml-2 text-gray-400 hover:text-gray-600 cursor-pointer">
+        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="inline-flex items-center gap-3 rounded-md border border-gray-200 bg-white px-4 py-3 text-[13px] shadow-sm">
+      <span class="h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
+      <span class="text-gray-700">실행에 실패했습니다. 다시 시도해주세요.</span>
+      <button class="ml-2 text-gray-400 hover:text-gray-600 cursor-pointer">
+        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SECTION 9: Icon + Text Alignment
+     ============================================================ -->
+<div class="border-b border-gray-100 px-6 py-4 bg-gray-50">
+  <span class="section-label">9. Icon + Text</span>
+  <h2 class="text-[15px] font-semibold mt-1">flex items-center gap-2, color on container</h2>
+</div>
+
+<div class="px-6 py-6 space-y-4">
+  <div class="flex items-center gap-6">
+    <!-- Correct: color on container -->
+    <div class="flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors cursor-pointer">
+      <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 4v16m8-8H4"/></svg>
+      <span class="text-[13px]">새 항목 추가</span>
+    </div>
+    <div class="flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors cursor-pointer">
+      <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+      <span class="text-[13px]">다운로드</span>
+    </div>
+    <div class="flex items-center gap-2 text-red-500 hover:text-red-700 transition-colors cursor-pointer">
+      <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+      <span class="text-[13px]">삭제</span>
+    </div>
+  </div>
+
+  <!-- Nav-style list -->
+  <div class="w-48 rounded-md border border-gray-200 bg-white p-1">
+    <a class="flex items-center gap-2 rounded-md bg-gray-100 px-3 py-2 text-gray-900 cursor-pointer">
+      <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      <span class="text-[13px] font-medium">대시보드</span>
+    </a>
+    <a class="flex items-center gap-2 rounded-md px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">
+      <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      <span class="text-[13px]">프로젝트</span>
+    </a>
+    <a class="flex items-center gap-2 rounded-md px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer">
+      <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      <span class="text-[13px]">설정</span>
+    </a>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="border-t border-gray-100 px-6 py-6 bg-gray-50">
+  <p class="text-[12px] text-gray-400">design-components.md 전체 컴포넌트 테스트 — 모든 패턴이 production-grade로 렌더링되는지 검증</p>
+  <p class="text-[12px] text-gray-400 mt-1">Nav (3종) | Buttons (light/dark/sizes) | Cards (stat/feature/dark) | Tables (light/dark) | Inputs (text/search) | Badges (dot/pill/gray) | Modal | Toast | Icon+Text</p>
+</div>
+
+</body>
+</html>
