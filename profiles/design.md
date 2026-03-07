@@ -295,6 +295,58 @@ These are actual values extracted from production services. Use them as concrete
 | Data / Spreadsheet | GL-38, GL-1, KR-6 | Multi-color labels, data grids, table-first layouts |
 | Fashion / E-commerce | KR-13, KR-14, KR-7 | Black-dominant, photography-first, mobile-first cards |
 
+#### Reference Selection Decision Tree
+
+Follow this tree to pick references. Start at the top, answer each question, follow the arrow.
+
+```
+START: What are you building?
+│
+├─ SaaS App (dashboard, settings, data views)?
+│  ├─ Korean market? → KR-4 + KR-6 + GL-1
+│  │  └─ Fintech? → KR-1 + GL-3 (trust-first, spacious)
+│  │  └─ HR / enterprise? → KR-4 + KR-10 (module colors, blue accent)
+│  │  └─ CRM / data-heavy? → KR-6 + GL-1 (dark tables, dot status)
+│  │  └─ Analytics? → KR-9 + GL-12 (dark-first, functional)
+│  └─ Global market? → GL-1 + GL-2
+│     └─ Developer tool? → GL-2 + GL-7 + GL-14 (monospace, dark, precision)
+│     └─ Project management? → GL-1 + GL-10 (restraint, lists, dot status)
+│     └─ Email / communication? → GL-9 + KR-5 (speed, density, large targets)
+│     └─ Database / spreadsheet? → GL-38 + GL-1 (multi-color labels, data grids)
+│
+├─ Marketing / Landing Page?
+│  ├─ Korean B2B? → KR-2 + GL-3 (indigo pill, typographic hero)
+│  │  └─ Add KR-1 for trust signals (card-free, logo strip)
+│  ├─ Korean B2C / consumer? → KR-7 + KR-13 (product cards, trust)
+│  │  └─ Fashion? → KR-13 + KR-14 (black, photography-first)
+│  │  └─ Education? → KR-11 + KR-12 (coral/teal, content-heavy)
+│  └─ Global B2B? → GL-3 + GL-4 (typographic confidence, enterprise trust)
+│     └─ Developer audience? → GL-32 + GL-34 (black primary, code-first)
+│     └─ Design audience? → GL-37 + GL-36 (typography-first, creative)
+│
+├─ E-commerce / Marketplace?
+│  ├─ Korean? → KR-3 + KR-7 + KR-14 (dense, portal-adjacent, mobile-first)
+│  │  └─ Fashion? → KR-13 + KR-14 (black, photography, card grid)
+│  └─ Global? → GL-38 Admin + GL-1 (data grids, functional color)
+│
+├─ Documentation / Content?
+│  ├─ Developer docs? → GL-35 + GL-34 (code examples, sky accent)
+│  ├─ Notes / wiki? → GL-6 + KR-1 (content-first, minimal chrome)
+│  └─ API reference? → GL-32 + GL-35 (black, developer minimalism)
+│
+└─ Design / Creative Tool?
+   └─ → GL-37 + GL-36 + GL-8 (panel precision, typography-first)
+```
+
+**Mixing Rules**:
+- Always pick at least 2 references (prevents copying a single product)
+- Mix regions when appropriate: Korean product + Global product
+- When mixing: Korean ref sets the density/typography, Global ref sets the component patterns
+- If no Korean reference fits: use GL-1 as anchor (safest default)
+- If no Global reference fits: use KR-2 as anchor (cleanest Korean SaaS)
+
+**Component Library**: For detailed component patterns from each reference, see `profiles/design-components.md`
+
 #### Comparison Gate — MANDATORY After Every Generation
 
 After generating UI code, perform this element-by-element comparison against your declared references:
