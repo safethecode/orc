@@ -192,6 +192,27 @@ These are actual values extracted from production services. Use them as concrete
 - Signature: Content-first, minimal chrome, generous whitespace, slash-command UX, block-based editing
 - Does NOT use: Dense dashboards, colorful badges, dark mode default, aggressive CTAs
 
+**GL-9** — Premium email client
+- Font: proprietary sans (Super Sans), proprietary serif (Super Serif), proprietary mono (Super Sans Mono) — all variable weight 100-900
+- Signature: Custom typography system, speed-obsessed UX, keyboard-first, email density, split-pane layout
+- Does NOT use: Colorful palettes, playful branding, decorative elements, heavy illustrations, slow animations
+
+**GL-10** — Enterprise project management
+- Primary: `#0d0d0d` (black) | Coral: `#690031`→`#ffeaec` | Blue: `#222875`→`#cbefff` | Green: `#004232`→`#c9fcdb`
+- Font: Ghost (headings), TWK Lausanne (body), Consolas (mono) | H1: 40-72px, Body: 14-16px
+- Spacing: 16px base (spacing-1) → 160px (spacing-10) | Radius: 3px | Grid: 12-col, 32px gutter
+- Breakpoints: 480/768/960/1120/1280/1440/1920px
+- Signature: Multi-color theme system (white/gray/dark per section), custom icon font, enterprise trust
+- Does NOT use: Gradients, heavy shadows on interactive elements, transform animations
+
+**GL-13** — Product analytics (mixed-method)
+- Primary: `#7856ff` (purple) | Blue: `#72bef4` | Teal: `#7fe1d8` | Orange: `#ff7557` | Green: `#3ba974`
+- Neutral: `#1f2023` (dark), `#fafafa` (light) | BG: `#000000`, `#ffffff`
+- Font: Inter (primary), DM Sans, Garnett, Apercu Pro | Sizes: 12-16px base
+- Layout: 1440px max-width | Breakpoints: 807/1200/1440px
+- Signature: Rich purple palette, multi-color data visualization, analytics-dense dashboards
+- Does NOT use: Box shadows, gradient overlays, explicit border-radius tokens
+
 **GL-12** — Open-source product analytics
 - Primary: `#2563eb` (blue) | Font: IBM Plex Sans Variable
 - Signature: Functional minimalism, developer-oriented, open-source ethos, analytics dashboards, hedgehog mascot
