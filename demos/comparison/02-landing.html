@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparison: Landing Page — AI Default vs Reference-based</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css');
+  * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  body { -webkit-font-smoothing: antialiased; word-break: keep-all; }
+</style>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        indigo: { 50: '#eef2ff', 100: '#e0e7ff', 800: '#312e81', 900: '#1e1b4b' },
+        surface: { 50: '#fafafa', 100: '#f5f5f5', 200: '#e5e7eb', 300: '#d1d5db' },
+        txt: { 900: '#04070d', 700: '#374151', 500: '#6b7280', 400: '#9ca3af' },
+      }
+    }
+  }
+}
+</script>
+</head>
+<body class="bg-gray-100">
+
+<!-- Comparison Header -->
+<div class="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-3">
+  <div class="max-w-[1800px] mx-auto flex items-center justify-between">
+    <h1 class="text-[15px] font-bold tracking-tight">Landing Page Comparison</h1>
+    <div class="flex items-center gap-6 text-[12px]">
+      <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-red-400"></span>AI Default — 레퍼런스 없이 생성</span>
+      <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Reference-based — KR-2 + GL-3 참조</span>
+    </div>
+  </div>
+</div>
+
+<div class="max-w-[1800px] mx-auto grid grid-cols-2 gap-4 p-4">
+
+<!-- ===== LEFT: AI DEFAULT ===== -->
+<div class="rounded-xl border-2 border-red-200 overflow-hidden">
+  <div class="bg-red-50 px-4 py-2 text-[12px] font-semibold text-red-700 border-b border-red-200">
+    AI Default — 그라디언트 히어로, glassmorphism, bento, 과도한 장식
+  </div>
+
+  <div class="bg-white">
+    <!-- AI: Gradient hero -->
+    <section class="relative bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 text-white overflow-hidden">
+      <!-- AI: Decorative blobs -->
+      <div class="absolute top-20 left-10 h-72 w-72 rounded-full bg-purple-500/30 blur-3xl"></div>
+      <div class="absolute bottom-10 right-20 h-56 w-56 rounded-full bg-blue-500/20 blur-3xl"></div>
+
+      <nav class="relative z-10 flex items-center justify-between px-8 py-4">
+        <span class="text-xl font-bold">✨ OrcFlow</span>
+        <div class="flex items-center gap-4">
+          <a class="text-sm text-white/70 hover:text-white">기능</a>
+          <a class="text-sm text-white/70 hover:text-white">가격</a>
+          <button class="rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 px-5 py-2 text-sm font-medium text-white hover:bg-white/20">시작하기</button>
+        </div>
+      </nav>
+
+      <div class="relative z-10 px-8 py-24 text-center max-w-3xl mx-auto">
+        <!-- AI: Gradient text -->
+        <h1 class="text-5xl font-extrabold leading-tight bg-gradient-to-r from-white via-purple-200 to-blue-200 bg-clip-text text-transparent">
+          AI 에이전트가 코드를<br>작성하고, 리뷰하고, 배포합니다
+        </h1>
+        <p class="mt-6 text-lg text-white/60 max-w-xl mx-auto">
+          멀티 에이전트 오케스트레이션으로 개발 워크플로우를 자동화하세요.
+        </p>
+        <div class="mt-8 flex items-center justify-center gap-4">
+          <!-- AI: Gradient button with shadow -->
+          <button class="rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 px-8 py-3.5 text-base font-bold text-white shadow-xl shadow-purple-500/30 hover:scale-105 transition-transform">무료로 시작하기 →</button>
+          <!-- AI: Glassmorphism button -->
+          <button class="rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 px-8 py-3.5 text-base text-white hover:bg-white/20">데모 보기</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- AI: Bento grid features -->
+    <section class="px-8 py-16 bg-gray-50">
+      <h2 class="text-center text-3xl font-bold mb-12">🚀 강력한 기능들</h2>
+      <div class="grid grid-cols-3 gap-4 max-w-4xl mx-auto">
+        <!-- AI: Each card different gradient -->
+        <div class="col-span-2 rounded-3xl bg-gradient-to-br from-blue-50 to-indigo-100 p-8 border border-blue-200/50">
+          <h3 class="text-lg font-bold text-blue-900">Ideation Agent</h3>
+          <p class="mt-2 text-sm text-blue-700/70">요구사항을 분석하고 구현 전략을 제안합니다.</p>
+        </div>
+        <div class="rounded-3xl bg-gradient-to-br from-purple-50 to-pink-100 p-8 border border-purple-200/50">
+          <h3 class="text-lg font-bold text-purple-900">Decomposer</h3>
+          <p class="mt-2 text-sm text-purple-700/70">태스크를 서브태스크로 분해합니다.</p>
+        </div>
+        <div class="rounded-3xl bg-gradient-to-br from-emerald-50 to-teal-100 p-8 border border-emerald-200/50">
+          <h3 class="text-lg font-bold text-emerald-900">Critique Agent</h3>
+          <p class="mt-2 text-sm text-emerald-700/70">코드 품질을 검증합니다.</p>
+        </div>
+        <div class="col-span-2 rounded-3xl bg-gradient-to-br from-orange-50 to-amber-100 p-8 border border-orange-200/50">
+          <h3 class="text-lg font-bold text-orange-900">Supervisor Agent</h3>
+          <p class="mt-2 text-sm text-orange-700/70">전체 워크플로우를 감독합니다.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ===== RIGHT: REFERENCE-BASED (KR-2 + GL-3) ===== -->
+<div class="rounded-xl border-2 border-emerald-200 overflow-hidden">
+  <div class="bg-emerald-50 px-4 py-2 text-[12px] font-semibold text-emerald-700 border-b border-emerald-200">
+    Reference-based — KR-2 인디고 pill CTA + GL-3 타이포그래피 자신감. 솔리드 배경, 장식 없음
+  </div>
+
+  <div class="bg-white">
+    <!-- Reference: Clean nav, no gradient, no glassmorphism -->
+    <header class="sticky top-10 z-40 border-b border-surface-200/60 bg-white/80 backdrop-blur-md">
+      <div class="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
+        <div class="flex items-center gap-8">
+          <span class="text-[15px] font-bold tracking-tight text-indigo-800">OrcFlow</span>
+          <nav class="flex items-center gap-6">
+            <a class="text-[13px] text-txt-500 hover:text-txt-900 transition-colors cursor-pointer">기능</a>
+            <a class="text-[13px] text-txt-500 hover:text-txt-900 transition-colors cursor-pointer">가격</a>
+            <a class="text-[13px] text-txt-500 hover:text-txt-900 transition-colors cursor-pointer">문서</a>
+          </nav>
+        </div>
+        <div class="flex items-center gap-3">
+          <a class="text-[13px] text-txt-500 hover:text-txt-900 transition-colors cursor-pointer">로그인</a>
+          <button class="rounded-full bg-indigo-800 px-4 py-2 text-[13px] font-medium text-white hover:bg-indigo-900 transition-colors cursor-pointer">무료로 시작하기</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Reference: Typographic hero, solid bg, left-aligned -->
+    <section class="mx-auto max-w-5xl px-6 pb-16 pt-20">
+      <div class="max-w-2xl">
+        <div class="mb-4 inline-flex items-center gap-2 rounded-full border border-surface-200 bg-surface-50 px-3 py-1">
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+          <span class="text-[12px] font-medium text-txt-500">v2.0 출시</span>
+        </div>
+        <h1 class="text-[40px] font-bold leading-[1.15] tracking-tight">
+          AI 에이전트가<br>코드를 작성하고,<br>리뷰하고, 배포합니다
+        </h1>
+        <p class="mt-4 max-w-lg text-[16px] leading-relaxed text-txt-500">
+          멀티 에이전트 오케스트레이션으로 개발 워크플로우를 자동화하세요.
+          설계부터 테스트까지, 에이전트가 협업합니다.
+        </p>
+        <div class="mt-8 flex items-center gap-3">
+          <button class="rounded-full bg-indigo-800 px-6 py-2.5 text-[14px] font-medium text-white hover:bg-indigo-900 transition-colors cursor-pointer">시작하기</button>
+          <button class="rounded-full border border-surface-300 px-6 py-2.5 text-[14px] font-medium text-txt-700 hover:bg-surface-50 transition-colors cursor-pointer">데모 보기</button>
+        </div>
+        <div class="mt-6 flex items-center gap-4 text-[12px] text-txt-400">
+          <span>카드 등록 불필요</span>
+          <span class="h-0.5 w-0.5 rounded-full bg-surface-300"></span>
+          <span>14일 무료 체험</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Reference: Uniform cards on #fafafa, border only, same size -->
+    <section class="bg-surface-50 py-16">
+      <div class="mx-auto max-w-5xl px-6">
+        <div class="mb-10">
+          <h2 class="text-[24px] font-bold tracking-tight">에이전트 시스템</h2>
+          <p class="mt-2 max-w-md text-[14px] leading-relaxed text-txt-500">각 에이전트가 전문 역할을 수행하며, Supervisor가 전체 흐름을 조율합니다.</p>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <article class="rounded-md border border-surface-200 bg-white p-5">
+            <div class="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-indigo-50 text-indigo-800">
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            </div>
+            <h3 class="text-[14px] font-semibold">Ideation Agent</h3>
+            <p class="mt-1.5 text-[13px] leading-relaxed text-txt-500">요구사항을 분석하고 구현 전략을 제안합니다.</p>
+          </article>
+          <article class="rounded-md border border-surface-200 bg-white p-5">
+            <div class="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-indigo-50 text-indigo-800">
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z"/></svg>
+            </div>
+            <h3 class="text-[14px] font-semibold">Decomposer Agent</h3>
+            <p class="mt-1.5 text-[13px] leading-relaxed text-txt-500">복잡한 태스크를 실행 가능한 서브태스크로 분해합니다.</p>
+          </article>
+          <article class="rounded-md border border-surface-200 bg-white p-5">
+            <div class="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-indigo-50 text-indigo-800">
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            </div>
+            <h3 class="text-[14px] font-semibold">Supervisor Agent</h3>
+            <p class="mt-1.5 text-[13px] leading-relaxed text-txt-500">전체 워크플로우를 감독하고 에이전트 간 협업을 조율합니다.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+</div>
+
+<!-- Annotation -->
+<div class="max-w-[1800px] mx-auto px-4 pb-8">
+  <div class="rounded-lg border border-gray-200 bg-white p-6">
+    <h2 class="text-[15px] font-bold mb-4">차이점 분석</h2>
+    <div class="grid grid-cols-2 gap-6 text-[13px]">
+      <div>
+        <h3 class="font-semibold text-red-600 mb-2">AI Default 문제점</h3>
+        <ul class="space-y-1 text-txt-700">
+          <li>1. purple→indigo→blue 그라디언트 히어로</li>
+          <li>2. 장식용 blob (blur-3xl 원형 2개)</li>
+          <li>3. 그라디언트 텍스트 (bg-clip-text)</li>
+          <li>4. glassmorphism 버튼 (backdrop-blur + white/10)</li>
+          <li>5. gradient CTA (purple→pink) + shadow</li>
+          <li>6. hover:scale-105 버튼</li>
+          <li>7. bento grid (col-span-2 비대칭)</li>
+          <li>8. 카드마다 다른 그라디언트 색상 (4가지)</li>
+          <li>9. rounded-3xl 과도한 radius</li>
+          <li>10. 중앙 정렬 히어로 (generic)</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="font-semibold text-emerald-600 mb-2">Reference-based 해결</h3>
+        <ul class="space-y-1 text-txt-700">
+          <li>1. 솔리드 화이트 배경 (KR-2: #fafafa)</li>
+          <li>2. 장식 요소 0개</li>
+          <li>3. 순수 텍스트 (타이포그래피가 디자인)</li>
+          <li>4. 솔리드 인디고 pill CTA (KR-2 스타일)</li>
+          <li>5. 단색 버튼 + border 버튼 (GL-3 스타일)</li>
+          <li>6. hover:bg-color 만 (transition-colors)</li>
+          <li>7. 균일한 3x2 그리드 (같은 크기)</li>
+          <li>8. 전체 카드 동일 스타일 (white + border)</li>
+          <li>9. rounded-md (6px) + rounded-full (pill CTA)</li>
+          <li>10. 좌측 정렬 히어로 (GL-3 자신감)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
