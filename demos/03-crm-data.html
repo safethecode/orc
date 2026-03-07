@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 3: CRM Data View — Relate + Linear reference</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css');
+  * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  body { -webkit-font-smoothing: antialiased; word-break: keep-all; letter-spacing: -0.01em; }
+</style>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        dark: { 950: '#0a0a0f', 900: '#14141e', 800: '#1e1e2e', 700: '#2a2a3d' },
+        bdr: { DEFAULT: 'rgba(255,255,255,0.08)', strong: 'rgba(255,255,255,0.12)' },
+        t: { 50: '#f8fafc', 100: '#e2e8f0', 300: '#94a3b8', 400: '#64748b', 500: '#475569' },
+        accent: { 500: '#3b82f6', 600: '#2563eb' },
+      }
+    }
+  }
+}
+</script>
+</head>
+<body class="bg-dark-950 text-t-50">
+
+<div class="flex h-screen">
+  <!-- Sidebar: Relate-style dark unified, Linear-style nav restraint -->
+  <aside class="flex w-56 flex-col border-r border-bdr bg-dark-900">
+    <div class="flex h-12 items-center px-4">
+      <span class="text-[13px] font-semibold text-t-100">OrcFlow CRM</span>
+    </div>
+    <nav class="flex-1 px-2 py-2">
+      <ul class="space-y-0.5 text-[13px]">
+        <li><a href="#" class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-t-300 hover:bg-dark-800 hover:text-t-100 transition-colors cursor-pointer">
+          <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          홈</a></li>
+        <li><a href="#" class="flex items-center gap-2 rounded-md bg-dark-800 px-2.5 py-1.5 text-t-50 font-medium cursor-pointer">
+          <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          에이전트</a></li>
+        <li><a href="#" class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-t-300 hover:bg-dark-800 hover:text-t-100 transition-colors cursor-pointer">
+          <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          태스크</a></li>
+        <li><a href="#" class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-t-300 hover:bg-dark-800 hover:text-t-100 transition-colors cursor-pointer">
+          <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          분석</a></li>
+        <li><a href="#" class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-t-300 hover:bg-dark-800 hover:text-t-100 transition-colors cursor-pointer">
+          <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          설정</a></li>
+      </ul>
+    </nav>
+    <div class="border-t border-bdr px-3 py-3">
+      <div class="flex items-center gap-2">
+        <div class="h-6 w-6 rounded-full bg-accent-500 flex items-center justify-center">
+          <span class="text-[10px] font-medium text-white">S</span>
+        </div>
+        <span class="text-[12px] text-t-300">workspace</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main: Relate-style data table on dark surface -->
+  <main class="flex-1 overflow-auto">
+    <div class="border-b border-bdr px-6 py-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-[16px] font-semibold">에이전트 관리</h1>
+          <p class="mt-0.5 text-[12px] text-t-400">18개 에이전트 등록됨</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="rounded-md border border-bdr-strong px-3 py-1.5 text-[12px] text-t-300 hover:bg-dark-800 transition-colors cursor-pointer">필터</button>
+          <button class="rounded-md bg-accent-500 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-accent-600 transition-colors cursor-pointer">에이전트 추가</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data table: Linear-style dense rows, Relate-style dark -->
+    <div class="px-6 py-4">
+      <table class="w-full">
+        <thead>
+          <tr class="border-b border-bdr">
+            <th class="pb-2 text-left text-[11px] font-medium uppercase tracking-wider text-t-500">이름</th>
+            <th class="pb-2 text-left text-[11px] font-medium uppercase tracking-wider text-t-500">역할</th>
+            <th class="pb-2 text-left text-[11px] font-medium uppercase tracking-wider text-t-500">상태</th>
+            <th class="pb-2 text-left text-[11px] font-medium uppercase tracking-wider text-t-500">모델</th>
+            <th class="pb-2 text-right text-[11px] font-medium uppercase tracking-wider text-t-500">실행 횟수</th>
+            <th class="pb-2 text-right text-[11px] font-medium uppercase tracking-wider text-t-500">성공률</th>
+            <th class="pb-2 text-right text-[11px] font-medium uppercase tracking-wider text-t-500">평균 시간</th>
+          </tr>
+        </thead>
+        <tbody class="text-[13px]">
+          <tr class="border-b border-bdr/50 hover:bg-dark-800/50 transition-colors cursor-pointer">
+            <td class="py-2.5 font-medium text-t-50">Ideation</td>
+            <td class="py-2.5 text-t-300">전략 수립</td>
+            <td class="py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="text-t-300">활성</span></span></td>
+            <td class="py-2.5 text-t-400 font-mono text-[12px]">opus</td>
+            <td class="py-2.5 text-right text-t-300">342</td>
+            <td class="py-2.5 text-right text-t-300">99.1%</td>
+            <td class="py-2.5 text-right text-t-400">1.8초</td>
+          </tr>
+          <tr class="border-b border-bdr/50 hover:bg-dark-800/50 transition-colors cursor-pointer">
+            <td class="py-2.5 font-medium text-t-50">Decomposer</td>
+            <td class="py-2.5 text-t-300">태스크 분해</td>
+            <td class="py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="text-t-300">활성</span></span></td>
+            <td class="py-2.5 text-t-400 font-mono text-[12px]">opus</td>
+            <td class="py-2.5 text-right text-t-300">287</td>
+            <td class="py-2.5 text-right text-t-300">97.6%</td>
+            <td class="py-2.5 text-right text-t-400">2.4초</td>
+          </tr>
+          <tr class="border-b border-bdr/50 hover:bg-dark-800/50 transition-colors cursor-pointer">
+            <td class="py-2.5 font-medium text-t-50">Router</td>
+            <td class="py-2.5 text-t-300">라우팅</td>
+            <td class="py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="text-t-300">활성</span></span></td>
+            <td class="py-2.5 text-t-400 font-mono text-[12px]">sonnet</td>
+            <td class="py-2.5 text-right text-t-300">1,204</td>
+            <td class="py-2.5 text-right text-t-300">99.8%</td>
+            <td class="py-2.5 text-right text-t-400">0.3초</td>
+          </tr>
+          <tr class="border-b border-bdr/50 hover:bg-dark-800/50 transition-colors cursor-pointer">
+            <td class="py-2.5 font-medium text-t-50">Critique</td>
+            <td class="py-2.5 text-t-300">코드 리뷰</td>
+            <td class="py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-t-500"></span><span class="text-t-400">비활성</span></span></td>
+            <td class="py-2.5 text-t-400 font-mono text-[12px]">opus</td>
+            <td class="py-2.5 text-right text-t-300">156</td>
+            <td class="py-2.5 text-right text-t-300">94.2%</td>
+            <td class="py-2.5 text-right text-t-400">3.1초</td>
+          </tr>
+          <tr class="border-b border-bdr/50 hover:bg-dark-800/50 transition-colors cursor-pointer">
+            <td class="py-2.5 font-medium text-t-50">QA</td>
+            <td class="py-2.5 text-t-300">테스트</td>
+            <td class="py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="text-t-300">활성</span></span></td>
+            <td class="py-2.5 text-t-400 font-mono text-[12px]">sonnet</td>
+            <td class="py-2.5 text-right text-t-300">489</td>
+            <td class="py-2.5 text-right text-t-300">96.3%</td>
+            <td class="py-2.5 text-right text-t-400">4.2초</td>
+          </tr>
+          <tr class="border-b border-bdr/50 hover:bg-dark-800/50 transition-colors cursor-pointer">
+            <td class="py-2.5 font-medium text-t-50">Supervisor</td>
+            <td class="py-2.5 text-t-300">오케스트레이션</td>
+            <td class="py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span><span class="text-t-300">활성</span></span></td>
+            <td class="py-2.5 text-t-400 font-mono text-[12px]">opus</td>
+            <td class="py-2.5 text-right text-t-300">1,284</td>
+            <td class="py-2.5 text-right text-t-300">98.7%</td>
+            <td class="py-2.5 text-right text-t-400">0.8초</td>
+          </tr>
+          <tr class="hover:bg-dark-800/50 transition-colors cursor-pointer">
+            <td class="py-2.5 font-medium text-t-50">Design</td>
+            <td class="py-2.5 text-t-300">UI 설계</td>
+            <td class="py-2.5"><span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-red-400"></span><span class="text-t-400">오류</span></span></td>
+            <td class="py-2.5 text-t-400 font-mono text-[12px]">opus</td>
+            <td class="py-2.5 text-right text-t-300">23</td>
+            <td class="py-2.5 text-right text-red-400">67.4%</td>
+            <td class="py-2.5 text-right text-t-400">5.8초</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>
