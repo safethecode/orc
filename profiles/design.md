@@ -1189,6 +1189,51 @@ RULES:
 7. **Animation** — Overlays enter with `fade-in` + slight scale (`scale-95 → 100`). Exit with reverse. Duration: 150ms. Easing: `ease-out` for enter, `ease-in` for exit.
 8. **Multiple overlays** — Maximum 2 overlay layers visible at once (e.g., modal + tooltip inside modal). Never stack modal-on-modal — use in-modal navigation instead.
 
+### State Machine Protocol
+
+Every data-driven component MUST implement all 4 states. Shipping fewer than 4 is the single most common "AI-looking" failure — real products never show a blank screen.
+
+**4-State Flow (mandatory order of implementation):**
+
+```
+Loading → Error → Empty → Data
+```
+
+You must implement ALL FOUR. No exceptions. No "I'll add loading later." Generate them in this order.
+
+**1. Loading State (Skeleton):**
+- Base color: `bg-[#ebebeb]` (not gray-200 — too dark)
+- Highlight color: `bg-[#f5f5f5]`
+- Shimmer animation: `1.5s ease-in-out infinite` with gradient sweep left-to-right
+- Skeleton shapes MUST match the content layout exactly: if content has avatar + 2 lines + button, skeleton has circle + 2 rectangles + rectangle
+- Minimum display time: `300ms` — never flash skeleton for <300ms (use `setTimeout` or `Promise.all` with delay)
+- Tailwind: `animate-pulse` is acceptable but custom shimmer is preferred for polish
+
+**2. Error State:**
+- Wrap data components: `<ErrorBoundary>` wraps `<Suspense>`, never the reverse
+- Content: human-readable message (not error codes) + retry button
+- Layout: centered in the container the data would occupy, same height as content area
+- Retry button: `variant="outline"` with refresh icon, NOT primary style
+- Never show raw error messages to users — log to console, show friendly text
+
+**3. Empty State:**
+- Icon: `48px` muted illustration or icon (not emoji)
+- Heading: `16px / font-semibold / text-gray-900`
+- Description: `14px / font-normal / text-gray-500`, max 2 lines
+- CTA button: primary action to populate (e.g., "새 프로젝트 만들기", "팀원 초대하기")
+- Height: match the height the filled state would occupy — never collapse to tiny
+- Center vertically and horizontally within container
+
+**4. Data State:**
+- The normal content. Must handle 1 item AND 100+ items gracefully.
+
+**State Transition Rules:**
+- Transition timing: `150ms fade` between states
+- Loading → Data: fade skeleton out, fade content in
+- Loading → Error: fade skeleton out, fade error in
+- Data → Loading (refresh): show inline spinner or top progress bar, do NOT replace content with skeleton on refresh
+- Error → Loading (retry): show skeleton again
+
 ---
 
 <!-- ═══════════ END OF MANDATORY HARNESS — General design guide below ═══════════ -->
