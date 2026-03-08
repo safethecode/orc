@@ -1178,6 +1178,7 @@ Containers with `overflow-auto` or fixed heights that create scrollbars when con
 **FAILURE #15: RAINBOW BADGE / TAG SYNDROME**
 Every status badge uses a different color: blue for active, green for complete, amber for pending, purple for review, pink for draft, teal for archived. The page looks like a color palette demo, not a professional tool. Real SaaS products (GL-1, GL-6, GL-3) use color sparingly — most statuses are gray.
 → RULES: (1) Gray is the DEFAULT badge color. Use `bg-gray-100 text-gray-600` for any status that does not require immediate user attention: draft, active, pending, in review, archived, default, unknown. (2) Color is RESERVED for exactly 3 situations: red = danger/error/overdue/failed, amber = warning/needs attention, green = success/complete/approved. (3) Maximum 3 distinct badge colors on any single page (gray + up to 2 semantic colors). If you have 4+ colored badge variants, demote the least urgent ones to gray. (4) Never use blue, purple, pink, teal, or indigo for status badges — these are decorative, not semantic. The accent color (blue) is for interactive elements (buttons, links), NOT for status indicators. (5) "Traffic light test": if your badge colors don't map to red/amber/green intuition, they're decorative. (6) Reference: look at GL-1's status badges — most are subtle gray dots with text. GL-3's dashboard — statuses are almost entirely gray with only red for failed. That's the standard.
+→ EXTENDS TO NON-BADGE ELEMENTS: This rule applies to ALL repeated visual elements in lists/tables, not just badges. (7) **Project/entity icons** in a table or list: use ONE neutral color (`bg-gray-100 text-gray-600`) for all items. Each row having a different icon color (blue, amber, green, violet, orange) is the same rainbow problem — it makes the table look like a children's toy. (8) **Avatar fallbacks** in a table or list: use ONE color scheme (`bg-primary-100 text-primary-700`) for all avatars. Never assign each user a different avatar color (rose, emerald, violet, orange). Real products like GL-1 use a single gray or brand-colored avatar fallback. (9) "Color audit" for tables: scan every column. If any column has 3+ distinct colors across rows, unify to one neutral color. The only column allowed multiple colors is the status badge column — and even that follows rules (1)-(6).
 
 ### Interaction Layer Protocol
 
@@ -1548,7 +1549,8 @@ RULE: Every card in a grid uses `flex flex-col h-full` with `mt-auto` on the bot
 ```
 - Font: `font-mono` for consistent character width
 - Font size: `calc(containerSize / 2)`
-- Colors: `bg-primary-100 text-primary-700` (light bg, dark text)
+- Colors: `bg-primary-100 text-primary-700` (light bg, dark text) — use this SINGLE color for ALL avatars
+- NEVER assign different colors per user (rose for Kim, emerald for Lee, violet for Park = rainbow syndrome)
 - Always show first character of name, NEVER show broken image icon
 
 **Long Name Handling:**
@@ -1872,6 +1874,16 @@ All inputs: `rounded-md w-full transition-colors duration-150`
 - Active: `bg-accent text-gray-900 font-medium`
 - Section label: `px-3 py-2 text-xs font-medium text-gray-400 uppercase tracking-wider`
 - Transition: `duration-300 ease-out` for expand/collapse
+- **Collapsed state implementation (CRITICAL — do not skip):**
+  - Sidebar MUST have `overflow-hidden` — prevents text from leaking out during/after collapse
+  - Header: HIDE logo + brand name, show ONLY the toggle button centered (`justify-center`)
+  - Nav items: HIDE text labels, icon centered (`justify-center px-0`), remove `gap` between icon and text
+  - Section labels ("메뉴" etc.): `display:none` — they have no icon equivalent
+  - Footer: HIDE name + email, show ONLY avatar circle centered
+  - All icons must have `shrink-0` — prevents icon from compressing during width transition
+  - All text must have `whitespace-nowrap` — prevents text from wrapping to 2 lines during transition
+  - Use `title` attribute on nav items for tooltip on hover in collapsed state
+  - Test: toggle collapse → no text clipping, no overlap, no layout jump. If any element extends beyond `w-16`, it's broken.
 
 **Toast / Snackbar Contract:**
 - Position: `fixed bottom-6 right-6 z-[1400]`
