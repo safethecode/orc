@@ -668,6 +668,51 @@ These are actual values extracted from production services. Use them as concrete
 - Signature: Extension card grid (icon + title + desc + author + downloads), featured section, pill filters, protocol install links
 - Does NOT use: Ornamental graphics, decorative elements, heavy shadows, serif fonts
 
+##### Open-Source UI Libraries
+
+**GL-89** — Open-source component library (copy-paste architecture)
+- Primary: `oklch(0.205 0 0)` | Text: `oklch(0.145 0 0)` | BG: `oklch(1 0 0)`
+- Font: system stack | Radius: `0.625rem` default | Spacing: Tailwind scale
+- Code pattern: `cva()` for type-safe variant composition, `cn()` = `clsx` + `tailwind-merge`, OKLCH CSS variables with semantic `--foreground`/`--background` pairing
+- Signature: Components live in user codebase (not npm), Radix Primitives for accessibility, minimal variants per component
+- Does NOT use: Traditional library constraints, HSL color space (migrated to OKLCH), 12+ button variant anti-pattern
+- Source: button.tsx, tailwind.config.ts
+
+**GL-90** — Headless UI primitive library with theming
+- Primary: 12-step color scales | Text: steps 11-12 | BG: steps 1-2
+- Font: system defaults | Radius: 6-step scale with `--radius-factor` multiplier | Spacing: 9-step (4/8/12/16/24/32/40/48/64px)
+- Code pattern: `asChild` prop for composition (clones child, passes behavior), 12-step color scales with solid + alpha variants, 27+ color families, `var(--space-1)` through `var(--space-9)`
+- Signature: Headless unstyled components, granular part-based architecture, automatic light/dark with alpha variants
+- Does NOT use: Opinionated styling, fixed element rendering, proprietary color systems
+
+**GL-91** — Full-featured component library (open-color palette)
+- Primary: `#228BE6` (blue-6) | Text: `#212529` (gray-9) | BG: `#FFFFFF`
+- Font: system-ui stack, `Menlo, Monaco, Consolas` (mono) | Radius: xs(0.25rem) sm(0.5rem) md(1rem) lg(2rem) xl(3rem) | Spacing: xs(0.5rem) sm(0.75rem) md(1rem) lg(1.5rem) xl(2rem)
+- Code pattern: `polymorphicFactory` for type-safe component prop, hooks-first architecture, numbers auto-convert to rem (1rem=16px locked), 10-shade open-color system
+- Signature: Polymorphic components with `component` prop, extensive hooks library, rem-based sizing
+- Does NOT use: Baseline changes (1rem locked 16px), class-based styling (CSS-in-JS), arbitrary element restrictions
+
+**GL-92** — Dashboard-focused component library (data visualization)
+- Primary: `#3B82F6` (blue-500) | Text: slate tones | BG: white / slate-50
+- Font: Tailwind defaults | Radius: Tailwind scale | Spacing: Tailwind scale
+- Code pattern: Semantic token system (`tremor-brand-faint`, `tremor-brand-DEFAULT`, `tremor-content-emphasis`), light/dark token pairs, chart `colors` prop accepts custom hex, requires safelist for dynamic colors
+- Signature: Built on Radix + Tailwind, semantic naming for dashboard context, optimized for charts/tables/KPIs
+- Does NOT use: Non-semantic color references, client-side theme detection, complex state management
+
+**GL-93** — Utility-first Tailwind plugin (semantic component classes)
+- Primary: `oklch(49.12% 0.3096 275.75)` | Secondary: `oklch(69.71% 0.329 342.55)` | BG: base-100/200/300
+- Font: Tailwind defaults | Radius: Tailwind scale | Spacing: Tailwind scale
+- Code pattern: Component classes (`btn` not `px-4 py-2 rounded`), semantic color variables (`--color-primary`, `--color-secondary`) with `-content` contrast variants, `data-theme="name"` switching, OKLCH color space
+- Signature: 35 built-in themes, nested theme support, responsive modifiers on all components (v5+)
+- Does NOT use: Constant utility classes for components, hex/RGB (OKLCH only), class composition for standard patterns
+
+**GL-94** — Modern React UI library with motion integration
+- Primary: blue scale (default) | Text: foreground tokens | BG: background 100/200/300
+- Font: system stack | Radius: sm/md/lg in rem | Spacing: custom scale
+- Code pattern: TailwindCSS plugin (`tw-colors`), `layout` tokens (fontSize, lineHeight, radius, borderWidth, boxShadow, dividerWeight, disabledOpacity), 50-900 color scales with `foreground` + `DEFAULT`, Framer Motion integration
+- Signature: Theme switching via HTML classes, polymorphic rendering, built-in Framer Motion, border weights system
+- Does NOT use: Over-animation (transform/opacity only), inline animation logic, restrictive element types
+
 #### Reference Selection Matrix — Pick 2+ Before ANY UI Task
 
 | UI Type | MUST Reference (pick 2+) | WHY |
