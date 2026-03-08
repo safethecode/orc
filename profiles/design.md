@@ -1041,23 +1041,39 @@ After generating UI code, run this self-check. If ANY item is TRUE, **fix it bef
 - **UNNECESSARY SCROLL CHECK** — Any container with `overflow-auto`, `overflow-y-scroll`, or fixed height that creates a scrollbar when content fits without one? → Fix: remove fixed height or overflow property. Use `overflow-hidden` + `text-ellipsis` for truncation, not scroll. Scrollable areas are only justified for: (1) main content areas with genuinely unbounded data, (2) code blocks, (3) modals with long forms. A card, sidebar section, or widget should NEVER have its own scrollbar — restructure the layout instead.
 - **SEMANTIC MARKUP CHECK** — Any `<div>` or `<span>` where a semantic element exists? → Fix: `<nav>`, `<main>`, `<section>`, `<article>`, `<header>`, `<footer>`, `<aside>`, `<button>`, `<a>`, `<ul>`/`<li>`, `<figure>`, `<time>`, `<dialog>`. Wrapper divs that only add one class? → Fix: merge into parent or child. Nesting depth >4 without semantic reason? → Fix: flatten. Every `<div>` must justify its existence — if removing it changes nothing, delete it.
 
-### Component Library Policy
+### Component Library Policy (CVA Standard)
 
-**RULE: Never use a component library's default styling as-is.**
+**RULE: Never use a component library's default styling as-is. All components use CVA (class-variance-authority) pattern.**
 
-shadcn/ui is GENERIC. When every AI UI uses shadcn defaults, they all look the same.
+shadcn/ui is GENERIC. When every AI UI uses shadcn defaults, they all look the same. CVA enforces explicit variant contracts.
 
-Override these defaults:
-- `ring-2 ring-ring ring-offset-2` → `border-accent shadow-sm`
-- `h-10` → `h-12` (48px default), `h-8` (32px minimum for compact/dense)
-- `text-sm` everywhere → vary: 12px labels, 13px cells, 14px body
-- `gap-4` → `gap-2` or `gap-3` for related items
-- `p-6` card padding → `p-4`
+**Bad (raw className soup):**
+```tsx
+<button className={`px-4 py-2 rounded ${primary ? 'bg-blue-500' : 'bg-gray-200'} ${size === 'lg' ? 'text-lg' : 'text-sm'}`}>
+```
 
-Tables (shadcn fails hardest here):
-- Row height 36-40px (not 48-56px), header text-xs uppercase, cell padding px-3 py-2
-- Row hover bg-gray-50 instant (no transition), borders border-b border-gray-100
-- Remove outer card wrapper
+**Good (CVA pattern):**
+```tsx
+const buttonVariants = cva("inline-flex items-center justify-center font-medium transition-colors", {
+  variants: {
+    variant: { primary: "bg-primary-500 text-white hover:bg-primary-600", secondary: "border border-gray-300 bg-white hover:bg-gray-50" },
+    size: { sm: "h-8 px-3 text-xs rounded-md", md: "h-10 px-4 text-sm rounded-md", lg: "h-12 px-6 text-sm rounded-md" }
+  },
+  defaultVariants: { variant: "primary", size: "md" }
+});
+```
+
+**shadcn/ui Override Policy (mandatory overrides):**
+
+| Default | Override | Reason |
+|---|---|---|
+| `ring-2 ring-ring ring-offset-2` | `ring-2 ring-primary-500/50 ring-offset-2` | Brand-specific focus ring |
+| `h-10` (40px) | `h-12` (48px) default, `h-8` (32px) compact | Larger touch targets |
+| `text-sm` everywhere | 12px labels, 13px cells, 14px body | Typography hierarchy |
+| `gap-4` | `gap-2` or `gap-3` for related items | Korean density |
+| `p-6` card padding | `p-4` or `p-5` | Tighter cards |
+| Table `h-12` rows | `h-9` to `h-10` (36-40px) rows | Data density |
+| Table outer card | Remove wrapper | Cleaner table look |
 
 Squint Test: zoom to 50%. Can you tell which library? → Bad. Custom product feel? → Good.
 
@@ -1770,6 +1786,107 @@ Full-width, auto-sliding, 400-500px height, dot indicators bottom-center, gradie
 - Error: `text-xs text-red-500 mt-1` below input, border turns `border-red-500`
 - Button primary: `h-12 rounded-md bg-primary-500 text-white font-medium px-6 hover:bg-primary-600 active:bg-primary-700 transition-colors` (48px default, minimum 32px/h-8 for compact/dense UI)
 - Button secondary: `h-12 rounded-md border border-gray-300 bg-white font-medium px-6 hover:bg-gray-50`
+
+### Component Contracts
+
+Every component below has a fixed contract. Do NOT deviate from these specs. When in doubt, follow the contract exactly.
+
+**Button Contract:**
+
+| Variant | Classes |
+|---|---|
+| `primary` | `bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700` |
+| `secondary` | `border border-gray-300 bg-white text-gray-700 hover:bg-gray-50` |
+| `ghost` | `text-gray-600 hover:bg-gray-100 hover:text-gray-900` |
+| `danger` | `bg-red-500 text-white hover:bg-red-600 active:bg-red-700` |
+| `outline` | `border border-primary-300 text-primary-600 hover:bg-primary-50` |
+| `link` | `text-primary-500 hover:text-primary-600 underline-offset-4 hover:underline p-0 h-auto` |
+
+| Size | Height | Padding | Text | Icon | Tailwind |
+|---|---|---|---|---|---|
+| `xs` | 28px | `px-2` | `text-xs` | 14px | `h-7` |
+| `sm` | 32px | `px-3` | `text-xs` | 16px | `h-8` |
+| `md` | 40px | `px-4` | `text-sm` | 18px | `h-10` |
+| `lg` | 48px | `px-6` | `text-sm` | 20px | `h-12` |
+
+All buttons: `rounded-md font-medium transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary-500/50 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none`
+
+**Input Contract:**
+
+| Variant | Classes |
+|---|---|
+| `default` | `border border-gray-300 bg-white focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500` |
+| `error` | `border-red-500 focus:ring-2 focus:ring-red-500/50 focus:border-red-500` |
+| `disabled` | `bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed` |
+
+| Size | Height | Text | Tailwind |
+|---|---|---|---|
+| `sm` | 32px | `text-xs` | `h-8 px-2.5` |
+| `md` | 40px | `text-sm` | `h-10 px-3` |
+| `lg` | 48px | `text-sm` | `h-12 px-3` |
+
+All inputs: `rounded-md w-full transition-colors duration-150`
+
+**Table Contract:**
+- Header: `sticky top-0 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-2 text-left`
+- Row: `border-b border-gray-100 hover:bg-gray-50 h-9 lg:h-10`
+- Cell: `px-3 py-2 text-sm text-gray-900`
+- Row hover: instant (no transition), `bg-gray-50`
+- Responsive: wrap in `overflow-x-auto` container, min-width on table
+- No outer card wrapper, no rounded corners on table itself
+- Empty table: full-width empty state inside `<tbody>` with `colspan`
+
+**Dialog Contract:**
+- Backdrop: `fixed inset-0 bg-black/50 z-[1200]` with `animate-fade-in duration-150`
+- Panel: `z-[1300] bg-white rounded-xl max-h-[90vh] w-full` with size variants:
+  - `sm`: `max-w-sm` (384px) — confirmations
+  - `md`: `max-w-lg` (512px) — forms
+  - `lg`: `max-w-2xl` (672px) — complex content
+  - `xl`: `max-w-4xl` (896px) — data-heavy dialogs
+- Close: ESC key + backdrop click + explicit close button (top-right, `p-2`)
+- Scroll: body content scrolls (`overflow-y-auto`), header and footer are fixed
+- Header: `px-6 py-4 border-b border-gray-100 font-semibold text-lg`
+- Footer: `px-6 py-4 border-t border-gray-100 flex justify-end gap-2`
+- Animation: enter `scale-95 → 100 opacity-0 → 100` in `200ms ease-out`
+
+**Select / Combobox Contract:**
+- Trigger: matches Input contract sizing
+- Dropdown: `createPortal` to `document.body`, `z-[1000]`
+- Max dropdown height: `max-h-[240px] overflow-y-auto`
+- Positioning: smart flip (if near bottom edge, open upward)
+- Option height: `h-9 px-3 text-sm`
+- Option hover: `bg-accent`
+- Selected: `bg-accent font-medium` with check icon
+- Keyboard: arrow keys to navigate, Enter to select, ESC to close, type-ahead search
+- Empty: "검색 결과가 없습니다" message
+
+**Sidebar Contract:**
+- Width: `w-60` (240px) default, `w-70` (280px) for content-heavy
+- Collapsed: `w-16` (64px) icons only, tooltip on hover
+- State persistence: cookie (`sidebar:state=collapsed`), read in server `layout.tsx`
+- Structure:
+  - Header: `sticky top-0 h-14 px-4 border-b border-gray-100` — logo + collapse toggle
+  - Nav: `flex-1 overflow-y-auto py-2` — scrollable navigation items
+  - Footer: `sticky bottom-0 px-4 py-3 border-t border-gray-100` — user avatar + settings
+- Nav item: `h-9 px-3 rounded-md text-sm text-gray-600 hover:bg-accent hover:text-gray-900`
+- Active: `bg-accent text-gray-900 font-medium`
+- Section label: `px-3 py-2 text-xs font-medium text-gray-400 uppercase tracking-wider`
+- Transition: `duration-300 ease-out` for expand/collapse
+
+**Toast / Snackbar Contract:**
+- Position: `fixed bottom-6 right-6 z-[1400]`
+- Width: `w-80` (320px) to `w-96` (384px)
+- Auto-dismiss: `5000ms` (5 seconds), with progress bar indicator
+- Max visible: 3 toasts stacked, older ones collapse upward
+- Variants:
+  - `default`: `bg-white border border-gray-200 text-gray-900`
+  - `success`: `bg-white border-l-4 border-l-green-500`
+  - `error`: `bg-white border-l-4 border-l-red-500`
+  - `warning`: `bg-white border-l-4 border-l-amber-500`
+- Layout: icon (20px) + message (text-sm) + optional action link + close button
+- Animation: enter from right (`translateX(100%) → 0`) in `300ms ease-out`
+- Exit: fade out left (`opacity-0 translateX(-8px)`) in `150ms ease-in`
+- Close: explicit X button + swipe right on mobile
 
 ## Animation Patterns
 
