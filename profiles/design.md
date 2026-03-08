@@ -1430,6 +1430,107 @@ Korean sites use more saturated accents and color-coded information than Western
 - `font-feature-settings: "ss01"` for Pretendard stylistic alternates
 - Never use `text-transform: uppercase` on Korean text (meaningless)
 
+### Real Data Resilience Protocol
+
+AI-generated UIs break with real data. Names are too long, numbers are too large, descriptions are empty, avatars are missing. Every component must handle these edge cases WITHOUT layout breakage.
+
+**Single-Line Truncation (all 4 properties required):**
+```css
+/* Missing ANY ONE of these = truncation fails silently */
+max-width: <value>;        /* or width — MUST constrain */
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+```
+Tailwind: `max-w-[200px] truncate` (shorthand for all 3 overflow properties)
+
+**Multi-Line Truncation (webkit line clamp):**
+```css
+display: -webkit-box;
+-webkit-line-clamp: 2;     /* or 3 */
+-webkit-box-orient: vertical;
+overflow: hidden;
+```
+Tailwind: `line-clamp-2` or `line-clamp-3`
+
+**Korean + Mixed Text Word Breaking:**
+```css
+word-break: keep-all;      /* Korean: don't break mid-syllable */
+overflow-wrap: break-word;  /* English URLs/long words: force break */
+```
+Tailwind: `break-keep` + `break-words` — always use BOTH together for Korean content.
+
+**Card Height Normalization:**
+When cards in a grid have varying content lengths, they must stay the same height:
+```html
+<div class="flex flex-col h-full">
+  <div><!-- fixed content: image, title --></div>
+  <div class="flex-grow"><!-- variable content: description --></div>
+  <div class="mt-auto"><!-- bottom-pinned: price, CTA --></div>
+</div>
+```
+RULE: Every card in a grid uses `flex flex-col h-full` with `mt-auto` on the bottom section.
+
+**Avatar Fallback (when no image):**
+```html
+<div class="flex items-center justify-center rounded-full bg-primary-100 text-primary-700 font-mono"
+     style="width: 40px; height: 40px; font-size: 20px;">
+  {name[0]}
+</div>
+```
+- Font: `font-mono` for consistent character width
+- Font size: `calc(containerSize / 2)`
+- Colors: `bg-primary-100 text-primary-700` (light bg, dark text)
+- Always show first character of name, NEVER show broken image icon
+
+**Long Name Handling:**
+- User names in headers/cards: `max-w-[120px] truncate`
+- User names in tables: `max-w-[160px] truncate`
+- Full name on hover: `title={fullName}` attribute
+- Email addresses: `max-w-[200px] truncate`
+
+**Number Formatting (Korean locale):**
+```typescript
+// Currency
+amount.toLocaleString('ko-KR') + '원'  // 1,234,567원
+// or with symbol
+'₩' + amount.toLocaleString('ko-KR')   // ₩1,234,567
+
+// Large numbers: abbreviate
+// 10,000+ → 1만, 12,345 → 1.2만
+// 100,000,000+ → 1억
+const formatKoreanNumber = (n: number) => {
+  if (n >= 100_000_000) return (n / 100_000_000).toFixed(1).replace('.0', '') + '억';
+  if (n >= 10_000) return (n / 10_000).toFixed(1).replace('.0', '') + '만';
+  return n.toLocaleString('ko-KR');
+};
+
+// Percentages: one decimal max
+'12.5%'  // not '12.4567%'
+
+// Counts: no decimals
+'1,234건'  // 건 = items/cases
+```
+
+**Date Formatting (Korean relative time):**
+
+| Elapsed | Display | Example |
+|---|---|---|
+| < 1 min | 방금 전 | 방금 전 |
+| 1-59 min | N분 전 | 3분 전 |
+| 1-23 hr | N시간 전 | 2시간 전 |
+| 1-6 days | N일 전 | 3일 전 |
+| 7-364 days | M월 D일 | 3월 15일 |
+| 1+ year | YYYY년 M월 D일 | 2024년 3월 15일 |
+
+RULE: Never show raw ISO timestamps (`2024-03-15T09:30:00Z`) in UI. Always format to relative or localized.
+
+**Table Cell Data Rules:**
+- Empty cell: show `—` (em dash), never blank
+- Zero value: show `0`, never blank (blank implies missing data)
+- Boolean: use dot indicator (`●` green / `○` gray) or toggle, not "true"/"false" text
+- Status: badge component, never raw text
+
 ## Spacing System
 
 ### 4px Base Grid
