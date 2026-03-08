@@ -244,6 +244,28 @@ These are actual values extracted from production services. Use them as concrete
 - Signature: Teal-green accent, blog card feed, markdown rendering, tag system, trending posts, developer community
 - Does NOT use: Heavy branding, advertising density, dark mode default, corporate aesthetics
 
+##### Korean Design Systems (Open-Source)
+
+**KR-31** — Korean customer messaging design system (open-source)
+- Primary: cobalt-400 `#5093E5` | Purple: blue-400 `#6D6AFC` | Text: grey-900 `#242428` | BG: grey-50 `#FCFCFC`
+- Grey scale: 13-step (`#FCFCFC` → `#1A1A1C`) | Alpha: black-0~100, white-0~100 with transparency
+- 11 color families (blue, cobalt, green, red, orange, yellow, pink, purple, navy, teal, olive) × 6 steps each (100-600)
+- Radius: 2/3/4/6/7/8/10/12/14/16/20/32px + `9999px` (rounded-half) + `42%` (smooth-corner)
+- Typography: 12 sizes (11-36px), 8 line-heights (16-44px), 3 weights (regular/semibold/bold)
+- Code pattern: CSS variable tokens, light/dark/alpha functional themes, gradient and shadow tokens
+- Signature: Cobalt-blue primary, comprehensive 6-step color scales, smooth-corner `42%` radius option
+- Does NOT use: Fixed hex references (CSS variables only), non-semantic color usage
+
+**KR-32** — Korean C2C marketplace design system (open-source)
+- Primary: carrot-500 `#FF6F0F` | Text: gray-900 `#212124` | BG: gray-00 `#FFFFFF`
+- Grey scale (light): `#FFFFFF` → `#212124` (11 steps) | Grey scale (dark): `#17171A` → `#EAEBEE` (inverted)
+- 8 color families: carrot, blue, red, green, yellow, pink, purple × 11 steps (50-950)
+- Static colors: black `#000000`, white `#FFFFFF`, gray-900 `#212124`
+- Full light/dark mode with completely inverted scales (dark gray-00 = `#17171A`)
+- Code pattern: CSS custom properties (`--seed-scale-color-*`), scale/semantic/static token layers
+- Signature: Carrot orange identity, fully inverted dark mode scales, 3-layer token architecture
+- Does NOT use: Direct hex references in components (CSS variables only), single-mode design
+
 ##### Global SaaS Products
 
 **GL-1** — Project management benchmark
