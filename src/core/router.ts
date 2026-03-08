@@ -73,12 +73,13 @@ export async function classifyWithSam(prompt: string, previousAgent?: string): P
 
   const classifyPrompt = [
     `Classify this user prompt. Reply with ONLY a JSON object, nothing else.`,
-    `{"type":"development"|"conversation","agent":"Sam"|"coder"|"architect"|"design"}`,
+    `{"type":"development"|"conversation","agent":"Sam"|"coder"|"architect"|"design"|"writer"}`,
     `Rules:`,
     `- "conversation" → ONLY pure greetings, thanks, or questions completely unrelated to any task → agent "Sam"`,
     `- "development" standard → code changes, bugs, tests, refactor, implement, follow-ups to coding work → agent "coder"`,
     `- "development" complex → system architecture, security audit, migration, infrastructure → agent "architect"`,
     `- "development" design → UI/UX design, styling, visual improvements, layout, colors, fonts, components, usability, look and feel, CSS, frontend appearance → agent "design"`,
+    `- "development" writing → documentation, README, API docs, changelog, tutorial, copywriting, technical writing, microcopy, error messages, UI text, 문서 작성, 카피, 글쓰기 → agent "writer"`,
     `- IMPORTANT: Short or ambiguous follow-ups that reference previous work (e.g. "fix that", "continue", "next", "keep going", "수정해", "계속", "다음") are development, NOT conversation.`,
     contextLine,
     ``,
@@ -113,7 +114,7 @@ export async function classifyWithSam(prompt: string, previousAgent?: string): P
     if (type === "conversation") {
       agent = "Sam";
     } else {
-      const validDevAgents = ["architect", "design"];
+      const validDevAgents = ["architect", "design", "writer"];
       agent = validDevAgents.includes(parsed.agent) ? parsed.agent : "coder";
     }
 
