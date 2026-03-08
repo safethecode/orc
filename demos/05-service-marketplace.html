@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protocol Test: 서비스 중개 플랫폼 — KR-7 + KR-1 + KR-3 참조</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css');
+  * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  body { -webkit-font-smoothing: antialiased; word-break: keep-all; letter-spacing: -0.01em; }
+</style>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        brand: { 500: '#059669', 600: '#047857', 700: '#065f46' },
+        trust: '#2563eb',
+        surface: { 50: '#f9fafb', 100: '#f3f4f6', 200: '#e5e7eb', 300: '#d1d5db' },
+        txt: { 900: '#111827', 700: '#374151', 500: '#6b7280', 400: '#9ca3af', 300: '#d1d5db' },
+      }
+    }
+  }
+}
+</script>
+</head>
+<body class="bg-white text-txt-900">
+
+<!-- Nav: KR-7 white-dominant + KR-1 warm minimal -->
+<header class="sticky top-0 z-50 border-b border-surface-200 bg-white/80 backdrop-blur-md">
+  <div class="mx-auto flex h-14 max-w-5xl items-center justify-between px-5">
+    <div class="flex items-center gap-6">
+      <span class="text-[15px] font-bold tracking-tight text-brand-600">긱플로우</span>
+      <nav class="flex items-center gap-5">
+        <a class="text-[13px] font-medium text-txt-900 cursor-pointer">서비스 찾기</a>
+        <a class="text-[13px] text-txt-500 hover:text-txt-900 transition-colors cursor-pointer">고수 찾기</a>
+        <a class="text-[13px] text-txt-500 hover:text-txt-900 transition-colors cursor-pointer">견적 요청</a>
+      </nav>
+    </div>
+    <div class="flex items-center gap-3">
+      <a class="text-[13px] text-txt-500 hover:text-txt-900 transition-colors cursor-pointer">로그인</a>
+      <button class="rounded-md bg-brand-500 px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-600 transition-colors cursor-pointer">고수 가입</button>
+    </div>
+  </div>
+</header>
+
+<!-- Hero: KR-1 style — typographic, solid bg, no gradient/blob -->
+<section class="bg-surface-50 border-b border-surface-200/60">
+  <div class="mx-auto max-w-5xl px-5 py-14">
+    <h1 class="text-[32px] font-bold leading-[1.2] tracking-tight">
+      어떤 서비스를<br>찾고 계세요?
+    </h1>
+    <p class="mt-3 text-[15px] text-txt-500">검증된 전문가에게 무료로 견적을 받아보세요.</p>
+    <!-- Search -->
+    <div class="mt-6 flex items-center gap-2">
+      <div class="relative flex-1 max-w-lg">
+        <svg class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-txt-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" placeholder="예: 이사, 인테리어, 레슨, 웹개발" class="h-11 w-full rounded-md border border-surface-300 bg-white pl-9 pr-4 text-[14px] placeholder-txt-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500/20 transition-colors">
+      </div>
+      <button class="h-11 rounded-md bg-brand-500 px-5 text-[14px] font-medium text-white hover:bg-brand-600 transition-colors cursor-pointer">검색</button>
+    </div>
+    <!-- Trust signals: KR-7 style -->
+    <div class="mt-5 flex items-center gap-5 text-[12px] text-txt-400">
+      <span class="flex items-center gap-1.5">
+        <svg class="h-3.5 w-3.5 text-brand-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+        누적 요청 320만 건
+      </span>
+      <span class="flex items-center gap-1.5">
+        <svg class="h-3.5 w-3.5 text-brand-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+        등록 고수 54만 명
+      </span>
+      <span class="flex items-center gap-1.5">
+        <svg class="h-3.5 w-3.5 text-brand-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+        평균 응답 30분
+      </span>
+    </div>
+  </div>
+</section>
+
+<!-- Categories: KR-3 style dense horizontal pills -->
+<section class="border-b border-surface-200/60">
+  <div class="mx-auto max-w-5xl px-5 py-4">
+    <div class="flex items-center gap-2 overflow-x-auto">
+      <button class="flex-shrink-0 rounded-full bg-txt-900 px-4 py-1.5 text-[13px] font-medium text-white cursor-pointer">전체</button>
+      <button class="flex-shrink-0 rounded-full border border-surface-200 px-4 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">홈/리빙</button>
+      <button class="flex-shrink-0 rounded-full border border-surface-200 px-4 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">레슨/교육</button>
+      <button class="flex-shrink-0 rounded-full border border-surface-200 px-4 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">IT/개발</button>
+      <button class="flex-shrink-0 rounded-full border border-surface-200 px-4 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">디자인</button>
+      <button class="flex-shrink-0 rounded-full border border-surface-200 px-4 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">이사/청소</button>
+      <button class="flex-shrink-0 rounded-full border border-surface-200 px-4 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">건강/뷰티</button>
+      <button class="flex-shrink-0 rounded-full border border-surface-200 px-4 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">비즈니스</button>
+      <button class="flex-shrink-0 rounded-full border border-surface-200 px-4 py-1.5 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">이벤트</button>
+    </div>
+  </div>
+</section>
+
+<!-- Service grid: KR-3 density + KR-7 trust -->
+<section class="mx-auto max-w-5xl px-5 py-8">
+  <div class="mb-5 flex items-center justify-between">
+    <h2 class="text-[18px] font-bold tracking-tight">인기 서비스</h2>
+    <div class="flex items-center gap-2">
+      <button class="rounded-md border border-surface-200 px-2.5 py-1 text-[12px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">추천순</button>
+      <button class="rounded-md px-2.5 py-1 text-[12px] text-txt-400 hover:bg-surface-50 transition-colors cursor-pointer">리뷰순</button>
+      <button class="rounded-md px-2.5 py-1 text-[12px] text-txt-400 hover:bg-surface-50 transition-colors cursor-pointer">낮은가격순</button>
+    </div>
+  </div>
+
+  <!-- Cards: KR-7 freelancer style — price, rating, reviews prominent -->
+  <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+
+    <article class="rounded-md border border-surface-200 bg-white overflow-hidden hover:border-surface-300 transition-colors cursor-pointer">
+      <div class="aspect-[4/3] bg-surface-100 relative">
+        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/40 to-transparent"></div>
+        <span class="absolute bottom-2 left-2.5 text-[11px] font-medium text-white/90">인테리어 시공</span>
+      </div>
+      <div class="p-3">
+        <div class="flex items-center gap-2 mb-1.5">
+          <div class="h-6 w-6 rounded-full bg-surface-200 flex-shrink-0"></div>
+          <span class="text-[13px] font-medium truncate">김민수 실장</span>
+          <span class="rounded-sm bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-600">인증</span>
+        </div>
+        <p class="text-[12px] text-txt-500 leading-relaxed line-clamp-2">원룸·투룸 전문 인테리어. 도배, 장판, 페인트, 타일 시공 15년 경력.</p>
+        <div class="mt-2 flex items-center gap-1.5 text-[12px]">
+          <span class="text-amber-500">★</span>
+          <span class="font-semibold text-txt-900">4.9</span>
+          <span class="text-txt-400">(127)</span>
+        </div>
+        <p class="mt-1.5 text-[13px] font-semibold text-txt-900">30만원<span class="text-[11px] font-normal text-txt-400">부터</span></p>
+      </div>
+    </article>
+
+    <article class="rounded-md border border-surface-200 bg-white overflow-hidden hover:border-surface-300 transition-colors cursor-pointer">
+      <div class="aspect-[4/3] bg-surface-100 relative">
+        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/40 to-transparent"></div>
+        <span class="absolute bottom-2 left-2.5 text-[11px] font-medium text-white/90">이사/포장이사</span>
+      </div>
+      <div class="p-3">
+        <div class="flex items-center gap-2 mb-1.5">
+          <div class="h-6 w-6 rounded-full bg-surface-200 flex-shrink-0"></div>
+          <span class="text-[13px] font-medium truncate">한빛이사</span>
+          <span class="rounded-sm bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-600">인증</span>
+        </div>
+        <p class="text-[12px] text-txt-500 leading-relaxed line-clamp-2">원룸~사무실 포장이사 전문. 파손보험 가입 완료. 당일 가능.</p>
+        <div class="mt-2 flex items-center gap-1.5 text-[12px]">
+          <span class="text-amber-500">★</span>
+          <span class="font-semibold text-txt-900">4.8</span>
+          <span class="text-txt-400">(89)</span>
+        </div>
+        <p class="mt-1.5 text-[13px] font-semibold text-txt-900">18만원<span class="text-[11px] font-normal text-txt-400">부터</span></p>
+      </div>
+    </article>
+
+    <article class="rounded-md border border-surface-200 bg-white overflow-hidden hover:border-surface-300 transition-colors cursor-pointer">
+      <div class="aspect-[4/3] bg-surface-100 relative">
+        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/40 to-transparent"></div>
+        <span class="absolute bottom-2 left-2.5 text-[11px] font-medium text-white/90">웹사이트 제작</span>
+      </div>
+      <div class="p-3">
+        <div class="flex items-center gap-2 mb-1.5">
+          <div class="h-6 w-6 rounded-full bg-surface-200 flex-shrink-0"></div>
+          <span class="text-[13px] font-medium truncate">박서연 개발자</span>
+        </div>
+        <p class="text-[12px] text-txt-500 leading-relaxed line-clamp-2">반응형 웹사이트, 랜딩페이지, 워드프레스. 기획부터 배포까지 원스톱.</p>
+        <div class="mt-2 flex items-center gap-1.5 text-[12px]">
+          <span class="text-amber-500">★</span>
+          <span class="font-semibold text-txt-900">5.0</span>
+          <span class="text-txt-400">(43)</span>
+        </div>
+        <p class="mt-1.5 text-[13px] font-semibold text-txt-900">50만원<span class="text-[11px] font-normal text-txt-400">부터</span></p>
+      </div>
+    </article>
+
+    <article class="rounded-md border border-surface-200 bg-white overflow-hidden hover:border-surface-300 transition-colors cursor-pointer">
+      <div class="aspect-[4/3] bg-surface-100 relative">
+        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/40 to-transparent"></div>
+        <span class="absolute bottom-2 left-2.5 text-[11px] font-medium text-white/90">영어 과외</span>
+      </div>
+      <div class="p-3">
+        <div class="flex items-center gap-2 mb-1.5">
+          <div class="h-6 w-6 rounded-full bg-surface-200 flex-shrink-0"></div>
+          <span class="text-[13px] font-medium truncate">Sarah Kim</span>
+          <span class="rounded-sm bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-600">인증</span>
+        </div>
+        <p class="text-[12px] text-txt-500 leading-relaxed line-clamp-2">미국 거주 10년, TESOL 자격. 회화·비즈니스 영어·TOEIC 전문.</p>
+        <div class="mt-2 flex items-center gap-1.5 text-[12px]">
+          <span class="text-amber-500">★</span>
+          <span class="font-semibold text-txt-900">4.9</span>
+          <span class="text-txt-400">(201)</span>
+        </div>
+        <p class="mt-1.5 text-[13px] font-semibold text-txt-900">3만원<span class="text-[11px] font-normal text-txt-400">/시간</span></p>
+      </div>
+    </article>
+
+    <article class="rounded-md border border-surface-200 bg-white overflow-hidden hover:border-surface-300 transition-colors cursor-pointer">
+      <div class="aspect-[4/3] bg-surface-100 relative">
+        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/40 to-transparent"></div>
+        <span class="absolute bottom-2 left-2.5 text-[11px] font-medium text-white/90">로고 디자인</span>
+      </div>
+      <div class="p-3">
+        <div class="flex items-center gap-2 mb-1.5">
+          <div class="h-6 w-6 rounded-full bg-surface-200 flex-shrink-0"></div>
+          <span class="text-[13px] font-medium truncate">스튜디오 온</span>
+        </div>
+        <p class="text-[12px] text-txt-500 leading-relaxed line-clamp-2">브랜드 아이덴티티 전문. 로고, 명함, 패키지, CI/BI 통합 디자인.</p>
+        <div class="mt-2 flex items-center gap-1.5 text-[12px]">
+          <span class="text-amber-500">★</span>
+          <span class="font-semibold text-txt-900">4.7</span>
+          <span class="text-txt-400">(56)</span>
+        </div>
+        <p class="mt-1.5 text-[13px] font-semibold text-txt-900">15만원<span class="text-[11px] font-normal text-txt-400">부터</span></p>
+      </div>
+    </article>
+
+    <article class="rounded-md border border-surface-200 bg-white overflow-hidden hover:border-surface-300 transition-colors cursor-pointer">
+      <div class="aspect-[4/3] bg-surface-100 relative">
+        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/40 to-transparent"></div>
+        <span class="absolute bottom-2 left-2.5 text-[11px] font-medium text-white/90">에어컨 청소</span>
+      </div>
+      <div class="p-3">
+        <div class="flex items-center gap-2 mb-1.5">
+          <div class="h-6 w-6 rounded-full bg-surface-200 flex-shrink-0"></div>
+          <span class="text-[13px] font-medium truncate">클린홈 서비스</span>
+          <span class="rounded-sm bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-600">인증</span>
+        </div>
+        <p class="text-[12px] text-txt-500 leading-relaxed line-clamp-2">벽걸이·스탠드·시스템 에어컨 분해청소. 항균 코팅 무료 제공.</p>
+        <div class="mt-2 flex items-center gap-1.5 text-[12px]">
+          <span class="text-amber-500">★</span>
+          <span class="font-semibold text-txt-900">4.9</span>
+          <span class="text-txt-400">(312)</span>
+        </div>
+        <p class="mt-1.5 text-[13px] font-semibold text-txt-900">5만원<span class="text-[11px] font-normal text-txt-400">부터</span></p>
+      </div>
+    </article>
+
+    <article class="rounded-md border border-surface-200 bg-white overflow-hidden hover:border-surface-300 transition-colors cursor-pointer">
+      <div class="aspect-[4/3] bg-surface-100 relative">
+        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/40 to-transparent"></div>
+        <span class="absolute bottom-2 left-2.5 text-[11px] font-medium text-white/90">세무/회계</span>
+      </div>
+      <div class="p-3">
+        <div class="flex items-center gap-2 mb-1.5">
+          <div class="h-6 w-6 rounded-full bg-surface-200 flex-shrink-0"></div>
+          <span class="text-[13px] font-medium truncate">이정호 세무사</span>
+          <span class="rounded-sm bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-600">인증</span>
+        </div>
+        <p class="text-[12px] text-txt-500 leading-relaxed line-clamp-2">개인사업자 종합소득세, 법인세, 기장대행. 세무조사 대응 전문.</p>
+        <div class="mt-2 flex items-center gap-1.5 text-[12px]">
+          <span class="text-amber-500">★</span>
+          <span class="font-semibold text-txt-900">4.8</span>
+          <span class="text-txt-400">(78)</span>
+        </div>
+        <p class="mt-1.5 text-[13px] font-semibold text-txt-900">10만원<span class="text-[11px] font-normal text-txt-400">/월</span></p>
+      </div>
+    </article>
+
+    <article class="rounded-md border border-surface-200 bg-white overflow-hidden hover:border-surface-300 transition-colors cursor-pointer">
+      <div class="aspect-[4/3] bg-surface-100 relative">
+        <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/40 to-transparent"></div>
+        <span class="absolute bottom-2 left-2.5 text-[11px] font-medium text-white/90">헬스/PT</span>
+      </div>
+      <div class="p-3">
+        <div class="flex items-center gap-2 mb-1.5">
+          <div class="h-6 w-6 rounded-full bg-surface-200 flex-shrink-0"></div>
+          <span class="text-[13px] font-medium truncate">최강훈 트레이너</span>
+        </div>
+        <p class="text-[12px] text-txt-500 leading-relaxed line-clamp-2">체형 교정, 다이어트, 벌크업. NSCA-CPT 자격. 강남·서초 출장 가능.</p>
+        <div class="mt-2 flex items-center gap-1.5 text-[12px]">
+          <span class="text-amber-500">★</span>
+          <span class="font-semibold text-txt-900">4.6</span>
+          <span class="text-txt-400">(34)</span>
+        </div>
+        <p class="mt-1.5 text-[13px] font-semibold text-txt-900">5만원<span class="text-[11px] font-normal text-txt-400">/회</span></p>
+      </div>
+    </article>
+
+  </div>
+
+  <div class="mt-6 text-center">
+    <button class="rounded-md border border-surface-200 px-6 py-2 text-[13px] text-txt-500 hover:bg-surface-50 transition-colors cursor-pointer">더 보기</button>
+  </div>
+</section>
+
+<!-- How it works: KR-1 style clean steps -->
+<section class="border-t border-surface-200/60 bg-surface-50 py-14">
+  <div class="mx-auto max-w-5xl px-5">
+    <h2 class="text-[20px] font-bold tracking-tight">이용 방법</h2>
+    <p class="mt-1.5 text-[14px] text-txt-500">3단계로 원하는 서비스를 받으세요.</p>
+    <div class="mt-8 grid grid-cols-3 gap-4">
+      <div class="rounded-md border border-surface-200 bg-white p-5">
+        <span class="text-[12px] font-bold text-brand-500">01</span>
+        <h3 class="mt-2 text-[14px] font-semibold">요청서 작성</h3>
+        <p class="mt-1.5 text-[13px] leading-relaxed text-txt-500">어떤 서비스가 필요한지 간단히 알려주세요. 3분이면 충분합니다.</p>
+      </div>
+      <div class="rounded-md border border-surface-200 bg-white p-5">
+        <span class="text-[12px] font-bold text-brand-500">02</span>
+        <h3 class="mt-2 text-[14px] font-semibold">견적 비교</h3>
+        <p class="mt-1.5 text-[13px] leading-relaxed text-txt-500">전문가들이 보낸 견적을 비교하세요. 평균 4건의 견적을 받습니다.</p>
+      </div>
+      <div class="rounded-md border border-surface-200 bg-white p-5">
+        <span class="text-[12px] font-bold text-brand-500">03</span>
+        <h3 class="mt-2 text-[14px] font-semibold">고수 선택</h3>
+        <p class="mt-1.5 text-[13px] leading-relaxed text-txt-500">리뷰와 포트폴리오를 확인하고 마음에 드는 고수를 선택하세요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="border-t border-surface-200/60 py-14">
+  <div class="mx-auto max-w-5xl px-5 text-center">
+    <h2 class="text-[20px] font-bold tracking-tight">지금 무료로 견적 받아보세요</h2>
+    <p class="mx-auto mt-2 max-w-sm text-[14px] text-txt-500">비용은 고수에게만 발생합니다. 의뢰인은 항상 무료.</p>
+    <div class="mt-5">
+      <button class="rounded-md bg-brand-500 px-6 py-2.5 text-[14px] font-medium text-white hover:bg-brand-600 transition-colors cursor-pointer">견적 요청하기</button>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="border-t border-surface-200/60 py-8">
+  <div class="mx-auto flex max-w-5xl items-center justify-between px-5 text-[12px] text-txt-400">
+    <span>&copy; 2026 긱플로우. All rights reserved.</span>
+    <div class="flex items-center gap-4">
+      <a class="hover:text-txt-700 transition-colors cursor-pointer">이용약관</a>
+      <a class="hover:text-txt-700 transition-colors cursor-pointer">개인정보처리방침</a>
+      <a class="hover:text-txt-700 transition-colors cursor-pointer">고객센터</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
