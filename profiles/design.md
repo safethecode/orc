@@ -1163,6 +1163,32 @@ Containers with `overflow-auto` or fixed heights that create scrollbars when con
 Every status badge uses a different color: blue for active, green for complete, amber for pending, purple for review, pink for draft, teal for archived. The page looks like a color palette demo, not a professional tool. Real SaaS products (GL-1, GL-6, GL-3) use color sparingly — most statuses are gray.
 → RULES: (1) Gray is the DEFAULT badge color. Use `bg-gray-100 text-gray-600` for any status that does not require immediate user attention: draft, active, pending, in review, archived, default, unknown. (2) Color is RESERVED for exactly 3 situations: red = danger/error/overdue/failed, amber = warning/needs attention, green = success/complete/approved. (3) Maximum 3 distinct badge colors on any single page (gray + up to 2 semantic colors). If you have 4+ colored badge variants, demote the least urgent ones to gray. (4) Never use blue, purple, pink, teal, or indigo for status badges — these are decorative, not semantic. The accent color (blue) is for interactive elements (buttons, links), NOT for status indicators. (5) "Traffic light test": if your badge colors don't map to red/amber/green intuition, they're decorative. (6) Reference: look at GL-1's status badges — most are subtle gray dots with text. GL-3's dashboard — statuses are almost entirely gray with only red for failed. That's the standard.
 
+### Interaction Layer Protocol
+
+Overlays, modals, dropdowns, and tooltips follow strict stacking and behavior rules. Getting these wrong creates unusable interfaces where elements disappear behind each other, scroll bleeds through, or focus escapes.
+
+**Z-Index Stacking Scale (mandatory):**
+
+| Layer | z-index | Usage | Example |
+|---|---|---|---|
+| Base | `0` | Normal flow content | Page body, cards, sections |
+| Sticky | `10` | Sticky headers, columns | `sticky top-0 z-10` |
+| Dropdown | `1000` | Selects, popovers, menus | Combobox list, context menu |
+| Overlay | `1200` | Backdrop behind modals | `fixed inset-0 bg-black/50 z-[1200]` |
+| Modal | `1300` | Dialog content | Centered dialog panel |
+| Snackbar | `1400` | Toast notifications | Bottom-right notification stack |
+| Tooltip | `1500` | Hover tips | Floating label on hover |
+
+RULES:
+1. **Portal rendering** — ALL overlays (dropdown, modal, tooltip, toast) render via `createPortal` to `document.body`. Never render inside a scroll container or clipped parent.
+2. **Nested scroll containment** — Any scrollable overlay MUST use `overscroll-behavior: contain` to prevent scroll bleeding to the page behind.
+3. **Drag-and-drop** — Prefer `@atlaskit/pragmatic-drag-and-drop` (framework-agnostic, accessible, performant). Never implement raw HTML5 drag — it has mobile/accessibility gaps.
+4. **Modal-over-dropdown** — When a modal opens from a dropdown action: close the dropdown FIRST (unmount), THEN open the modal. Never stack both.
+5. **Focus trap** — Every overlay with `z >= 1200` MUST trap focus: Tab cycles within the overlay, Shift+Tab cycles backward, ESC closes the topmost overlay, focus returns to the trigger element on close.
+6. **Backdrop click** — Modals close on backdrop click. Dropdowns close on any outside click. Tooltips close on mouse leave or focus loss.
+7. **Animation** — Overlays enter with `fade-in` + slight scale (`scale-95 → 100`). Exit with reverse. Duration: 150ms. Easing: `ease-out` for enter, `ease-in` for exit.
+8. **Multiple overlays** — Maximum 2 overlay layers visible at once (e.g., modal + tooltip inside modal). Never stack modal-on-modal — use in-modal navigation instead.
+
 ---
 
 <!-- ═══════════ END OF MANDATORY HARNESS — General design guide below ═══════════ -->
