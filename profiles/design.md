@@ -148,6 +148,102 @@ These are actual values extracted from production services. Use them as concrete
 - Signature: Mobile-first vertical scroll, product card grid, active-state only (no hover), tap-optimized
 - Does NOT use: Dark mode, gradients, shadows, letter-spacing, desktop-wide layouts
 
+**KR-15** — Korean C2C local marketplace
+- Primary: `#FF6F0F` (orange) | Text: `#212124` | BG: `#FFFFFF`
+- Font: Pretendard | Letter-spacing: -0.02em
+- Signature: Orange accent, local community feel, simple card grids, location-based UX, warm conversational tone
+- Does NOT use: Dark mode, gradient backgrounds, enterprise aesthetics, complex navigation
+
+**KR-16** — Korean premium grocery e-commerce
+- Primary: `#5F0080` (deep purple) | Text: `#333333` | BG: `#FFFFFF`
+- Font: Pretendard | Layout: 1050px max-width
+- Signature: Deep purple accent, premium food photography, vertical scroll feeds, timed deals, morning delivery branding
+- Does NOT use: Bright multi-color, playful rounded UI, dark mode, excessive whitespace
+
+**KR-17** — Korean mega e-commerce
+- Primary: `#C73434` (red) | Text: `#111111` | BG: `#FFFFFF`
+- Font: system sans-serif | Density: VERY dense
+- Signature: Dense product grids, aggressive deals/discounts, mega menus, banner carousels, rocket delivery branding
+- Does NOT use: Whitespace, minimalism, subtle design, dark mode, professional restraint
+
+**KR-18** — Korean food delivery
+- Primary: `#2AC1BC` (teal) | Text: `#1E1E1E` | BG: `#FFFFFF`
+- Font: custom display (hand-drawn feel) + Pretendard (body)
+- Signature: Custom typography personality, teal accent, food photography, playful brand identity, delivery time prominence
+- Does NOT use: Corporate aesthetics, dark mode, gradient backgrounds, enterprise density
+
+**KR-19** — Korean interior / home platform
+- Primary: `#35C5F0` (sky blue) | Text: `#292929` | BG: `#FFFFFF`
+- Font: Pretendard | Layout: 1256px max-width
+- Signature: Community UGC photos, interior inspiration feed, magazine-style layout, social features (likes/comments), product tagging on photos
+- Does NOT use: Dark mode, gradient backgrounds, dense data tables, enterprise aesthetics
+
+**KR-20** — Korean travel / accommodation
+- Primary: `#DE2E5F` (pink-red) | Text: `#1A1A1A` | BG: `#FFFFFF`
+- Font: Pretendard | Radius: 12-16px (app-like feel)
+- Signature: Bold pink-red accent, hotel/property card grids, date picker, map integration, deal banners, review prominence
+- Does NOT use: Minimalism, dark mode, enterprise aesthetics, monochrome palette
+
+**KR-21** — Korean real estate platform
+- Primary: `#FF6600` (orange) | Text: `#222222` | BG: `#FFFFFF`
+- Font: Pretendard
+- Signature: Map-first UX, property listing cards, filter-heavy search, orange accent, area/price prominence
+- Does NOT use: Dark mode, gradient backgrounds, minimal layouts, image-light design
+
+**KR-22** — Korean fintech aggregator
+- Primary: `#00C4B4` (teal) | Text: `#222222` | BG: `#FFFFFF`
+- Font: Pretendard
+- Signature: Teal accent, financial data visualization, card-based accounts, spending analytics, category breakdowns
+- Does NOT use: Dense enterprise tables, dark mode default, playful branding, gradient backgrounds
+
+**KR-23** — Korean mobile payment
+- Primary: `#FFCD00` (yellow) | Text: `#1A1A1A` | BG: `#FFFFFF`
+- Font: Pretendard | Layout: mobile-first
+- Signature: Yellow accent (ecosystem branding), mobile-first flows, simple payment UX, trust badges, financial card UI
+- Does NOT use: Complex desktop layouts, dark mode, gradient backgrounds, enterprise density
+
+**KR-24** — Korean job / career platform
+- Primary: `#3366FF` (blue) | Text: `#333333` | BG: `#FFFFFF`
+- Font: Pretendard
+- Signature: Blue accent, job listing cards, company logos prominent, salary transparency, career content feed
+- Does NOT use: Dark mode, playful branding, heavy illustrations, gradient backgrounds
+
+**KR-25** — Korean business networking
+- Primary: `#00B2FF` (blue) | Text: `#1A1A1A` | BG: `#F7F8FA`
+- Font: Pretendard
+- Signature: Clean business card aesthetic, professional blue accent, networking feed, career-focused content
+- Does NOT use: Playful design, bright multi-color, consumer aesthetics, heavy imagery
+
+**KR-26** — Korean online education marketplace
+- Primary: `#FF444F` (red-pink) | Text: `#1A1A1A` | BG: `#FFFFFF`
+- Font: Pretendard
+- Signature: Bright red-pink accent, class card grids with instructor photos, category pills, creator economy feel
+- Does NOT use: Dark mode, enterprise aesthetics, monochrome palette, dense data layouts
+
+**KR-27** — Korean handmade / artisan marketplace
+- Primary: `#FF6F61` (coral) | Text: `#333333` | BG: `#FFFFFF`
+- Font: Pretendard
+- Signature: Warm coral accent, artisan product cards, handmade/craft aesthetic, seller identity, product photography
+- Does NOT use: Dark mode, corporate aesthetics, enterprise layouts, gradient backgrounds
+
+**KR-28** — Korean crowdfunding platform
+- Primary: `#00C4C4` (teal) | Text: `#222222` | BG: `#FFFFFF`
+- Font: Pretendard
+- Signature: Funding progress bars, backer counts, deadline urgency, project cards, teal accent, milestone indicators
+- Does NOT use: Dark mode, enterprise aesthetics, minimal layouts, monochrome palette
+
+**KR-29** — Korean secondhand marketplace
+- Primary: `#FF3B3B` (red) | Text: `#1E1E1E` | BG: `#FFFFFF`
+- Font: Pretendard | Layout: mobile-first (600px)
+- Signature: Red accent, product photo grids, price prominence, condition badges, user ratings, chat-first contact
+- Does NOT use: Desktop-wide layouts, enterprise aesthetics, dark mode, complex navigation
+
+**KR-30** — Korean developer blog platform
+- Primary: `#12B886` (teal-green) | Text: `#212529` | BG: `#F8F9FA`
+- Font: Pretendard + monospace for code blocks
+- Signature: Teal-green accent, blog card feed, markdown rendering, tag system, trending posts, developer community
+- Does NOT use: Heavy branding, advertising density, dark mode default, corporate aesthetics
+
 ##### Global SaaS Products
 
 **GL-1** — Project management benchmark
@@ -273,27 +369,336 @@ These are actual values extracted from production services. Use them as concrete
 - Signature: Warm orange accent, cream backgrounds, multi-color data labels (#B6E995 lime, #FCB42A yellow, #FA91E0 pink)
 - Does NOT use: Monochrome palette, dark mode default, developer minimalism
 
+**GL-39** — Developer collaboration platform
+- Primary: CSS variables (theme-adaptive) | Text: adaptive | BG: `#ffffff` / dark adaptive
+- Font: system sans (Segoe UI, Helvetica, Arial) + monospace for code
+- Signature: Contribution graph, code-centric UI, tab navigation, issue/PR components, markdown rendering
+- Does NOT use: Heavy gradients, decorative complexity, serif fonts, playful branding
+
+**GL-40** — DevOps platform
+- Primary: `#7759C2` (purple) | Text: `#171321` | BG: `#ffffff`, `#F6F3FE`
+- Font: GitLab Sans (variable 100-900) | 8px base unit system
+- Signature: Purple accent, gradient overlays (purple/orange/pink), marquee animations, stacking card transforms
+- Does NOT use: Heavy shadows, vibrant high-contrast combos, rigid grids
+
+**GL-41** — Error monitoring platform
+- Primary: `#362D59` (dark purple) | Accent: `#E1567C` (pink) | BG: `#FAF9FB`
+- Font: Rubik (body) + Fira Code (mono)
+- Signature: Dark purple foundation, error/issue-centric UI, breadcrumb traces, stack trace rendering, developer-focused
+- Does NOT use: Playful branding, bright consumer palettes, large rounded corners, decorative elements
+
+**GL-42** — Infrastructure monitoring
+- Primary: `#632CA6` (purple) | Text: white on dark | BG: dark navy/charcoal
+- Font: system sans-serif (Tailwind stack) | Density: dense multi-level dropdowns
+- Signature: Purple-to-pink gradients (`#6A00FF` → `#FFC8F9`), dense dashboards, metric visualization, geotargeted banners
+- Does NOT use: Light mode default, playful design, sparse layouts, serif typography
+
+**GL-43** — Deployment platform
+- Primary: `#4B0390` (deep purple) | Text: `#FFFFFF` | BG: `hsl(250,24%,9%)`
+- Font: Inter Tight + JetBrains Mono + IBM Plex Serif
+- Signature: Vaporwave theme option, multi-layered gradients, service architecture visualization, dark-first
+- Does NOT use: Flat minimalism, rigid grids, light mode default, sparse layouts
+
+**GL-44** — Cloud platform
+- Primary: blue (semantic variables) | BG: semantic variable-based
+- Font: modern sans-serif (semantic CSS classes)
+- Signature: Purple-to-orange gradients, semantic color naming, utility-first CSS, generous whitespace, dark mode support
+- Does NOT use: Decorative borders, serif typography, heavy shadows, micro-interactions in static markup
+
+**GL-45** — Authentication platform
+- Primary: `#1F2937` | Text: `#111827` light, white dark | BG: `#F9FAFB` light, `#030712` dark
+- Font: system fonts, antialiased rendering
+- Signature: Circuit board aesthetic, animated meteor effects, glow/blur CSS filters, gradient overlays with opacity masks
+- Does NOT use: Neon accents, heavy shadows, skeuomorphism, decorative serifs
+
+**GL-46** — Serverless PostgreSQL
+- Primary: `#34D59A` (teal-green) | Text: `#181919` | BG: `#0C0D0D` dark
+- Font: modern web fonts via @next/font | Radius: 4px
+- Signature: Dual-pattern gradient overlays, dashboard mockups, tabbed interfaces, dark mode first, green accent, video backgrounds
+- Does NOT use: Text gradients, heavy 3D shadows, serif fonts, ornamental elements, light mode default
+
+**GL-47** — Database platform
+- Primary: dark modern theme | Text: near-black | BG: near-white
+- Font: clean sans-serif
+- Signature: ASCII architecture diagrams, performance metric graphs (p50/p95/p99), technical-first, testimonials with attribution
+- Does NOT use: Color gradients, decorative effects, animations, ornamental imagery
+
+**GL-48** — Database toolkit
+- Primary: teal/cyan (CTA) | Secondary: indigo | BG: dark navy/black overlay
+- Font: modern sans-serif (Inter-like)
+- Signature: Dark-veil overlays, carousel scroll with gradient masking, bento grids, logo parade, dark-first aesthetic
+- Does NOT use: Gradient text, heavy animations, serif fonts, pill buttons, neon accents, auto-playing carousels
+
+**GL-49** — Internal tools builder
+- Primary: `#151515` (dark) | Text: light semantic | BG: dark semantic
+- Font: SaansVF (variable) + PxGrotesk (Bold/Regular)
+- Signature: Large hero imagery with gradient overlays, illustrated backgrounds, carousel/tab patterns, customer logo walls
+- Does NOT use: Skeuomorphism, excessive animations, cluttered feature pages
+
+**GL-50** — Website builder platform
+- Primary: `#146EF5` (blue) | BG: dynamic light/dark via CSS variables
+- Font: Inconsolata (mono) + CSS variable typography system
+- Signature: 8px card radius, fluted glass gradients with color-mix(), animated underlines, GSAP staggered reveals
+- Does NOT use: Drop shadows on buttons, serif fonts in UI, bare link underlines
+
+**GL-51** — Video messaging platform
+- Primary: violet/magenta | Text: design system CSS variables | BG: white-dominant
+- Font: web-safe via CSS variable design system | 8px base unit (modular scale)
+- Signature: Video embedding hero, testimonial carousel, card-based layouts, integration logo carousel
+- Does NOT use: Dark mode dominance, skeuomorphism, complex navigation hierarchies, decorative elements
+
+**GL-52** — Workplace messaging platform
+- Primary: `#4A154B` (aubergine purple) | Text: white/dark | BG: varies by workspace
+- Font: Lato → system sans
+- Signature: Aubergine purple, channel-based UI, message components, emoji reactions, thread patterns, workspace customization
+- Does NOT use: Heavy gradients, ornate borders, cluttered layouts, serif fonts
+
+**GL-53** — Community communication platform
+- Primary: `#5865F2` (blurple) | Text: `#23272A` | BG: dark with white accents
+- Font: system sans-serif stack
+- Signature: Blurple accent, icon-driven feature blocks, hero with large imagery, clear CTAs, community-first
+- Does NOT use: Excessive gradients, heavy textures, skeuomorphic design, serif typography
+
+**GL-54** — Music streaming platform
+- Primary: `#1DB954` (green) | Text: `#000000`, `#656565` | BG: dark default
+- Font: CSS custom properties, system font approach | Radius: 9999px (pill buttons), 4px (base)
+- Signature: Dark mode default, hover scale (1.04), grid-based cards with circular artist avatars, opacity-based states
+- Does NOT use: Heavy shadows, fixed color palettes, ornamental elements, light mode default
+
+**GL-55** — Task management app
+- Primary: `#EE6449` (red-orange) | Text: dark | BG: `#FEFDFC`
+- Font: Inter (100-900) + Graphik + Caecilia serif + Shantell Sans handwritten
+- Signature: Warm red-orange accent, shimmer/glare effects, soft drop shadows with color bleed, micro-interactions with cubic-bezier
+- Does NOT use: Dark/harsh UI, heavy borders, monochrome palette
+
+**GL-56** — Document editor
+- Primary: `#000000` | Text: dark semantic | BG: beige tones
+- Font: modern sans-serif, antialiased | Radius: rounded-3xl (large)
+- Signature: Glass morphism effects, layered paper texture overlays, gradient backgrounds, beige warm tones, cloud graphics
+- Does NOT use: Sharp corners, harsh contrast, heavy shadows, dark mode emphasis
+
+**GL-57** — Note-taking app
+- Primary: red accent (Red Graphite theme) | Text: dark on light | BG: light
+- Font: Bear Sans (custom, based on Clarika) + system fonts
+- Signature: Custom typography with vertical rhythm, modular feature cards, alternating content layouts, device mockups, award badges
+- Does NOT use: Aggressive marketing, cluttered interfaces, excessive CTAs, dark mode default
+
+**GL-58** — Knowledge management
+- Primary: gradient (purple-based) | BG: dark mode default
+- Font: system fallback
+- Signature: Interconnected graph visualizations, canvas-based composition, plain text Markdown, nested information architecture
+- Does NOT use: Cloud dependency, proprietary formats, vendor lock-in, light mode default
+
+**GL-59** — Password management
+- Primary: `#0051BA` (blue) | Text: black/dark gray | BG: `#FFFFFF`, `#010115` dark
+- Font: custom stack (Light/Regular weights)
+- Signature: Two-column split layouts, multiline stacked hero text, card modules with shadows, carousel testimonials, photography
+- Does NOT use: Extreme gradients, serif emphasis, heavy borders, complex pattern backgrounds
+
+**GL-60** — Work management platform
+- Primary: `#6161FF` (purple) | Text: `#535768`, `#323338` | BG: `#FFFFFF`, `#F5F6F8`
+- Font: modern system sans-serif
+- Signature: Glassmorphism (backdrop-filter blur), gradient buttons (#5034FF → #B4B4FF), fully rounded buttons (32-100px), large card radius (40px)
+- Does NOT use: Heavy drop shadows, serif typography, high-saturation neon, thick borders
+
+**GL-61** — AI-native project management
+- Primary: `#6366F1` (indigo) | Text: adaptive | BG: white/dark adaptive
+- Font: Inter + custom sans
+- Signature: Linear-inspired restraint, AI-native features, clean task lists, indigo accent, keyboard-first UX
+- Does NOT use: Heavy illustrations, playful branding, dense marketing, gradient backgrounds
+
+**GL-62** — Presentation platform
+- Primary: `#2DD4BF` (teal) | Text: dark | BG: clean light
+- Font: custom sans + system
+- Signature: Template-first approach, live collaboration, slide thumbnails, presentation editor, analytics dashboard
+- Does NOT use: Complex navigation, heavy ornamentation, dense data layouts, dark mode
+
+**GL-63** — Whiteboard / collaboration
+- Primary: `#3859FF` (blue) | Text: `#1C1C1E` | BG: `#FFFFFF`, `#FAFAFC`
+- Font: Open Sans + Noto Sans + Inter + Roobert PRO | 12px baseline gap
+- Signature: Sticky positioning, flexbox-heavy layouts, softly rounded aesthetic, 16px border radius, aspect ratio preservation
+- Does NOT use: Drop shadows, geometric complexity, dark mode, decorative borders
+
+**GL-64** — Form builder
+- Primary: purple (CSS variables) | Text: adaptive light/dark | BG: adaptive
+- Font: Inter (300-700) + Tobias + Twklausanne (headings) | 12-column gutter grid
+- Signature: Eight named color themes, animated marquee carousels, accordion components, scroll-linked progress, scaled radius on hover
+- Does NOT use: Heavy shadows, heavy gradients, excessive animation
+
+**GL-65** — E-commerce platform
+- Primary: `#96008C` (purple-magenta) | Text: `#000000` | BG: `#FFFFFF`
+- Font: modern sans-serif (Inter-style)
+- Signature: Merchant showcase galleries, multi-column feature grids, high-contrast CTAs, hero with dynamic text rotation
+- Does NOT use: Skeuomorphic elements, excessive gradients, dark mode emphasis, serif headers
+
+**GL-66** — Digital commerce platform
+- Primary: minimal (white-dominant) | Text: near-black | BG: `#FFFFFF`
+- Font: ABC Favorit (custom geometric sans-serif)
+- Signature: Decorative SVG illustrations, product discovery carousels, accordion components, parallax scrolling
+- Does NOT use: Gradients, shadows, heavy borders, bright saturated colors, animation-heavy interactions
+
+**GL-67** — Digital commerce / MoR
+- Primary: `#5423E7` (purple) | Text: `#6C6C89` | BG: `#F7F7F8`
+- Font: JetBrains Mono (monospace), antialiased, font-feature-settings: "ss04"
+- Signature: Animated icons with translate effects, inset shadow borders, line-clamped text, dropdown transforms on hover
+- Does NOT use: Box shadows (except inset), rounded avatars, gradient backgrounds, italic typography
+
+**GL-68** — CRM & marketing platform
+- Primary: `#FF4800` (orange) | Text: `#1F1F1F` | BG: `#FCFCFA`
+- Font: proprietary sans (300-600) + proprietary serif (display headings) | 8px base unit
+- Signature: 140+ semantic color tokens, container CSS Grid with subgrid, global nav with dropdown/tabs/sidebar
+- Does NOT use: Border outlines on primary buttons, fixed-width containers, drop shadows, serif body text
+
+**GL-69** — Customer messaging platform (dark-first)
+- Primary: `#000000` | Text: `#FFFFFF` | BG: `#050505`
+- Font: Segoe UI, Roboto, Helvetica, Arial | Letter-spacing: -0.8px headlines
+- Signature: Gradient text with animated underlines, hover drop shadows (white 15%), dark-first, progressive card opacity
+- Does NOT use: Rounded corners on primary CTAs, bright accents, serif typography, light mode, excessive whitespace
+
+**GL-70** — Customer support platform
+- Primary: `#D1F470` (lime-green) | Text: `#11110D` | BG: `#FFFFFF`
+- Font: Vanilla Sans (thin-black) + Noto Sans JP | Radius: 4px max
+- Signature: Animated accordions, extensive focus-visible states, custom checkbox styling, rotated tooltip pointers (45° transform)
+- Does NOT use: Border radius >4px, drop shadows on UI, gradient fills, all-caps, serif typefaces
+
+**GL-71** — Product analytics
+- Primary: `#FF0000` (red) | Text: `#000000` | BG: `#FFFFFF`
+- Font: modern system stack
+- Signature: Four-card feature grids, testimonial carousels with badges, multi-tab product sections with pill navigation, large stat blocks
+- Does NOT use: Gradient overlays, colorful backgrounds, excessive animation, decorative icons, serif fonts
+
+**GL-72** — Customer data platform
+- Primary: CSS variable-based | BG: semantic variable-based
+- Font: web-safe via CSS variables | 8px base unit
+- Signature: Expandable navigation, hierarchical categorization, card-based containers, flat modular components
+- Does NOT use: Rigid grid overlays, skeuomorphic elements, gradient-heavy aesthetics, hardcoded colors
+
+**GL-73** — Headless CMS
+- Primary: `#0066FF` (blue) | Text: `#000000` | BG: `#FFFFFF`
+- Font: modern sans-serif (Inter-like) | Radius: 4-8px
+- Signature: Modular content blocks, hero imagery with gradient overlays, feature comparison tables, testimonial cards
+- Does NOT use: Skeuomorphism, decorative icons, serif typefaces, heavy shadows, glassmorphism
+
+**GL-74** — Content platform
+- Primary: magenta (CSS variable) | Text: adaptive | BG: adaptive light/dark
+- Font: Waldenburg (display) + IBM Plex Mono (code/UI)
+- Signature: Interactive syntax-highlighted code blocks, carousel grids, icon+description feature lists, G2 badge testimonials
+- Does NOT use: Drop shadows, extensive animations, explicit button hierarchy, colors beyond brand magenta
+
+**GL-75** — Financial API platform
+- Primary: gradient `#07578C` → `#42F0CD` | Text: `#111112` | BG: `#FFFFFF` + overlays
+- Font: proprietary sans + Cern + Avenir Next + Proxima Nova | Letter-spacing: -2px to -3.4px
+- Signature: Animated conic gradient buttons, glassmorphism with backdrop blur, animated SVG icons, illustrated mascot
+- Does NOT use: Flat monotony, static imagery, serif UI, dark mode, minimal spacing
+
+**GL-76** — Communications API platform
+- Primary: CSS variable-based | BG: semantic variable-based
+- Font: standard web fonts (not exposed) | 8px-based system
+- Signature: Nested mega-menus, card-based image-text layouts, code sample switchers (7+ languages), customer logo sections
+- Does NOT use: Skeuomorphic design, decorative illustrations, gradient overlays in navigation
+
+**GL-77** — Travel marketplace
+- Primary: `#FF385C` (pink-red) | Text: `#222222` | BG: `#FFFFFF`
+- Font: proprietary sans (Cereal) | Radius: 12px (cards), 32px (search bar)
+- Signature: Large photography, rounded search bar, booking card components, map integration, review system, wishlist hearts
+- Does NOT use: Dark mode, gradient backgrounds, enterprise aesthetics, dense data tables
+
+**GL-78** — Ride-sharing / mobility
+- Primary: `#000000` (black) | Text: `#000000` | BG: `#FFFFFF`
+- Font: proprietary sans (UberMove, UberMoveText)
+- Signature: Black-dominant, map-first UI, large touch targets, clean mobile-first, minimal color use
+- Does NOT use: Colorful palettes, decorative elements, gradient backgrounds, playful branding
+
+**GL-79** — Streaming platform
+- Primary: `#E50914` (red) | Text: `#FFFFFF` | BG: `#141414` dark
+- Font: proprietary sans (Netflix Sans) | Layout: full-bleed
+- Signature: Dark-first, large content imagery, horizontal scroll rows, auto-play trailers, content-density focus
+- Does NOT use: Light mode, enterprise aesthetics, minimal layouts, text-heavy design
+
+**GL-80** — Cloud storage platform
+- Primary: `#0061FF` (blue) | Text: `#1E1919` | BG: `#FFFFFF`
+- Font: Atlas Grotesk (custom sans)
+- Signature: Bold illustrative style, geometric patterns, clean file/folder components, generous whitespace
+- Does NOT use: Dark mode default, dense data tables, gradient backgrounds, serif fonts
+
+**GL-81** — Online design platform
+- Primary: `#7D2AE8` (purple) | Secondary: `#00C4CC` (teal) | Text: `#0D1216` | BG: `#FFFFFF`
+- Font: system sans-serif
+- Signature: Multi-color category system, template gallery grids, large colorful CTAs, social proof, consumer-friendly
+- Does NOT use: Dark mode default, minimal color, enterprise aesthetics, monochrome palette
+
+**GL-82** — Scheduling platform
+- Primary: `#006BFF` (blue) | Text: `#1A1A1A` | BG: `#FFFFFF`
+- Font: modern sans-serif
+- Signature: Calendar slot picker UI, blue accent, clean scheduling flows, integration logos, trust badges
+- Does NOT use: Dark mode, gradient backgrounds, dense data, playful branding
+
+**GL-83** — Form builder (minimal)
+- Primary: `#000000` (black) | Text: `#111111` | BG: `#FFFFFF`
+- Font: system sans-serif
+- Signature: Extreme minimalism, notion-like block editing, near-zero decoration, content-first
+- Does NOT use: Colorful accents, gradients, decorative elements, heavy branding, shadows
+
+**GL-84** — AI UI generation tool
+- Primary: CSS variables (Geist design system) | BG: `hsl(0 0% 98%)` light, `hsl(0 0% 4%)` dark
+- Font: Geist Sans + Geist Mono | Radius: 8px (Radix-based)
+- Signature: shadcn/ui component system, template showcase, dark/light toggle, developer-focused, Radix primitives
+- Does NOT use: Heavy visual ornamentation, sidebar navigation in hero, prescriptive color schemes
+
+**GL-85** — AI code editor
+- Primary: `#F54E00` (international orange) | Text: `#26251E` | BG: `#F7F7F4` light, `#14120B` dark
+- Font: CursorGothic (custom Bold/Regular/Italic) + BerkeleyMono (mono)
+- Signature: Warm olive-tinted neutrals, custom proprietary typography, subtle rgba borders, 0.15s ease hover
+- Does NOT use: Bright neon accents, heavy gradients, serif fonts, playful branding
+
+**GL-86** — Calendar app (dark-first)
+- Primary: `#FF4700` (orange) | Text: `#FFFFFF` on dark | BG: `#161412` dark
+- Font: system-based | Radius: 9999px (buttons), 4px (containers), 16px (media)
+- Signature: Dark-first, glowing box-shadows on CTAs, inset borders with gradient overlays, full-bleed video on mobile
+- Does NOT use: Drop shadows, serif fonts, underlines, bright/light backgrounds, fixed widths
+
+**GL-87** — Changelog design pattern
+- Theme: `#08090A` dark default | Text: `rgba(255,255,255,0.48)` secondary | Font: Inter Variable
+- Signature: Date-grouped entries, video demonstrations, expandable feature descriptions, improvement lists
+- Does NOT use: Decorative elements, colorful badges, light mode default, complex navigation
+
+**GL-88** — Extension marketplace pattern
+- Primary: `#FF6363` (red) | Text: adaptive | BG: dark adaptive
+- Font: system sans-serif
+- Signature: Extension card grid (icon + title + desc + author + downloads), featured section, pill filters, protocol install links
+- Does NOT use: Ornamental graphics, decorative elements, heavy shadows, serif fonts
+
 #### Reference Selection Matrix — Pick 2+ Before ANY UI Task
 
 | UI Type | MUST Reference (pick 2+) | WHY |
 |---|---|---|
-| Dashboard / Analytics | GL-1, GL-12, KR-1, KR-9 | Information density + color restraint + analytics patterns |
-| Project Management | GL-1, GL-5, GL-31, KR-4 | Task-centric, status-driven, scheduling, action density |
-| Korean Marketplace / Tool | KR-3, KR-7, KR-13, KR-14 | Korean density, portal-adjacent, fashion e-commerce, mobile-first |
-| CRM / Sales / Data | KR-6, GL-1, KR-10 | Data tables, functional color, grayscale foundation |
-| Developer Tool / CLI UI | GL-2, GL-7, GL-14, GL-34 | Monospace, dark mode, launcher/terminal UX, precision |
-| Korean B2B SaaS | KR-4, KR-5, KR-6, KR-9 | Korean typography, professional density, `keep-all` |
-| Document / Note | GL-6, KR-1, GL-35 | Content-first, minimal chrome, generous whitespace |
-| Settings / Admin Panel | GL-3 Dashboard, GL-4 | Form-heavy, clean hierarchy, trust design |
-| Fintech / Payment | KR-1, GL-3 | Trust signals, whitespace, functional color only |
-| Customer Communication | KR-5, KR-8, GL-9 | Real-time UI, message density, chat components |
-| Korean Landing Page | KR-2, KR-1, KR-4, KR-11 | Korean hero patterns, Pretendard, CTA conventions |
-| Enterprise / Trust-heavy | GL-4, GL-3, GL-31 | Logo carousels, compliance badges, restrained palette |
-| Education / EdTech | KR-11, KR-12, GL-35 | Content sections, teal/coral accents, learning cards |
-| Developer Docs / API | GL-35, GL-34, GL-32 | Code-first, documentation excellence, dark mode |
-| Design Tool / Prototyping | GL-37, GL-36, GL-8 | Typography-first, creative personality, panel precision |
-| Data / Spreadsheet | GL-38, GL-1, KR-6 | Multi-color labels, data grids, table-first layouts |
-| Fashion / E-commerce | KR-13, KR-14, KR-7 | Black-dominant, photography-first, mobile-first cards |
+| Dashboard / Analytics | GL-1, GL-12, GL-13, KR-1, KR-9 | Information density + color restraint + analytics patterns |
+| Project Management | GL-1, GL-5, GL-31, GL-61, KR-4 | Task-centric, status-driven, scheduling, action density |
+| Korean Marketplace / Tool | KR-3, KR-7, KR-13, KR-14, KR-15 | Korean density, portal-adjacent, local marketplace, mobile-first |
+| CRM / Sales / Data | KR-6, GL-1, GL-68, KR-10 | Data tables, functional color, semantic tokens |
+| Developer Tool / CLI UI | GL-2, GL-7, GL-14, GL-34, GL-85 | Monospace, dark mode, launcher/terminal UX, precision |
+| Korean B2B SaaS | KR-4, KR-5, KR-6, KR-9, KR-25 | Korean typography, professional density, `keep-all` |
+| Document / Note | GL-6, GL-56, GL-57, KR-1 | Content-first, minimal chrome, generous whitespace |
+| Settings / Admin Panel | GL-3, GL-4, GL-45 | Form-heavy, clean hierarchy, auth patterns |
+| Fintech / Payment | KR-1, KR-22, KR-23, GL-3, GL-75 | Trust signals, whitespace, functional color only |
+| Customer Communication | KR-5, KR-8, GL-9, GL-52, GL-53 | Real-time UI, message density, chat components |
+| Korean Landing Page | KR-2, KR-1, KR-4, KR-11, KR-26 | Korean hero patterns, Pretendard, CTA conventions |
+| Enterprise / Trust-heavy | GL-4, GL-3, GL-31, GL-59 | Logo carousels, compliance badges, restrained palette |
+| Education / EdTech | KR-11, KR-12, KR-26, GL-35 | Content sections, teal/coral accents, learning cards |
+| Developer Docs / API | GL-35, GL-34, GL-32, GL-48 | Code-first, documentation excellence, dark mode |
+| Design Tool / Prototyping | GL-37, GL-36, GL-8, GL-50, GL-81 | Typography-first, creative personality, panel precision |
+| Data / Spreadsheet | GL-38, GL-1, KR-6, GL-49 | Multi-color labels, data grids, table-first layouts |
+| Fashion / E-commerce | KR-13, KR-14, KR-16, KR-27 | Black-dominant, photography-first, mobile-first cards |
+| Food / Delivery | KR-17, KR-18, GL-77 | Product grids, photography, trust/review patterns |
+| Travel / Accommodation | KR-20, GL-77, KR-21 | Map integration, card grids, date picker, deal urgency |
+| Streaming / Content | GL-54, GL-79, KR-19 | Dark-first, horizontal scroll, large imagery, content-density |
+| Job / Career | KR-24, KR-25 | Listing cards, professional aesthetic, salary/company prominence |
+| Crowdfunding / Community | KR-28, KR-19, GL-66 | Progress bars, backer counts, UGC, social features |
+| Secondhand / C2C | KR-15, KR-29 | Location-based, chat-first, price prominence, photo grids |
+| DevOps / Monitoring | GL-40, GL-41, GL-42, GL-46 | Dense dashboards, metric visualization, error traces |
+| Scheduling / Calendar | GL-31, GL-82, GL-86 | Calendar slot picker, time-focused, clean scheduling flows |
+| Form / Survey | GL-64, GL-83 | Theme customization, minimal UI, progress indicators |
+| Developer Blog / Changelog | KR-30, GL-87 | Markdown rendering, date-grouped entries, tag system |
 
 #### Reference Selection Decision Tree
 
@@ -304,38 +709,65 @@ START: What are you building?
 │
 ├─ SaaS App (dashboard, settings, data views)?
 │  ├─ Korean market? → KR-4 + KR-6 + GL-1
-│  │  └─ Fintech? → KR-1 + GL-3 (trust-first, spacious)
+│  │  └─ Fintech? → KR-1 + KR-22 + GL-3 (trust-first, spacious)
 │  │  └─ HR / enterprise? → KR-4 + KR-10 (module colors, blue accent)
-│  │  └─ CRM / data-heavy? → KR-6 + GL-1 (dark tables, dot status)
-│  │  └─ Analytics? → KR-9 + GL-12 (dark-first, functional)
+│  │  └─ CRM / data-heavy? → KR-6 + GL-1 + GL-68 (dark tables, dot status)
+│  │  └─ Analytics? → KR-9 + GL-12 + GL-42 (dark-first, functional)
+│  │  └─ Payment? → KR-23 + KR-1 + GL-75 (yellow/teal accent, trust)
 │  └─ Global market? → GL-1 + GL-2
-│     └─ Developer tool? → GL-2 + GL-7 + GL-14 (monospace, dark, precision)
-│     └─ Project management? → GL-1 + GL-10 (restraint, lists, dot status)
-│     └─ Email / communication? → GL-9 + KR-5 (speed, density, large targets)
-│     └─ Database / spreadsheet? → GL-38 + GL-1 (multi-color labels, data grids)
+│     └─ Developer tool? → GL-2 + GL-7 + GL-14 + GL-85 (monospace, dark, precision)
+│     └─ Project management? → GL-1 + GL-10 + GL-61 (restraint, lists, dot status)
+│     └─ Email / communication? → GL-9 + GL-52 + KR-5 (speed, density, channels)
+│     └─ Database / spreadsheet? → GL-38 + GL-1 + GL-46 (multi-color labels, data grids)
+│     └─ DevOps / monitoring? → GL-40 + GL-41 + GL-42 (purple, metric dashboards)
+│     └─ Auth / security? → GL-45 + GL-59 (circuit board, trust, clean forms)
 │
 ├─ Marketing / Landing Page?
 │  ├─ Korean B2B? → KR-2 + GL-3 (indigo pill, typographic hero)
 │  │  └─ Add KR-1 for trust signals (card-free, logo strip)
-│  ├─ Korean B2C / consumer? → KR-7 + KR-13 (product cards, trust)
+│  ├─ Korean B2C / consumer? → KR-7 + KR-15 + KR-19 (product cards, trust, UGC)
 │  │  └─ Fashion? → KR-13 + KR-14 (black, photography-first)
-│  │  └─ Education? → KR-11 + KR-12 (coral/teal, content-heavy)
+│  │  └─ Education? → KR-11 + KR-12 + KR-26 (coral/teal/red-pink, content-heavy)
+│  │  └─ Food/delivery? → KR-17 + KR-18 (dense grids, playful brand)
 │  └─ Global B2B? → GL-3 + GL-4 (typographic confidence, enterprise trust)
-│     └─ Developer audience? → GL-32 + GL-34 (black primary, code-first)
-│     └─ Design audience? → GL-37 + GL-36 (typography-first, creative)
+│     └─ Developer audience? → GL-32 + GL-34 + GL-84 (black primary, code-first)
+│     └─ Design audience? → GL-37 + GL-36 + GL-81 (typography-first, creative)
+│     └─ Commerce? → GL-65 + GL-67 (merchant showcase, purple accent)
 │
 ├─ E-commerce / Marketplace?
 │  ├─ Korean? → KR-3 + KR-7 + KR-14 (dense, portal-adjacent, mobile-first)
 │  │  └─ Fashion? → KR-13 + KR-14 (black, photography, card grid)
-│  └─ Global? → GL-38 Admin + GL-1 (data grids, functional color)
+│  │  └─ Grocery/food? → KR-16 + KR-17 (deep purple/red, dense product grids)
+│  │  └─ Handmade/craft? → KR-27 + KR-15 (coral, artisan aesthetic)
+│  │  └─ Secondhand/C2C? → KR-29 + KR-15 (red/orange, chat-first, local)
+│  └─ Global? → GL-65 + GL-77 (merchant/booking, photography)
+│     └─ Digital products? → GL-66 + GL-67 (illustration, accordion, minimal)
+│     └─ Travel? → GL-77 + KR-20 (large photos, rounded search, map)
 │
 ├─ Documentation / Content?
-│  ├─ Developer docs? → GL-35 + GL-34 (code examples, sky accent)
-│  ├─ Notes / wiki? → GL-6 + KR-1 (content-first, minimal chrome)
+│  ├─ Developer docs? → GL-35 + GL-34 + GL-48 (code examples, sky accent)
+│  ├─ Notes / wiki? → GL-6 + GL-57 + KR-1 (content-first, minimal chrome)
+│  ├─ Knowledge base? → GL-58 + GL-6 (graph visualization, markdown)
+│  ├─ Blog / changelog? → KR-30 + GL-87 (markdown, date-grouped, tags)
 │  └─ API reference? → GL-32 + GL-35 (black, developer minimalism)
 │
+├─ Communication / Social?
+│  ├─ Workplace messaging? → GL-52 + KR-5 (aubergine, channel-based)
+│  ├─ Community? → GL-53 + KR-19 (blurple, UGC, social features)
+│  └─ Video? → GL-51 + GL-79 (video embedding, dark-first)
+│
+├─ Scheduling / Calendar?
+│  └─ → GL-31 + GL-82 + GL-86 (slot picker, purple/blue/orange accent)
+│
+├─ Forms / Surveys?
+│  └─ → GL-64 + GL-83 (theme system, minimal, progress indicators)
+│
+├─ Streaming / Media?
+│  ├─ Music? → GL-54 (green, dark-first, circular avatars, pill buttons)
+│  └─ Video? → GL-79 + KR-19 (red/sky-blue, horizontal scroll, auto-play)
+│
 └─ Design / Creative Tool?
-   └─ → GL-37 + GL-36 + GL-8 (panel precision, typography-first)
+   └─ → GL-37 + GL-36 + GL-8 + GL-50 (panel precision, typography-first)
 ```
 
 **Mixing Rules**:
@@ -371,8 +803,8 @@ After generating UI code, perform this element-by-element comparison against you
 | Bento grid for everything | GL-1: list views. GL-3: content sections. GL-35: docs layout. Bento only for landing page feature grids |
 | 6+ colored status badges | GL-1: gray dots + text. GL-3: almost all gray. KR-1: `#3182f6` + gray only. GL-12: minimal semantic |
 | `rounded-2xl` everywhere | GL-2: 8px max. GL-1: 6px cards. KR-3: minimal radius. GL-33: near-zero radius |
-| `scale(1.05)` on hover | ALL 23 references: bg-color shift only. Zero use `scale()` on card hover |
-| Decorative blob shapes | Zero of 23 reference products use abstract decorative blobs. Zero |
+| `scale(1.05)` on hover | ALL 100 references: bg-color shift only. Zero use `scale()` on card hover |
+| Decorative blob shapes | Zero of 100 reference products use abstract decorative blobs. Zero |
 | Dark sidebar + light content | GL-1: unified dark. GL-2: unified light. GL-34: unified dark. KR-1: unified light. Never mixed mode |
 | `shadow-lg` on cards | GL-1: no shadow. GL-2: no shadow. GL-33: no shadow. KR-2: no shadow. Border only |
 | Neon accent on dark mode | GL-2: white on black. GL-1: muted on dark. GL-34: muted green on dark. No neon. Ever |
