@@ -1834,6 +1834,36 @@ Always respect `prefers-reduced-motion`:
 - Layout changes: `transition-all duration-300 ease-out`
 - Page transitions: `duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]`
 
+### Production Timing Table
+
+Every animation must use one of these 4 durations. No custom values.
+
+| Duration | Name | Usage | Tailwind |
+|---|---|---|---|
+| `150ms` | Instant | Button press, color change, toggle, tooltip show | `duration-150` |
+| `200ms` | Fast | Dropdown open, hover feedback, focus ring | `duration-200` |
+| `300ms` | Normal | Modal enter, sidebar expand, card flip, skeleton fade | `duration-300` |
+| `400ms` | Slow | Page transition, complex layout shift, stagger parent | `duration-400` |
+
+RULE: Never exceed `400ms` for any UI animation. Longer = sluggish. If it needs >400ms, break into staged steps.
+
+### Easing Curve Library
+
+| Name | Value | Usage |
+|---|---|---|
+| `ease-out` | `cubic-bezier(0.16, 1, 0.3, 1)` | Entrances — element arriving on screen |
+| `ease-in` | `cubic-bezier(0.4, 0, 1, 1)` | Exits — element leaving screen |
+| `ease-in-out` | `cubic-bezier(0.4, 0, 0.2, 1)` | State changes — element staying but transforming |
+| `spring` | `cubic-bezier(0.34, 1.56, 0.64, 1)` | Playful bounce — button press, badge pop |
+| `linear` | `linear` | NEVER use for UI transitions. Only for: progress bars, continuous rotation |
+
+RULES:
+1. Entrances: `ease-out` (fast start, gentle landing)
+2. Exits: `ease-in` (gentle start, fast departure)
+3. Hover/focus: `ease-in-out` (smooth both ways)
+4. Never use `linear` for element movement — it looks robotic
+5. Never use `transition: all` in production — specify exact properties (`transition-colors`, `transition-transform`, `transition-opacity`)
+
 ## Layout Rules
 
 ### Visual Hierarchy (priority order)
@@ -2054,6 +2084,42 @@ Every interactive element MUST define all 5 states. No exceptions.
 "
 ></button>
 ```
+
+### Hover, Focus & Disabled Contracts
+
+**Hover Rules:**
+- Background tint only — `hover:bg-muted/30` or `hover:bg-gray-50`. Never color shift.
+- Maximum scale: `hover:scale-[1.02]` — anything larger looks unprofessional
+- Cards: border color shift (`hover:border-primary-200`) + bg tint. NO shadows.
+- Table rows: `hover:bg-gray-50` instant (no transition duration)
+- List items: `hover:bg-accent` with `rounded-md` applied to each item
+- Links: `hover:text-primary-600` + `hover:underline`, never color-only
+
+**Focus Ring Spec:**
+```html
+focus-visible:outline-none
+focus-visible:ring-2
+focus-visible:ring-primary-500/50
+focus-visible:ring-offset-2
+```
+- Width: `2px` ring
+- Offset: `2px` from element edge
+- Color: primary at 50% opacity
+- Trigger: `focus-visible` ONLY — never `focus` (would show on click)
+- All interactive elements MUST have visible focus indicator — buttons, inputs, links, cards with onClick
+
+**Disabled State Contract:**
+```html
+disabled:opacity-50
+disabled:pointer-events-none
+disabled:cursor-not-allowed
+```
+- Opacity: `50%` — universally understood as disabled
+- Pointer events: `none` — prevents all interaction
+- Cursor: `not-allowed` on hover (visible before click)
+- Never change colors for disabled — opacity alone is sufficient and consistent
+- Disabled buttons: keep original colors, just dim with opacity
+- Form inputs: add `bg-gray-100` in addition to opacity for extra clarity
 
 ### Card Hover States
 
