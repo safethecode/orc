@@ -1846,21 +1846,69 @@ Always respect `prefers-reduced-motion`:
 
 ### Responsive Breakpoints
 
-| Breakpoint | Width       | Tailwind       | Grid Columns    |
-| ---------- | ----------- | -------------- | --------------- |
-| Mobile     | < 640px     | default        | 2 cols (Korean) |
-| Tablet     | 640-1024px  | `sm:` to `lg:` | 3 cols          |
-| Desktop    | 1024-1280px | `lg:` to `xl:` | 4 cols          |
-| Wide       | > 1280px    | `2xl:`         | 4-5 cols        |
+| Breakpoint | Width | Tailwind | Grid Cols | Sidebar | Container |
+|---|---|---|---|---|---|
+| Mobile | < 640px | default | 1-2 | Hidden (drawer) | `px-4` full-width |
+| Tablet | 640-1023px | `sm:` / `md:` | 2-3 | Collapsed (icons) | `px-6` full-width |
+| Desktop | 1024-1279px | `lg:` | 3-4 | Expanded (240px) | `max-w-6xl mx-auto` |
+| Wide | ≥ 1280px | `xl:` / `2xl:` | 4-5 | Expanded (280px) | `max-w-7xl mx-auto` |
 
 Max content width: `max-w-6xl` (1152px) for Korean sites. Western sites use `max-w-7xl` (1280px).
 
+**Mobile-First Rule:** Unprefixed classes = mobile. Build up from mobile, never desktop-down.
+
+### Component Adaptation Table
+
+Components MUST transform at breakpoints, not just resize:
+
+| Component | Mobile (< 640px) | Desktop (≥ 1024px) |
+|---|---|---|
+| Sidebar | Bottom drawer (`fixed bottom-0`) or hamburger menu | Persistent side panel |
+| Dialog/Modal | Bottom sheet (`fixed bottom-0 rounded-t-xl`) | Centered dialog |
+| Data table | Stacked cards (each row = card) | Full table with columns |
+| Tabs | Horizontal scroll (`overflow-x-auto`) | Static row |
+| Navigation | Bottom tab bar (max 5 items) | Sidebar or top nav |
+| Search | Full-screen overlay | Inline input in header |
+| Filters | Bottom sheet with "필터" button | Inline sidebar or top bar |
+| Actions | FAB or bottom action bar | Inline buttons |
+
 ### Grid Patterns
 
-- Product grid: `grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4`
-- Content feed: `grid grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-5`
-- Feature grid: `grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8`
-- Dashboard: `grid grid-cols-2 lg:grid-cols-4 gap-4`
+```
+/* Product grid */
+grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4
+
+/* Content feed */
+grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-5
+
+/* Feature grid */
+grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8
+
+/* Dashboard stats */
+grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4
+
+/* Sidebar + Content */
+lg:grid lg:grid-cols-[240px_1fr] /* mobile: stacked, desktop: side-by-side */
+```
+
+### Touch Target Rules
+
+- WCAG minimum: `44px × 44px` touch target
+- Recommended: `48px × 48px` (`h-12 w-12` or `min-h-[48px]`)
+- Gap between adjacent targets: minimum `8px` (`gap-2`)
+- Mobile list items: `min-h-[48px] py-3` to ensure tappable height
+- Icon buttons on mobile: always `w-12 h-12`, never `w-8 h-8`
+- Links in body text: ensure enough line-height (`leading-7`) for tappable spacing
+
+### Responsive Typography
+
+| Element | Mobile | Desktop | Tailwind |
+|---|---|---|---|
+| Page title | 20px / 600 | 24px / 600 | `text-xl lg:text-2xl font-semibold` |
+| Section heading | 16px / 600 | 18px / 600 | `text-base lg:text-lg font-semibold` |
+| Body text | 14px / 400 | 14px / 400 | `text-sm` (same) |
+| Caption | 12px / 400 | 12px / 400 | `text-xs` (same) |
+| Button text | 14px / 500 | 14px / 500 | `text-sm font-medium` (same) |
 
 ## AI Anti-pattern Avoidance
 
