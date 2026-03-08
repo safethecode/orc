@@ -735,17 +735,67 @@ These are actual values extracted from production services. Use them as concrete
 - Signature: Theme switching via HTML classes, polymorphic rendering, built-in Framer Motion, border weights system
 - Does NOT use: Over-animation (transform/opacity only), inline animation logic, restrictive element types
 
+**GL-95** — Open-source CRM platform
+- Primary: #9193FF (Accent Blue) | Text: #333333 | BG: #FFFFFF / #FCFCFC / #F1F1F1
+- Font: Inter, sans-serif | Radius: 2px/4px/8px/20px | Spacing: 4px base (0-128px scale)
+- Code pattern: CSS custom properties with `--t-` prefix namespace, display-p3 color space for extended gamut, generated theme files from constants
+- Signature: 4px spacing multiplicator system, noisy texture background (base64 PNG), dual light/dark themes with full variable sets, radial gradient buttons, 0.075s-1.5s animation durations
+- Does NOT use: Hardcoded colors in components, Tailwind's default spacing, RGB color notation (uses display-p3)
+- Source: packages/twenty-ui/dist/theme-light.css, packages/twenty-ui/dist/theme-dark.css
+
+**GL-96** — Open-source project management platform
+- Primary: Custom CSS variables | Text: --text-primary/secondary/placeholder | BG: --canvas / --layer-2
+- Font: font-body (system) | Radius: Custom utilities | Spacing: Tailwind base
+- Code pattern: Tailwind v4 @import syntax, custom @utility directives, CSS variable-based theming, nested scrollbar utilities with hover states
+- Signature: Custom scrollbar system (scrollbar-xs/sm/md/lg with padding-box background-clip), conical gradient emoji picker, highlight-with-line pattern (5px left border), disable-autofill-style utility, vertical-lr writing mode
+- Does NOT use: Inline styles for scrollbars, default browser autofill styling, standard Tailwind scrollbar plugin
+
+**GL-97** — Open-source API development platform
+- Primary: Preset-based | Text: Preset vars | BG: Preset vars
+- Font: Preset-defined | Radius: Preset | Spacing: Preset
+- Code pattern: @hoppscotch/ui preset pattern, centralized design system via npm package, minimal config delegation
+- Signature: Monorepo preset architecture, shared UI package across packages, 3-line tailwind.scss (pure @tailwind directives), zero custom theme in consuming apps
+- Does NOT use: Scattered theme definitions, per-app color customization, inline Tailwind config extensions
+
+**GL-98** — Open-source document signing platform
+- Primary: hsl(var(--primary)) | Text: hsl(var(--foreground)) | BG: hsl(var(--background))
+- Font: var(--font-sans), var(--font-signature), var(--font-noto) | Radius: calc(var(--radius) - Npx) system | Spacing: Tailwind default
+- Code pattern: HSL with CSS var pattern for all colors, calc-based radius system (--radius ± offsets), recipient color palette (green/blue/purple/orange/yellow/pink), flattenColorPalette plugin
+- Signature: #A2E771 brand, dawn/water custom palettes, signature-pad aspect ratio (16/7), caret-blink animation (1.25s), 3xl-5xl breakpoints (1920px-3840px), print media support
+- Does NOT use: Fixed radius values, RGB colors, standard Tailwind color names in components
+
+**GL-99** — Open-source survey platform
+- Primary: #0f172a | Text: #0f172a (primary) / #fefefe (foreground) | BG: #f1f5f9 (secondary)
+- Font: Tailwind default | Radius: Tailwind default | Spacing: Tailwind default
+- Code pattern: Brand variable --formbricks-brand (#038178), destructive as #FF6B6B (soft coral red), semantic color system (info/warning/success/error with foreground/muted/background variants)
+- Signature: #00E6CA brand-light, shake keyframe animation (0.82s cubic-bezier), survey loading/exit animations (translateY -50px/50px), card shadow scale (sm/md/lg/xl), blur utilities (xxs: 0.33px, xs: 2px), 20-column grid
+- Does NOT use: Pure Tailwind colors for brand, default destructive red, standard shadow naming
+
+**GL-100** — Open-source web analytics platform
+- Primary: indigo-600 (#4f46e5) | Text: gray-800 (zinc) | BG: white / gray-75 (#f7f7f8)
+- Font: System default | Radius: Tailwind md | Spacing: Tailwind default
+- Code pattern: Tailwind v4 @theme inline definitions, color aliasing (yellow→amber, green→emerald, gray→zinc), Phoenix LiveView loading variants, custom gray shades (75/150/750/825/850)
+- Signature: @custom-variant for phx-click-loading/phx-submit-loading, pulsating-circle animation (green-500, 3s pulse), focus-visible ring pattern (ring-2 ring-indigo-500 ring-offset-2), table-striped with gray-75/850
+- Does NOT use: JavaScript state management for loading, default Tailwind gray, standard focus styles
+
+**GL-101** — Open-source web analytics alternative
+- Primary: OKLCH alpha colors | Text: --alpha-black-900/1000 | BG: Extended color system
+- Font: System | Radius: Custom | Spacing: Custom
+- Code pattern: OKLCH color space with alpha channel variants (0-1200 scale), extended color palettes (purple-25 through purple-950), data-theme attribute switching
+- Signature: --alpha-white/black scales (0/100/200...1200 at 5%/10% increments), extended-color-purple/etc palettes, data-theme="dark-contrast" high-contrast mode, OKLCH format (e.g., oklch(0.981 0.0054 297.73))
+- Does NOT use: RGB/HSL colors, class-based dark mode, standard Tailwind color scales
+
 #### Reference Selection Matrix — Pick 2+ Before ANY UI Task
 
 | UI Type | MUST Reference (pick 2+) | WHY |
 |---|---|---|
-| Dashboard / Analytics | GL-1, GL-12, GL-13, KR-1, KR-9 | Information density + color restraint + analytics patterns |
-| Project Management | GL-1, GL-5, GL-31, GL-61, KR-4 | Task-centric, status-driven, scheduling, action density |
+| Dashboard / Analytics | GL-1, GL-12, GL-13, KR-1, KR-9, GL-100, GL-101 | Information density + color restraint + analytics patterns + open-source analytics |
+| Project Management | GL-1, GL-5, GL-31, GL-61, KR-4, GL-96 | Task-centric, status-driven, scheduling, action density |
 | Korean Marketplace / Tool | KR-3, KR-7, KR-13, KR-14, KR-15 | Korean density, portal-adjacent, local marketplace, mobile-first |
-| CRM / Sales / Data | KR-6, GL-1, GL-68, KR-10 | Data tables, functional color, semantic tokens |
-| Developer Tool / CLI UI | GL-2, GL-7, GL-14, GL-34, GL-85 | Monospace, dark mode, launcher/terminal UX, precision |
+| CRM / Sales / Data | KR-6, GL-1, GL-68, KR-10, GL-95 | Data tables, functional color, semantic tokens, display-p3 |
+| Developer Tool / CLI UI | GL-2, GL-7, GL-14, GL-34, GL-85, GL-97 | Monospace, dark mode, launcher/terminal UX, precision, API dev |
 | Korean B2B SaaS | KR-4, KR-5, KR-6, KR-9, KR-25 | Korean typography, professional density, `keep-all` |
-| Document / Note | GL-6, GL-56, GL-57, KR-1 | Content-first, minimal chrome, generous whitespace |
+| Document / Note | GL-6, GL-56, GL-57, KR-1, GL-98 | Content-first, minimal chrome, generous whitespace, signing |
 | Settings / Admin Panel | GL-3, GL-4, GL-45 | Form-heavy, clean hierarchy, auth patterns |
 | Fintech / Payment | KR-1, KR-22, KR-23, GL-3, GL-75 | Trust signals, whitespace, functional color only |
 | Customer Communication | KR-5, KR-8, GL-9, GL-52, GL-53 | Real-time UI, message density, chat components |
@@ -764,7 +814,7 @@ These are actual values extracted from production services. Use them as concrete
 | Secondhand / C2C | KR-15, KR-29 | Location-based, chat-first, price prominence, photo grids |
 | DevOps / Monitoring | GL-40, GL-41, GL-42, GL-46 | Dense dashboards, metric visualization, error traces |
 | Scheduling / Calendar | GL-31, GL-82, GL-86 | Calendar slot picker, time-focused, clean scheduling flows |
-| Form / Survey | GL-64, GL-83 | Theme customization, minimal UI, progress indicators |
+| Form / Survey | GL-64, GL-83, GL-99 | Theme customization, minimal UI, progress indicators, survey animations |
 | Developer Blog / Changelog | KR-30, GL-87 | Markdown rendering, date-grouped entries, tag system |
 
 #### Reference Selection Decision Tree
