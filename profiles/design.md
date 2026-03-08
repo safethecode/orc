@@ -1234,6 +1234,58 @@ You must implement ALL FOUR. No exceptions. No "I'll add loading later." Generat
 - Data → Loading (refresh): show inline spinner or top progress bar, do NOT replace content with skeleton on refresh
 - Error → Loading (retry): show skeleton again
 
+### Multi-Page Consistency Protocol
+
+Single-page demos look good. Multi-page apps fall apart — sidebar state resets on navigation, page transitions are jarring, breadcrumbs don't match URL, active nav items don't update. This protocol prevents those failures.
+
+**Layout Persistence (Next.js App Router):**
+- `layout.tsx` — persists across child route navigations (sidebar, header, nav). Never unmounts.
+- `template.tsx` — remounts on every navigation (for page-level animations, reset scroll).
+- RULE: Shared shell (sidebar + header) goes in `layout.tsx`. Page content goes in `page.tsx`. Use `template.tsx` ONLY when you need remount behavior.
+
+**State Management Layers:**
+
+| Scope | Storage | Access | Example |
+|---|---|---|---|
+| Global (persisted) | Cookie / `localStorage` | Server + Client | Sidebar collapsed, theme, locale |
+| Page-level | URL search params | Server + Client | Table sort, filters, pagination |
+| Component-level | `useState` / `useReducer` | Client only | Form input, dropdown open state |
+| Real-time | WebSocket / SSE | Client only | Notifications, live counts |
+
+RULES:
+1. **Sidebar state** — Store in cookie (`sidebar:collapsed=true`), read in server component layout. Never `useState` — it resets on navigation.
+2. **Table filters/sort/page** — Store in URL params (`?sort=name&dir=asc&page=2`). User can bookmark, share, and browser-back works. Never `useState` for table state.
+3. **Form state** — `useState` is fine. Multi-step forms: `useReducer` or URL params per step.
+4. **Theme** — Cookie + `<html class="dark">` set in server layout. Never flash of wrong theme.
+
+**Page Transition Animation:**
+```css
+/* Content area only — shell (sidebar/header) stays static */
+.page-enter { opacity: 0; transform: translateY(4px); }
+.page-enter-active { opacity: 1; transform: translateY(0); transition: all 200ms ease-out; }
+.page-exit { opacity: 1; }
+.page-exit-active { opacity: 0; transition: opacity 150ms ease-in; }
+```
+- Fade-out: `150ms ease-in`
+- Fade-in: `200ms ease-out`
+- Only animate the content area inside the shell. Sidebar and header NEVER animate on route change.
+
+**Shared Layout Rules:**
+1. Header and sidebar NEVER unmount during navigation — they live in root `layout.tsx`
+2. Active nav item: derive from `usePathname()`, highlight with `bg-accent text-accent-foreground`
+3. Breadcrumb: derive from URL path segments, max 3-4 levels, truncate middle segments if deeper
+4. Page title: update via `metadata` export or `<title>` in `head.tsx`, must match breadcrumb last segment
+
+**Breadcrumb Pattern:**
+```
+URL: /dashboard/projects/123/settings
+Breadcrumb: 대시보드 / 프로젝트 / 프로젝트 설정
+```
+- First segment = root name (대시보드)
+- Dynamic segments ([id]) = fetched entity name, NOT the raw ID
+- Last segment = current page name, not a link
+- Separator: `/` with `text-gray-400 mx-1.5`
+
 ---
 
 <!-- ═══════════ END OF MANDATORY HARNESS — General design guide below ═══════════ -->
