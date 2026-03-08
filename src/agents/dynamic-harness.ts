@@ -57,6 +57,7 @@ const ROLE_TASK_MAP: Partial<Record<AgentRole, TaskType>> = {
   researcher: "generic",
   "spec-writer": "generic",
   qa: "review",
+  writer: "generic",
 };
 
 function resolveTaskTypeSync(role: string, prompt: string): TaskType {

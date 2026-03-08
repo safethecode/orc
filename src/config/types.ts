@@ -601,7 +601,7 @@ export interface ProviderCapability {
 
 // ── Supervisor Types ────────────────────────────────────────────────
 
-export type AgentRole = "architect" | "coder" | "reviewer" | "tester" | "researcher" | "spec-writer" | "qa" | "design";
+export type AgentRole = "architect" | "coder" | "reviewer" | "tester" | "researcher" | "spec-writer" | "qa" | "design" | "writer";
 
 export interface SubTask {
   id: string;

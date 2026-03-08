@@ -26,6 +26,7 @@ const ROLE_TITLES: Record<AgentRole, string> = {
   "spec-writer": "Specification Writer",
   qa: "Quality Assurance Inspector",
   design: "UI/UX Design Engineer",
+  writer: "Technical Writer",
 };
 
 const PROTOCOL_BLOCK = `## Output Protocol
@@ -56,6 +57,10 @@ const ROLE_CONSTRAINTS: Record<AgentRole, string> = {
     "Produce concrete CSS/Tailwind code and design tokens, not abstract advice. " +
     "Always specify exact values (hex colors, px/rem sizes, font weights). " +
     "When recommending layouts, include responsive breakpoints.",
+  writer:
+    "Produce clean, concise documentation. Follow the tone level specified in the task. " +
+    "Never use AI-typical filler phrases. Match the document type template. " +
+    "Respect character limits from design components when writing UI microcopy.",
 };
 
 const PROVIDER_HINTS: Partial<Record<ProviderName, string>> = {
