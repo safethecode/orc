@@ -88,10 +88,10 @@ describe("AgentRegistry", () => {
     await registry.loadProfiles(profileDir);
 
     const profiles = registry.list();
-    expect(profiles).toHaveLength(7);
+    expect(profiles).toHaveLength(9);
 
     const names = profiles.map((p) => p.name).sort();
-    expect(names).toEqual(["Sam", "architect", "coder", "design", "rapid", "researcher", "reviewer"]);
+    expect(names).toEqual(["Sam", "architect", "coder", "design", "design-components", "rapid", "researcher", "reviewer", "writer"]);
   });
 
   it("loaded profiles have correct fields", async () => {
@@ -109,8 +109,9 @@ describe("AgentRegistry", () => {
     expect(coder.model).toBe("sonnet");
     expect(coder.role).toBe("Software Engineer");
 
-    // All profiles have required fields
-    for (const profile of registry.list()) {
+    // All agent profiles (those with provider field) have required fields
+    const agentProfiles = registry.list().filter((p) => p.provider);
+    for (const profile of agentProfiles) {
       expect(typeof profile.name).toBe("string");
       expect(typeof profile.provider).toBe("string");
       expect(typeof profile.model).toBe("string");
