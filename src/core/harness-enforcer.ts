@@ -547,6 +547,18 @@ const RULES: EnforcementRule[] = [
         }
       }
 
+      // TodoWrite/TodoRead are internal task-tracking tools — suppress them
+      const todoNoopTools = ["todowrite", "todoread", "todo_write", "todo_read"];
+      if (todoNoopTools.includes(tool.toolName.toLowerCase())) {
+        return {
+          ruleId: "noop-tool-call",
+          severity: "warn",
+          message: `${tool.toolName} is an internal tool — suppressed.`,
+          suggestion: "Summarize your work in text instead of using internal todo tools.",
+          toolName: tool.toolName,
+        };
+      }
+
       return null;
     },
   },
