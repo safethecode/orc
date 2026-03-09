@@ -55,6 +55,22 @@ describe("routeTask", () => {
     expect(result.multiAgent).toBe(true);
   });
 
+  it("multi-agent triggers on Korean keyword '그리고'", () => {
+    const result = routeTask(
+      "refactor the auth module 그리고 implement the design system",
+      config,
+    );
+    expect(result.multiAgent).toBe(true);
+  });
+
+  it("multi-agent triggers on Korean keyword '도 해'", () => {
+    const result = routeTask(
+      "디자인 수정해줘. 테스트도 해",
+      config,
+    );
+    expect(result.multiAgent).toBe(true);
+  });
+
   it("multi-agent triggers on long prompts with multiple domains", () => {
     // 3+ distinct keyword matches across tiers triggers multiAgentByDomains
     const result = routeTask(
@@ -134,25 +150,33 @@ describe("classifyWithSam", () => {
     expect(result).toHaveProperty("agent");
     expect(result).toHaveProperty("reason");
     expect(["development", "conversation"]).toContain(result.type);
-    expect(["Sam", "coder", "architect", "design"]).toContain(result.agent);
+    expect(["Sam", "coder", "architect", "design", "writer"]).toContain(result.agent);
   }, LLM_TIMEOUT);
 
   it("classifies greeting as conversation → Sam", async () => {
     const result = await classifyWithSam("안녕하세요");
     expect(result.type).toBe("conversation");
     expect(result.agent).toBe("Sam");
+    expect(result.lang).toBe("ko");
   }, LLM_TIMEOUT);
 
   it("classifies dev task as development → coder or architect", async () => {
     const result = await classifyWithSam("src/index.ts 파일의 버그를 수정해줘");
     expect(result.type).toBe("development");
     expect(["coder", "architect"]).toContain(result.agent);
+    expect(result.lang).toBe("ko");
   }, LLM_TIMEOUT);
 
   it("classifies design/UI task as development → design", async () => {
     const result = await classifyWithSam("디자인이 맘에 안 들어. 스타일 바꿔줘");
     expect(result.type).toBe("development");
     expect(result.agent).toBe("design");
+    expect(result.lang).toBe("ko");
+  }, LLM_TIMEOUT);
+
+  it("detects English language", async () => {
+    const result = await classifyWithSam("Fix the null pointer exception in auth.ts");
+    expect(result.lang).toBe("en");
   }, LLM_TIMEOUT);
 
   it("falls back gracefully when claude CLI is unavailable", async () => {
@@ -160,6 +184,6 @@ describe("classifyWithSam", () => {
     // otherwise regex fallback kicks in. Either way it should return a valid result.
     const result = await classifyWithSam("what's the weather?");
     expect(["development", "conversation"]).toContain(result.type);
-    expect(["Sam", "coder", "architect", "design"]).toContain(result.agent);
+    expect(["Sam", "coder", "architect", "design", "writer"]).toContain(result.agent);
   }, LLM_TIMEOUT);
 });

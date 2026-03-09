@@ -13,17 +13,27 @@ export interface RouteOptions {
 
 export interface Classification {
   type: "development" | "conversation";
-  agent: string;
+  agent: string;          // primary agent (backward compat)
+  agents?: string[];      // multi-agent: array of agents
+  lang?: string;          // detected language ISO 639-1 ("ko" | "en" | "ja" | etc.)
   reason: string;
 }
 
 const MULTI_AGENT_KEYWORDS = [
+  // English
   "and then",
   "after that",
   "review after",
   "followed by",
   "once done",
   "then have",
+  // Korean
+  "그리고",
+  "그 다음에",
+  "동시에",
+  "도 해",
+  "하고 나서",
+  "그런 다음",
 ];
 
 // Patterns that indicate a development/engineering task
@@ -73,13 +83,23 @@ export async function classifyWithSam(prompt: string, previousAgent?: string): P
 
   const classifyPrompt = [
     `Classify this user prompt. Reply with ONLY a JSON object, nothing else.`,
-    `{"type":"development"|"conversation","agent":"Sam"|"coder"|"architect"|"design"|"writer"}`,
+    `{"type":"development"|"conversation","agents":["coder"],"lang":"en"}`,
     `Rules:`,
-    `- "conversation" → ONLY pure greetings, thanks, or questions completely unrelated to any task → agent "Sam"`,
-    `- "development" standard → code changes, bugs, tests, refactor, implement, follow-ups to coding work → agent "coder"`,
-    `- "development" complex → system architecture, security audit, migration, infrastructure → agent "architect"`,
-    `- "development" design → UI/UX design, styling, visual improvements, layout, colors, fonts, components, usability, look and feel, CSS, frontend appearance → agent "design"`,
-    `- "development" writing → documentation, README, API docs, changelog, tutorial, copywriting, technical writing, microcopy, error messages, UI text, 문서 작성, 카피, 글쓰기 → agent "writer"`,
+    `- "agents" is an ARRAY. Use ONE agent for single-domain tasks, MULTIPLE for multi-domain.`,
+    `- Available agents: "Sam" (conversation only), "coder", "architect", "design", "writer"`,
+    `- "conversation" → ONLY pure greetings, thanks, or questions completely unrelated to any task → agents ["Sam"]`,
+    `- "development" standard → code changes, bugs, tests, refactor, implement → agents ["coder"]`,
+    `- "development" complex → system architecture, security audit, migration → agents ["architect"]`,
+    `- "development" design → UI/UX design, styling, visual improvements, layout, CSS → agents ["design"]`,
+    `- "development" writing → documentation, README, API docs, changelog → agents ["writer"]`,
+    `- Multi-agent examples:`,
+    `  "디자인 개선하고 버그도 고쳐" → agents ["design","coder"]`,
+    `  "Write tests and update the docs" → agents ["coder","writer"]`,
+    `  "Design the UI and implement the API" → agents ["design","coder"]`,
+    `- Single-agent examples:`,
+    `  "이 버그 고쳐" → agents ["coder"]`,
+    `  "Design a landing page" → agents ["design"]`,
+    `- "lang": detect the PRIMARY language of the user's input (2-letter ISO 639-1 code, e.g. "ko", "en", "ja", "zh")`,
     `- IMPORTANT: Short or ambiguous follow-ups that reference previous work (e.g. "fix that", "continue", "next", "keep going", "수정해", "계속", "다음") are development, NOT conversation.`,
     contextLine,
     ``,
@@ -110,15 +130,34 @@ export async function classifyWithSam(prompt: string, previousAgent?: string): P
 
     const parsed = JSON.parse(jsonMatch[0]);
     const type = parsed.type === "development" ? "development" : "conversation";
-    let agent: string;
+    const lang = typeof parsed.lang === "string" ? parsed.lang : "en";
+
+    // Parse agents array (backward compat: accept singular "agent" field too)
+    const validAgents = ["Sam", "coder", "architect", "design", "writer"];
+    const rawAgents: string[] = Array.isArray(parsed.agents)
+      ? parsed.agents.filter((a: string) => validAgents.includes(a))
+      : parsed.agent && validAgents.includes(parsed.agent)
+        ? [parsed.agent]
+        : [];
+
+    let agents: string[];
     if (type === "conversation") {
-      agent = "Sam";
+      agents = ["Sam"];
     } else {
-      const validDevAgents = ["architect", "design", "writer"];
-      agent = validDevAgents.includes(parsed.agent) ? parsed.agent : "coder";
+      agents = rawAgents.filter(a => a !== "Sam");
+      if (agents.length === 0) agents = ["coder"];
     }
 
-    return { type, agent, reason: `Sam: ${type} → ${agent}` };
+    const primaryAgent = agents[0];
+    const isMulti = agents.length > 1;
+
+    return {
+      type,
+      agent: primaryAgent,
+      agents: isMulti ? agents : undefined,
+      lang,
+      reason: `Sam: ${type} → ${agents.join("+")} (${lang})`,
+    };
   } catch (e) {
     const errMsg = (e as Error).message;
     // Fallback: if previous agent was a dev agent, stay with it
