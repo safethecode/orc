@@ -12,8 +12,6 @@ import { CancellationToken } from "../utils/cancellation.ts";
 import { RolloutRecorder } from "../session/rollout.ts";
 import { eventBus } from "../core/events.ts";
 import { decomposeWithSam } from "../core/decomposer.ts";
-import { ResultCollector } from "../core/result-collector.ts";
-import { ContextPropagator } from "../core/context-propagator.ts";
 import { scoutSkills, type ScoutResult } from "./skill-scout.ts";
 import { scoutMcp, type McpScoutResult } from "../mcp/mcp-scout.ts";
 import { ScoutCache } from "./scout-cache.ts";
@@ -573,8 +571,7 @@ export class ReplController {
 
     // Execute subtasks in parallel
     r.phaseUpdate("executing", `0/${decomposition.subtasks.length} tasks`);
-    const collector = new ResultCollector(decomposition.subtasks.map(s => s.id));
-    const propagator = new ContextPropagator();
+    const collected = new Map<string, { text: string; cost: number; inputTokens: number; outputTokens: number }>();
     let completedCount = 0;
 
     await Promise.all(
@@ -586,9 +583,14 @@ export class ReplController {
         if (!providerConfig) return;
 
         const harness = buildHarness({ agentName: name, role: st.agentRole as any, provider: profile.provider as any, parentTaskId: taskId, isWorker: true });
-        const context = propagator.buildContext(st.id, collector.getResults());
+        // Build context from already-completed siblings
+        const siblingCtx = [...collected.values()]
+          .map((c) => c.text)
+          .filter(Boolean)
+          .join("\n---\n");
+        const prompt = (siblingCtx ? siblingCtx + "\n\n" : "") + st.prompt;
         const cmd = buildCommand(providerConfig, profile, {
-          prompt: context + "\n\n" + st.prompt,
+          prompt,
           model: profile.model,
           systemPrompt: harness.systemPrompt,
           maxTurns: profile.maxTurns,
@@ -604,13 +606,13 @@ export class ReplController {
         });
 
         r.taskUpdate(st.id, "running");
-        const workerStart = Date.now();
+        const workerStartTime = Date.now();
         try {
           const result = await streamer.run(cmd, cancellation.signal);
-          collector.collect(st.id, { text: result.text, cost: result.costUsd, inputTokens: result.inputTokens, outputTokens: result.outputTokens });
+          collected.set(st.id, { text: result.text, cost: result.costUsd, inputTokens: result.inputTokens, outputTokens: result.outputTokens });
           completedCount++;
           r.workerDone(workerName);
-          r.taskUpdate(st.id, "passed", Date.now() - workerStart);
+          r.taskUpdate(st.id, "passed", Date.now() - workerStartTime);
           if (result.inputTokens > 0) {
             r.taskTokens(st.id, result.inputTokens, result.outputTokens);
             r.cost(result.costUsd, result.inputTokens, result.outputTokens);
@@ -618,15 +620,14 @@ export class ReplController {
           r.phaseUpdate("executing", `${completedCount}/${decomposition.subtasks.length} tasks`);
         } catch (e) {
           r.workerDone(workerName);
-          r.taskUpdate(st.id, "failed", Date.now() - workerStart);
+          r.taskUpdate(st.id, "failed", Date.now() - workerStartTime);
           r.error(`Worker ${name} failed: ${(e as Error).message}`);
         }
       }),
     );
 
     // Summarize results
-    const results = collector.getResults();
-    const combined = results.map(r => r.text).filter(Boolean).join("\n\n---\n\n");
+    const combined = [...collected.values()].map(c => c.text).filter(Boolean).join("\n\n---\n\n");
     if (combined) {
       const turn = { role: "assistant" as const, content: combined, agentName: "multi-agent", tier: "sonnet" as ModelTier, timestamp: new Date().toISOString() };
       this.conversation.add(turn);
