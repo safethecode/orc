@@ -186,7 +186,7 @@ export class ReplController {
     let agentName: string;
 
     r.phaseUpdate("routing");
-    r.startSpinner("orc", "haiku");
+    r.startSpinner("routing", "haiku");
 
     if (this.pinnedAgent) {
       const pinnedProfile = this.orchestrator.getRegistry().get(this.pinnedAgent);
@@ -233,6 +233,8 @@ export class ReplController {
     }
 
     if (route.multiAgent) {
+      r.stopSpinner();
+      r.startSpinner("orc", "supervisor" as any);
       await this.handleMultiAgent(input, cancellation);
       return;
     }
