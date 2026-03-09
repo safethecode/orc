@@ -40,6 +40,10 @@ export interface RendererPort {
   researchProgress(phase: string, detail?: string): void;
   researchComplete(durationMs: number): void;
   phaseUpdate(phase: string, detail?: string): void;
-  taskList(items: Array<{ id: string; label: string; role: string }>): void;
+  taskList(items: Array<{ id: string; label: string; role: string }>, description?: string): void;
   taskUpdate(taskId: string, status: string, durationMs?: number): void;
+  taskTokens(taskId: string, inputTokens: number, outputTokens: number): void;
+  workerStart(agentName: string, taskId: string, model: string): void;
+  workerUpdate(agentName: string, partial: Record<string, any>): void;
+  workerDone(agentName: string): void;
 }
