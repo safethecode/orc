@@ -1139,6 +1139,7 @@ async function handleNaturalInput(
     // eslint-disable-next-line prefer-const -- mutated inside event handler
     let pendingApproval: { command: string; ruleId: string; message: string } | null = null as any;
     let queueDrainAbort = false;
+    let doomLoopAbort: string | null = null;
     const WRITE_TOOLS = new Set(["write", "edit", "create", "patch", "apply_patch"]);
 
     // ── Monitoring: stall watchdog + spinner stats ──
@@ -1294,10 +1295,13 @@ async function handleNaturalInput(
         }
       }
 
-      // Doom loop detection (legacy — enforcer also checks)
+      // Doom loop detection: abort agent on repeated modifications
       const doomResult = orchestrator.getDoomLoop().record(tool.name, detail ?? "");
-      if (doomResult.triggered) {
-        renderer.error(`doom loop detected: ${tool.name} called ${doomResult.count}x — agent may be stuck`);
+      if (doomResult.triggered && !doomLoopAbort) {
+        const reason = doomResult.reason ?? `${tool.name} repeated ${doomResult.count}x`;
+        renderer.error(`\x1b[1m⛔ doom loop:\x1b[0m ${reason} — aborting agent`);
+        doomLoopAbort = reason;
+        streamer.abort();
       }
 
       // Auto-format after file write tool use
@@ -1488,6 +1492,33 @@ async function handleNaturalInput(
           conversation.add({ role: "assistant", content: "(user denied the command — execution aborted)", agentName, tier: route.model, timestamp: new Date().toISOString() });
           return;
         }
+      }
+
+      // Doom loop abort: agent was stopped due to repetitive modifications
+      if (doomLoopAbort) {
+        const reason = doomLoopAbort;
+        doomLoopAbort = null;
+        // Save partial work
+        if (result.text) {
+          conversation.add({ role: "assistant", content: result.text, agentName, tier: route.model, timestamp: new Date().toISOString() });
+        }
+        const correction = `STOP. You are stuck in a loop: ${reason}. Do NOT modify that file again. Step back, explain what you are trying to achieve, and find a different approach.`;
+        const correctionTurn = { role: "user" as const, content: correction, timestamp: new Date().toISOString() };
+        conversation.add(correctionTurn);
+        forkManager?.addTurn(correctionTurn);
+
+        conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? route.model] ?? TIER_BUDGETS.sonnet);
+        const newPrompt = conversation.buildPrompt(correction);
+        currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+          prompt: newPrompt,
+          model: currentProfile.model,
+          systemPrompt,
+          maxTurns: currentProfile.maxTurns,
+          mcpConfig: mcpConfigPath,
+        });
+        renderer.startSpinner(agentName, displayModel);
+        attempt = -1;
+        continue;
       }
 
       // Empty-response guard: agent produced tool calls but no text → ask for summary
