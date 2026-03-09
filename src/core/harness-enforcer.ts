@@ -493,6 +493,63 @@ const RULES: EnforcementRule[] = [
       return null;
     },
   },
+
+  // Rule 10: No-op tool call detection
+  {
+    id: "noop-tool-call",
+    name: "No-Op Tool Detection",
+    severity: "warn",
+    appliesTo: "all",
+    check(tool) {
+      if (isBashTool(tool.toolName)) {
+        const command = extractCommand(tool.input);
+        if (!command || !command.trim()) {
+          return {
+            ruleId: "noop-tool-call",
+            severity: "warn",
+            message: "Bash called with empty command.",
+            suggestion: "Only run commands that serve a specific purpose.",
+            toolName: tool.toolName,
+          };
+        }
+        const trimmed = command.trim();
+        const noopPatterns: Array<{ pattern: RegExp; label: string }> = [
+          { pattern: /^echo\s*$/, label: "echo with no arguments" },
+          { pattern: /^pwd\s*$/, label: "pwd (already known from context)" },
+          { pattern: /^whoami\s*$/, label: "whoami (unnecessary)" },
+          { pattern: /^(true|false|:)\s*$/, label: "no-op shell builtin" },
+          { pattern: /^ls\s*$/, label: "bare ls (use Glob instead)" },
+          { pattern: /^cat\s+\/dev\/null\s*$/, label: "cat /dev/null" },
+        ];
+        for (const { pattern, label } of noopPatterns) {
+          if (pattern.test(trimmed)) {
+            return {
+              ruleId: "noop-tool-call",
+              severity: "warn",
+              message: `Meaningless Bash: ${label}`,
+              suggestion: "Run commands with a clear purpose related to the current task.",
+              toolName: tool.toolName,
+            };
+          }
+        }
+      }
+
+      if (isReadTool(tool.toolName)) {
+        const filePath = extractFilePath(tool.input);
+        if (!filePath) {
+          return {
+            ruleId: "noop-tool-call",
+            severity: "warn",
+            message: "Read called with no file path.",
+            suggestion: "Specify the file path to read.",
+            toolName: tool.toolName,
+          };
+        }
+      }
+
+      return null;
+    },
+  },
 ];
 
 // ── Main Enforcer Class ──────────────────────────────────────────────

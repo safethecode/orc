@@ -354,6 +354,53 @@ describe("HarnessEnforcer", () => {
     });
   });
 
+  describe("noop-tool-call", () => {
+    it("warns on empty bash command", () => {
+      const result = enforcer.check("bash", { command: "" });
+      expect(result.violations.some(v => v.ruleId === "noop-tool-call")).toBe(true);
+    });
+
+    it("warns on bare echo", () => {
+      const result = enforcer.check("bash", { command: "echo" });
+      expect(result.violations.some(v => v.ruleId === "noop-tool-call")).toBe(true);
+    });
+
+    it("warns on bare pwd", () => {
+      const result = enforcer.check("bash", { command: "pwd" });
+      expect(result.violations.some(v => v.ruleId === "noop-tool-call")).toBe(true);
+    });
+
+    it("warns on bare ls", () => {
+      const result = enforcer.check("bash", { command: "ls" });
+      expect(result.violations.some(v => v.ruleId === "noop-tool-call")).toBe(true);
+    });
+
+    it("does not warn on ls with args", () => {
+      const result = enforcer.check("bash", { command: "ls src/" });
+      expect(result.violations.filter(v => v.ruleId === "noop-tool-call").length).toBe(0);
+    });
+
+    it("does not warn on normal command", () => {
+      const result = enforcer.check("bash", { command: "bun test" });
+      expect(result.violations.filter(v => v.ruleId === "noop-tool-call").length).toBe(0);
+    });
+
+    it("warns on read with no file_path", () => {
+      const result = enforcer.check("read", {});
+      expect(result.violations.some(v => v.ruleId === "noop-tool-call")).toBe(true);
+    });
+
+    it("does not warn on read with file_path", () => {
+      const result = enforcer.check("read", { file_path: "/src/index.ts" });
+      expect(result.violations.filter(v => v.ruleId === "noop-tool-call").length).toBe(0);
+    });
+
+    it("severity is warn (does not block)", () => {
+      const result = enforcer.check("bash", { command: "pwd" });
+      expect(result.allowed).toBe(true);
+    });
+  });
+
   describe("createEnforcer factory", () => {
     it("creates enforcer for each role", () => {
       const roles = ["coder", "reviewer", "tester", "researcher", "architect", "spec-writer"] as const;
