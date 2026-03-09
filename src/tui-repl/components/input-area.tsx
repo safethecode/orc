@@ -111,8 +111,9 @@ export function InputArea({ onSubmit, agents = [] }: Props) {
               s = 0.7;
             }
             if (s > 0) {
+              const displayName = agent.name.charAt(0).toUpperCase() + agent.name.slice(1);
               scored.push({
-                match: { kind: "agent", path: agent.name, name: agent.name, role: agent.role },
+                match: { kind: "agent", path: agent.name, name: displayName, role: agent.role },
                 score: s + 0.1, // boost agents above files
               });
             }
