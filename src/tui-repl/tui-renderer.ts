@@ -40,6 +40,7 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
     },
     workerToolUse(agentName, toolName, detail) {
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("tool", "", { agentName, toolName, toolDetail: detail }) });
+      dispatch({ type: "UPDATE_WORKER", name: agentName, partial: { lastTool: `${toolName}${detail ? " " + detail : ""}`, state: "tool_use" } });
     },
     workerFileChange(agentName, action, filePath) {
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `${agentName}: ${action} ${filePath}`) });
@@ -144,16 +145,33 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
     phaseUpdate(phase, detail) {
       dispatch({ type: "STATUS_UPDATE", partial: { phase: phase as any, phaseDetail: detail ?? "" } });
     },
-    taskList(items) {
+    taskList(items, description) {
       dispatch({
         type: "APPEND_MESSAGE",
         message: createMessage("task_list", "", {
           taskItems: items.map((i) => ({ ...i, status: "pending" as const })),
+          taskDescription: description,
         }),
       });
     },
     taskUpdate(taskId, status, durationMs) {
       dispatch({ type: "UPDATE_TASK_LIST", taskId, status, durationMs });
+    },
+    taskTokens(taskId, inputTokens, outputTokens) {
+      dispatch({ type: "UPDATE_TASK_TOKENS", taskId, inputTokens, outputTokens });
+    },
+    workerStart(agentName, taskId, model) {
+      dispatch({
+        type: "REGISTER_WORKER",
+        name: agentName,
+        entry: { state: "thinking", model, startedAt: Date.now(), taskId, inputTokens: 0, outputTokens: 0 },
+      });
+    },
+    workerUpdate(agentName, partial) {
+      dispatch({ type: "UPDATE_WORKER", name: agentName, partial });
+    },
+    workerDone(agentName) {
+      dispatch({ type: "REMOVE_WORKER", name: agentName });
     },
   };
 }

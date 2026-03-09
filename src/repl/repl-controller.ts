@@ -567,7 +567,7 @@ export class ReplController {
       id: st.id,
       label: st.prompt.slice(0, 60),
       role: st.agentRole,
-    })));
+    })), input.slice(0, 80));
 
     // Execute subtasks in parallel
     r.phaseUpdate("executing", `0/${decomposition.subtasks.length} tasks`);
@@ -592,10 +592,13 @@ export class ReplController {
           maxTurns: profile.maxTurns,
         });
 
+        const workerName = `${name}-${st.id}`;
+        r.workerStart(workerName, st.id, profile.model);
+
         const streamer = new AgentStreamer();
         streamer.on("tool_use", (tool: ToolUseEvent) => {
           const detail = (tool.input?.file_path as string) ?? (tool.input?.command as string) ?? undefined;
-          r.workerToolUse(name, tool.name, detail);
+          r.workerToolUse(workerName, tool.name, detail);
         });
 
         r.taskUpdate(st.id, "running");
@@ -604,12 +607,15 @@ export class ReplController {
           const result = await streamer.run(cmd, cancellation.signal);
           collector.collect(st.id, { text: result.text, cost: result.costUsd, inputTokens: result.inputTokens, outputTokens: result.outputTokens });
           completedCount++;
+          r.workerDone(workerName);
           r.taskUpdate(st.id, "passed", Date.now() - workerStart);
-          r.phaseUpdate("executing", `${completedCount}/${decomposition.subtasks.length} tasks`);
           if (result.inputTokens > 0) {
+            r.taskTokens(st.id, result.inputTokens, result.outputTokens);
             r.cost(result.costUsd, result.inputTokens, result.outputTokens);
           }
+          r.phaseUpdate("executing", `${completedCount}/${decomposition.subtasks.length} tasks`);
         } catch (e) {
+          r.workerDone(workerName);
           r.taskUpdate(st.id, "failed", Date.now() - workerStart);
           r.error(`Worker ${name} failed: ${(e as Error).message}`);
         }
