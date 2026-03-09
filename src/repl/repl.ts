@@ -1103,6 +1103,7 @@ async function handleNaturalInput(
   let midTurnDrains = 0;
   const MAX_MID_TURN_DRAINS = 5; // Prevent infinite queue drain loops
   let summaryRetried = false;
+  let incompleteRetried = false;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (cancellation.cancelled) break;
@@ -1509,6 +1510,34 @@ async function handleNaturalInput(
         renderer.startSpinner(agentName, displayModel);
         attempt = -1;
         continue;
+      }
+
+      // Incomplete-response guard: agent stated intent to act but stopped prematurely
+      if (result.text?.trim() && toolCount > 0 && !incompleteRetried) {
+        const lastLine = result.text.trim().split("\n").pop() ?? "";
+        const stalledIntent = lastLine.endsWith(":") || /\blet me\b.+(?:edit|write|fix|update|create|modify|change|implement|add|remove|replace|refactor)/i.test(lastLine);
+        if (stalledIntent) {
+          incompleteRetried = true;
+          renderer.info(`\x1b[2m⚡ incomplete response detected — auto-continuing\x1b[0m`);
+          const followUp = "You stated you would perform an action but stopped before completing it. Continue where you left off and finish the task.";
+          const followUpTurn = { role: "user" as const, content: followUp, timestamp: new Date().toISOString() };
+          conversation.add({ role: "assistant", content: result.text, agentName, tier: route.model, timestamp: new Date().toISOString() });
+          conversation.add(followUpTurn);
+          forkManager?.addTurn(followUpTurn);
+
+          conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? route.model] ?? TIER_BUDGETS.sonnet);
+          const newPrompt = conversation.buildPrompt(followUp);
+          currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+            prompt: newPrompt,
+            model: currentProfile.model,
+            systemPrompt,
+            maxTurns: currentProfile.maxTurns,
+            mcpConfig: mcpConfigPath,
+          });
+          renderer.startSpinner(agentName, displayModel);
+          attempt = -1;
+          continue;
+        }
       }
 
       // Quality gate
