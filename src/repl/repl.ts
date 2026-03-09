@@ -85,6 +85,18 @@ async function pollTeamInbox(): Promise<string | null> {
   return null;
 }
 
+/** Per-agent session context from multi-agent runs */
+interface AgentSessionContext {
+  role: string;
+  agentName: string;
+  systemPrompt: string;
+  originalTask: string;
+  resultText: string;
+  model: string;
+  taskId: string;
+  timestamp: string;
+}
+
 /**
  * Extract an @agent mention from input, disambiguating from @file references.
  * Agent names are simple words (no dots/slashes), file refs have path characters.
@@ -118,6 +130,8 @@ export async function startRepl(
   let currentCancellation: CancellationToken | null = null;
   let hasInteraction = false;
   let pinnedAgent: string | null = null;
+
+  const agentSessions = new Map<string, AgentSessionContext>();
 
   // Split-pane layout manager
   const layout = new LayoutManager();
@@ -612,6 +626,7 @@ export async function startRepl(
           recentFileChanges,
           rl,
           layout,
+          agentSessions,
         );
       } finally {
         // Exit agent mode: collect queued messages
@@ -705,6 +720,7 @@ async function handleNaturalInput(
   recentFileChanges?: string[],
   rl?: readline.Interface,
   layout?: LayoutManager,
+  agentSessions?: Map<string, AgentSessionContext>,
 ): Promise<void> {
   let route: RouteResult;
   let agentName: string;
@@ -720,6 +736,15 @@ async function handleNaturalInput(
     route = { tier: "medium", model, multiAgent: false, reason: `pinned to ${pinned}` };
     agentName = pinned;
   } else if (mentioned) {
+    // Check for stored multi-agent session context
+    const session = agentSessions?.get(mentioned);
+    if (session) {
+      await resumeAgentSession(input, session, orchestrator, config, conversation,
+        rollout, cancellation, onStreamer, forkManager);
+      return;
+    }
+
+    // No session — fall back to fresh start (existing behavior)
     const mentionedProfile = orchestrator.getRegistry().get(mentioned);
     if (!mentionedProfile) {
       renderer.error(`Agent "${mentioned}" not found.`);
@@ -781,7 +806,7 @@ async function handleNaturalInput(
   }
 
   if (route.multiAgent) {
-    await handleMultiAgent(input, orchestrator, config, conversation, rollout, cancellation, onStreamer, mcpScoutCache, skillScoutCache, forkManager, samAgents);
+    await handleMultiAgent(input, orchestrator, config, conversation, rollout, cancellation, onStreamer, mcpScoutCache, skillScoutCache, forkManager, samAgents, agentSessions);
     return;
   }
 
@@ -1728,6 +1753,133 @@ async function handleNaturalInput(
   }
 }
 
+async function resumeAgentSession(
+  userMessage: string,
+  session: AgentSessionContext,
+  orchestrator: Orchestrator,
+  config: OrchestratorConfig,
+  conversation: Conversation,
+  rollout: RolloutRecorder,
+  cancellation: CancellationToken,
+  onStreamer: (s: AgentStreamer) => void,
+  forkManager?: SessionForkManager,
+): Promise<void> {
+  const profile = orchestrator.getRegistry().get(session.agentName)
+    ?? orchestrator.getRegistry().get(session.role);
+  if (!profile) {
+    renderer.error(`Agent profile "${session.agentName}" not found.`);
+    return;
+  }
+  const providerConfig = config.providers[profile.provider];
+  if (!providerConfig) {
+    renderer.error(`No provider config for "${profile.provider}".`);
+    return;
+  }
+
+  const displayModel = (profile.model as ModelTier) ?? (session.model as ModelTier);
+
+  renderer.agentHeader(session.agentName, displayModel, `resuming @${session.role}`);
+  renderer.info(`\x1b[2m↩ continuing from previous ${session.role} session\x1b[0m`);
+
+  // Build conversation with agent's previous context
+  const contextPrompt = [
+    `## Previous Task\n${session.originalTask}`,
+    `## Your Previous Response\n${session.resultText}`,
+    `## Follow-up Request\n${userMessage}`,
+  ].join("\n\n");
+
+  // MCP config
+  const mcpMgr = orchestrator.getMcpManager();
+  let mcpConfigPath: string | undefined;
+  if (mcpMgr.getToolCount() > 0 && profile.provider === "claude") {
+    mcpConfigPath = mcpMgr.generateMcpConfigJson() ?? undefined;
+  }
+
+  const cmd = buildCommand(providerConfig, profile, {
+    prompt: contextPrompt,
+    model: session.model,
+    systemPrompt: session.systemPrompt,
+    maxTurns: profile.maxTurns,
+    mcpConfig: mcpConfigPath,
+  });
+
+  // Record user turn
+  const userTurn = { role: "user" as const, content: userMessage, timestamp: new Date().toISOString() };
+  conversation.add(userTurn);
+  forkManager?.addTurn(userTurn);
+  rollout.append({ type: "turn", timestamp: userTurn.timestamp, data: userTurn });
+
+  renderer.startSpinner(session.agentName, displayModel);
+
+  const streamer = new AgentStreamer();
+  onStreamer(streamer);
+  let boxOpen = false;
+
+  streamer.on("text_delta", (delta: string) => {
+    if (!boxOpen) {
+      renderer.stopSpinner();
+      renderer.startBox(displayModel);
+      boxOpen = true;
+    }
+    renderer.text(delta);
+  });
+  streamer.on("text_complete", () => {
+    if (boxOpen) { renderer.endBox(); boxOpen = false; }
+    renderer.startSpinner(session.agentName, displayModel);
+  });
+  streamer.on("usage", (usage: { costUsd: number }) => {
+    renderer.updateCostLive(usage.costUsd);
+  });
+  streamer.on("tool_use", (tool: ToolUseEvent) => {
+    const inp = tool.input ?? {};
+    const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
+    renderer.stopSpinner();
+    if (boxOpen) {
+      renderer.toolUse(tool.name, detail, true);
+    } else {
+      renderer.toolUse(tool.name, detail, false);
+    }
+    renderer.startSpinner(session.agentName, displayModel);
+  });
+  streamer.on("error", (msg: string) => {
+    renderer.stopSpinner();
+    if (boxOpen) renderer.endBox();
+    renderer.error(msg);
+  });
+
+  const startTime = Date.now();
+  try {
+    const result = await streamer.run(cmd, cancellation.signal);
+    renderer.stopSpinner();
+    const durationMs = Date.now() - startTime;
+    if (boxOpen) renderer.endBox();
+
+    if (result.inputTokens > 0 || result.outputTokens > 0) {
+      renderer.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
+    }
+
+    const assistantTurn = {
+      role: "assistant" as const,
+      content: result.text,
+      agentName: session.agentName,
+      tier: displayModel,
+      timestamp: new Date().toISOString(),
+    };
+    conversation.add(assistantTurn);
+    forkManager?.addTurn(assistantTurn);
+    rollout.append({ type: "turn", timestamp: assistantTurn.timestamp, data: assistantTurn });
+
+    // Update session with latest result for subsequent follow-ups
+    session.originalTask = userMessage;
+    session.resultText = result.text;
+    session.timestamp = new Date().toISOString();
+  } catch (e) {
+    renderer.stopSpinner();
+    if (boxOpen) renderer.endBox();
+    renderer.error(`Agent execution failed: ${(e as Error).message}`);
+  }
+}
+
 async function handleMultiAgent(
   input: string,
   orchestrator: Orchestrator,
@@ -1740,6 +1892,7 @@ async function handleMultiAgent(
   skillScoutCache: ScoutCache,
   forkManager?: SessionForkManager,
   samAgents?: string[],
+  agentSessions?: Map<string, AgentSessionContext>,
 ): Promise<void> {
   const taskId = `repl-${Date.now().toString(36)}`;
 
@@ -1948,13 +2101,13 @@ async function handleMultiAgent(
 
     if (phaseSubtasks.length > 1) {
       const promises = phaseSubtasks.map(st =>
-        executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator, detectedLang),
+        executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator, detectedLang, agentSessions),
       );
       await Promise.all(promises);
     } else {
       for (const st of phaseSubtasks) {
         if (cancellation.cancelled) break;
-        await executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator, detectedLang);
+        await executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator, detectedLang, agentSessions);
       }
     }
   }
@@ -2078,6 +2231,7 @@ async function executeSubtask(
   qaHistory: QAIssue[][],
   propagator: ContextPropagator,
   lang?: string,
+  agentSessions?: Map<string, AgentSessionContext>,
 ): Promise<void> {
   const agentName = `${subtask.agentRole}-${subtask.id.slice(-4)}`;
   // Use profile model if available, otherwise fall back to subtask.model
@@ -2344,6 +2498,20 @@ async function executeSubtask(
         intermediateResults: [],
       };
       collector.collect(workerState, subtask.agentRole as import("../config/types.ts").AgentRole, subtask.agentRole);
+
+      // Save session for @agent follow-up
+      if (agentSessions) {
+        agentSessions.set(subtask.agentRole, {
+          role: subtask.agentRole,
+          agentName,
+          systemPrompt,
+          originalTask: subtask.prompt,
+          resultText: result.text,
+          model: currentModel,
+          taskId: subtask.parentTaskId,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       // Record conflict diff
       const collected = collector.getResult(subtask.id);
