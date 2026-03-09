@@ -49,9 +49,7 @@ export function buildCommand(
       ];
     }
 
-    if (options.maxTurns) {
-      cmd.push("--max-turns", String(options.maxTurns));
-    }
+    cmd.push("--max-turns", String(options.maxTurns ?? 1000));
 
     if (options.systemPrompt) {
       cmd.push("--system-prompt", options.systemPrompt);
