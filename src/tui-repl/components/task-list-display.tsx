@@ -100,7 +100,22 @@ export function TaskListDisplay({ meta }: Props) {
           // Find worker with matching taskId
           for (const [, w] of workers) {
             if (w.taskId === item.id && w.lastTool) {
-              rightInfo = w.lastTool;
+              const tool = w.lastTool;
+              // Truncate long tool paths: "Read /very/long/path/file.ts" → "Read …path/file.ts"
+              if (tool.length > 40) {
+                const spaceIdx = tool.indexOf(" ");
+                if (spaceIdx > 0) {
+                  const name = tool.slice(0, spaceIdx);
+                  const arg = tool.slice(spaceIdx + 1);
+                  const parts = arg.split("/");
+                  const short = parts.length > 2 ? parts.slice(-2).join("/") : arg;
+                  rightInfo = `${name} …${short}`;
+                } else {
+                  rightInfo = tool.slice(0, 37) + "...";
+                }
+              } else {
+                rightInfo = tool;
+              }
               break;
             }
           }
