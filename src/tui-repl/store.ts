@@ -39,7 +39,12 @@ export interface MessageMeta {
     role: string;
     status: "pending" | "running" | "passed" | "failed" | "reviewing";
     durationMs?: number;
+    inputTokens?: number;
+    outputTokens?: number;
   }>;
+  taskDescription?: string;
+  totalInputTokens?: number;
+  totalOutputTokens?: number;
 }
 
 export interface Message {
@@ -74,6 +79,9 @@ export interface WorkerEntry {
   model: string;
   startedAt: number;
   lastTool?: string;
+  taskId: string;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export type WorkflowPhase = "idle" | "routing" | "classifying" | "decomposing" | "executing" | "reviewing" | "done";
@@ -109,6 +117,10 @@ type Action =
   | { type: "APPEND_MESSAGE"; message: Message }
   | { type: "UPDATE_WELCOME_META"; partial: Partial<MessageMeta> }
   | { type: "UPDATE_TASK_LIST"; taskId: string; status: string; durationMs?: number }
+  | { type: "REGISTER_WORKER"; name: string; entry: WorkerEntry }
+  | { type: "UPDATE_WORKER"; name: string; partial: Partial<WorkerEntry> }
+  | { type: "REMOVE_WORKER"; name: string }
+  | { type: "UPDATE_TASK_TOKENS"; taskId: string; inputTokens: number; outputTokens: number }
   | { type: "STREAMING_START"; tier: ModelTier }
   | { type: "STREAMING_DELTA"; text: string }
   | { type: "STREAMING_COMMIT" }
@@ -139,6 +151,42 @@ function reducer(state: StoreState, action: Action): StoreState {
       );
       const updated = [...state.messages];
       updated[idx] = { ...msg, meta: { ...msg.meta, taskItems: items } };
+      return { ...state, messages: updated };
+    }
+    case "REGISTER_WORKER": {
+      const workers = new Map(state.status.workers);
+      workers.set(action.name, action.entry);
+      return { ...state, status: { ...state.status, workers } };
+    }
+    case "UPDATE_WORKER": {
+      const workers = new Map(state.status.workers);
+      const existing = workers.get(action.name);
+      if (!existing) return state;
+      workers.set(action.name, { ...existing, ...action.partial });
+      return { ...state, status: { ...state.status, workers } };
+    }
+    case "REMOVE_WORKER": {
+      const workers = new Map(state.status.workers);
+      workers.delete(action.name);
+      return { ...state, status: { ...state.status, workers } };
+    }
+    case "UPDATE_TASK_TOKENS": {
+      const idx = state.messages.findLastIndex((m) => m.type === "task_list");
+      if (idx === -1) return state;
+      const msg = state.messages[idx];
+      const items = msg.meta?.taskItems?.map((item) =>
+        item.id === action.taskId
+          ? { ...item, inputTokens: action.inputTokens, outputTokens: action.outputTokens }
+          : item,
+      );
+      let totalInput = 0;
+      let totalOutput = 0;
+      for (const item of items ?? []) {
+        totalInput += item.inputTokens ?? 0;
+        totalOutput += item.outputTokens ?? 0;
+      }
+      const updated = [...state.messages];
+      updated[idx] = { ...msg, meta: { ...msg.meta, taskItems: items, totalInputTokens: totalInput, totalOutputTokens: totalOutput } };
       return { ...state, messages: updated };
     }
     case "STREAMING_START":
