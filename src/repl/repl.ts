@@ -1461,41 +1461,28 @@ async function handleNaturalInput(
         // Ask user for approval via readline
         const answer = await rl.question("  Allow this command? [y/N] ");
         if (answer.trim().toLowerCase() === "y") {
-          // Approve and retry
           orchestrator.getHarnessEnforcer().approve(command);
           renderer.info("  \x1b[32mApproved.\x1b[0m Retrying...");
           pendingApproval = null;
-          // Re-run with same prompt (recursive call via the retry loop)
-          const retryStreamer = new AgentStreamer();
-          onStreamer(retryStreamer);
-          let retryBox = false;
-          retryStreamer.on("text_delta", (d: string) => {
-            if (!retryBox) { renderer.stopSpinner(); renderer.startBox(route.model); retryBox = true; }
-            renderer.text(d);
+
+          // Inject context so agent knows the command was approved
+          const approvalMsg = `The user approved this command: \`${command}\`. Execute it now and continue.`;
+          const approvalTurn = { role: "user" as const, content: approvalMsg, timestamp: new Date().toISOString() };
+          conversation.add(approvalTurn);
+          forkManager?.addTurn(approvalTurn);
+
+          conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? route.model] ?? TIER_BUDGETS.sonnet);
+          const newPrompt = conversation.buildPrompt(approvalMsg);
+          currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+            prompt: newPrompt,
+            model: currentProfile.model,
+            systemPrompt,
+            maxTurns: currentProfile.maxTurns,
+            mcpConfig: mcpConfigPath,
           });
-          retryStreamer.on("text_complete", () => {
-            if (retryBox) { renderer.endBox(); retryBox = false; }
-            renderer.startSpinner(agentName, route.model);
-          });
-          retryStreamer.on("usage", (u: { costUsd: number }) => renderer.updateCostLive(u.costUsd));
-          retryStreamer.on("tool_use", (t: ToolUseEvent) => {
-            const d = (t.input?.file_path as string) ?? (t.input?.command as string) ?? undefined;
-            if (retryBox) renderer.toolUse(t.name, d, true);
-            else renderer.updateSpinner(`${t.name} ${d ? d.split("/").pop() : ""}`.trim());
-          });
-          retryStreamer.on("error", (m: string) => { renderer.stopSpinner(); if (retryBox) renderer.endBox(); renderer.error(m); });
-          renderer.startSpinner(agentName, route.model);
-          const retryResult = await retryStreamer.run(currentCmd, cancellation.signal);
-          renderer.stopSpinner();
-          if (retryBox) renderer.endBox();
-          // Use retry result instead
-          if (retryResult.text) {
-            conversation.add({ role: "assistant", content: retryResult.text, agentName, tier: route.model, timestamp: new Date().toISOString() });
-          }
-          if (retryResult.inputTokens > 0 || retryResult.outputTokens > 0) {
-            renderer.cost(retryResult.costUsd, retryResult.inputTokens, retryResult.outputTokens, Date.now() - startTime);
-          }
-          return;
+          renderer.startSpinner(agentName, displayModel);
+          attempt = -1;
+          continue;
         } else {
           renderer.info("  \x1b[31mDenied.\x1b[0m Command was not executed.");
           pendingApproval = null;
