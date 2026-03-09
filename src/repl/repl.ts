@@ -758,15 +758,23 @@ async function handleNaturalInput(
       );
     }
 
-    // Sam (haiku) classifies: development vs conversation
+    // Sam (haiku) classifies: development vs conversation, multi-agent, language
     renderer.info(`\x1b[2m🏷 Sam is classifying...\x1b[0m`);
     const classification = await classifyWithSam(input);
     agentName = classification.agent;
     renderer.info(`\x1b[36m🏷 ${classification.reason}\x1b[0m`);
 
-    // If Sam classified as conversation, override route to skip multi-agent
-    if (classification.type === "conversation") {
+    // Sam's multi-agent judgment takes priority over static keyword heuristic
+    if (classification.agents && classification.agents.length > 1) {
+      route.multiAgent = true;
+      route.reason = `Sam multi-agent: ${classification.agents.join("+")}`;
+    } else if (classification.type === "conversation") {
       route.multiAgent = false;
+    }
+
+    // Store detected language on conversation for downstream use
+    if (classification.lang) {
+      conversation.setLanguage(classification.lang);
     }
   }
 
