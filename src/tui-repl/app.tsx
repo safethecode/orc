@@ -4,7 +4,7 @@ import { useKeyboard } from "@opentui/react";
 import { StoreContext, INITIAL_STATE, reducer } from "./store.ts";
 import { MessageArea } from "./components/message-area.tsx";
 import { StatusBar } from "./components/status-bar.tsx";
-import { WorkerHud } from "./components/worker-hud.tsx";
+
 import { ProjectBar } from "./components/project-bar.tsx";
 import { InputArea, type AgentEntry } from "./components/input-area.tsx";
 import { ApprovalDialog } from "./components/approval-dialog.tsx";
@@ -95,7 +95,6 @@ export function App({ onSubmit, onAbort, dispatchRef, approvalRef, agents }: Pro
     <StoreContext.Provider value={{ state, dispatch }}>
       <box flexDirection="column" width="100%" height="100%">
         <MessageArea />
-        <WorkerHud />
         <ProjectBar />
         <StatusBar />
         {state.approval ? (
