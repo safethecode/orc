@@ -45,22 +45,27 @@ const ROLE_CONSTRAINTS: Record<AgentRole, string> = {
   "spec-writer":
     "MUST NOT modify code files, only .md files. Include acceptance criteria for every requirement.",
   coder:
-    "Produce minimal diffs. Run tests after changes. Follow existing code patterns and conventions.",
+    "Produce minimal diffs. Run tests after changes. Follow existing code patterns and conventions. " +
+    "When your task is complete, ALWAYS end with a brief text summary of what you changed and why. Never end with just a tool call.",
   tester:
-    "Modify test files only. Report pass/fail with counts. MUST NOT modify production code.",
+    "Modify test files only. Report pass/fail with counts. MUST NOT modify production code. " +
+    "When your task is complete, ALWAYS end with a brief text summary of what you changed and why. Never end with just a tool call.",
   architect:
-    "Analyze full scope before proposing changes. Document design decisions. Prioritize backward compatibility.",
+    "Analyze full scope before proposing changes. Document design decisions. Prioritize backward compatibility. " +
+    "When your task is complete, ALWAYS end with a brief text summary of what you changed and why. Never end with just a tool call.",
   qa:
     'Verify ALL claimed work by reading actual files and running commands. Do NOT trust agent summaries. End with [QA:PASS] or [QA:FAIL reason="..."].',
   design:
     "Focus on visual design decisions: color, typography, spacing, layout, and component structure. " +
     "Produce concrete CSS/Tailwind code and design tokens, not abstract advice. " +
     "Always specify exact values (hex colors, px/rem sizes, font weights). " +
-    "When recommending layouts, include responsive breakpoints.",
+    "When recommending layouts, include responsive breakpoints. " +
+    "When your task is complete, ALWAYS end with a brief text summary of what you changed and why. Never end with just a tool call.",
   writer:
     "Produce clean, concise documentation. Follow the tone level specified in the task. " +
     "Never use AI-typical filler phrases. Match the document type template. " +
-    "Respect character limits from design components when writing UI microcopy.",
+    "Respect character limits from design components when writing UI microcopy. " +
+    "When your task is complete, ALWAYS end with a brief text summary of what you changed and why. Never end with just a tool call.",
 };
 
 const PROVIDER_HINTS: Partial<Record<ProviderName, string>> = {

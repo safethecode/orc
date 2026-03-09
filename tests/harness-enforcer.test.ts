@@ -399,6 +399,20 @@ describe("HarnessEnforcer", () => {
       const result = enforcer.check("bash", { command: "pwd" });
       expect(result.allowed).toBe(true);
     });
+
+    it("detects TodoWrite as noop tool call", () => {
+      const result = enforcer.check("TodoWrite", { todos: [{ id: "1", status: "completed" }] });
+      const noop = result.violations.find(v => v.ruleId === "noop-tool-call");
+      expect(noop).toBeDefined();
+      expect(noop!.message).toContain("internal tool");
+    });
+
+    it("detects TodoRead as noop tool call", () => {
+      const result = enforcer.check("TodoRead", {});
+      const noop = result.violations.find(v => v.ruleId === "noop-tool-call");
+      expect(noop).toBeDefined();
+      expect(noop!.message).toContain("internal tool");
+    });
   });
 
   describe("createEnforcer factory", () => {
