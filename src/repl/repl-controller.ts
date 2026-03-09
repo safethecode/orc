@@ -1,7 +1,7 @@
 import type { Orchestrator } from "../core/orchestrator.ts";
 import type { OrchestratorConfig, ModelTier, SubTask, ProviderName } from "../config/types.ts";
 import type { RendererPort } from "./renderer-types.ts";
-import { routeTask, suggestAgent, classifyWithSam, type RouteResult } from "../core/router.ts";
+import { routeTask, classifyWithSam, type RouteResult } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
 import { AgentStreamer, type ToolUseEvent, type StreamResult } from "./streamer.ts";
@@ -24,6 +24,13 @@ import { HashlineEditor } from "../core/hashline.ts";
 import { SessionForkManager } from "../core/session-fork.ts";
 import { shouldBrainstorm, brainstorm } from "../core/brainstorm.ts";
 import type { AgentRegistry } from "../agents/registry.ts";
+
+/** Map decomposer agentRole → profile name */
+const ROLE_TO_PROFILE: Record<string, string> = {
+  coder: "coder", architect: "architect", design: "design",
+  writer: "writer", reviewer: "reviewer", researcher: "researcher",
+  tester: "coder", "spec-writer": "writer", qa: "reviewer",
+};
 
 /**
  * Extract an @agent mention from input, case-insensitive.
@@ -546,7 +553,7 @@ export class ReplController {
 
     if (decomposition.subtasks.length <= 1) {
       const st = decomposition.subtasks[0];
-      const name = suggestAgent(st.agentRole === "architect" ? "complex" : "medium");
+      const name = ROLE_TO_PROFILE[st.agentRole] ?? "coder";
       const profile = this.orchestrator.getRegistry().get(name);
       if (!profile) { r.error(`No profile for "${name}".`); return; }
       const providerConfig = this.config.providers[profile.provider];
@@ -578,7 +585,7 @@ export class ReplController {
 
     await Promise.all(
       decomposition.subtasks.map(async (st) => {
-        const name = suggestAgent(st.agentRole === "architect" ? "complex" : "medium");
+        const name = ROLE_TO_PROFILE[st.agentRole] ?? "coder";
         const profile = this.orchestrator.getRegistry().get(name);
         if (!profile) return;
         const providerConfig = this.config.providers[profile.provider];
