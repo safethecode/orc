@@ -595,7 +595,6 @@ export class ReplController {
           prompt,
           model: profile.model,
           systemPrompt: harness.systemPrompt,
-          maxTurns: profile.maxTurns,
         });
 
         const workerName = `${name}-${st.id}`;
