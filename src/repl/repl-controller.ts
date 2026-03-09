@@ -56,6 +56,10 @@ export interface ApprovalCallback {
   (command: string, message: string): Promise<boolean>;
 }
 
+export interface AskUserCallback {
+  (question: string, options?: string[]): Promise<string>;
+}
+
 // ── Controller ──────────────────────────────────────────────────────
 
 export interface ReplControllerOptions {
@@ -63,6 +67,7 @@ export interface ReplControllerOptions {
   config: OrchestratorConfig;
   renderer: RendererPort;
   approve?: ApprovalCallback;
+  askUser?: AskUserCallback;
 }
 
 export class ReplController {
@@ -70,6 +75,7 @@ export class ReplController {
   private config: OrchestratorConfig;
   private renderer: RendererPort;
   private approve: ApprovalCallback;
+  private askUser: AskUserCallback;
 
   private conversation = new Conversation();
   private planMode = new PlanMode();
@@ -91,6 +97,7 @@ export class ReplController {
     this.config = opts.config;
     this.renderer = opts.renderer;
     this.approve = opts.approve ?? (() => Promise.resolve(false));
+    this.askUser = opts.askUser ?? (() => Promise.resolve(""));
     this.rollout = new RolloutRecorder(`${opts.config.orchestrator.dataDir}/sessions`);
     this.fileRef.warmCache().catch(() => {});
   }
@@ -426,6 +433,7 @@ export class ReplController {
       this.currentStreamer = streamer;
       let boxOpen = false;
       let pendingApproval: { command: string; message: string } | null = null;
+      let pendingQuestion: { question: string; options?: string[] } | null = null;
 
       streamer.on("text_delta", (delta: string) => {
         if (!boxOpen) { r.stopSpinner(); r.startBox(route.model); boxOpen = true; }
@@ -447,6 +455,20 @@ export class ReplController {
         r.stopSpinner();
         // Close text box first so tool badge appears between text blocks
         if (boxOpen) { r.endBox(); boxOpen = false; }
+
+        // Intercept AskUserQuestion — abort and relay to user
+        if (tool.name === "AskUserQuestion") {
+          const questions = inp.questions as Array<{ question: string; options?: Array<{ label: string }> }> | undefined;
+          const q = questions?.[0];
+          const questionText = q?.question ?? (inp.question as string) ?? "Agent has a question";
+          const options = q?.options?.map((o: any) => o.label);
+          pendingQuestion = { question: questionText, options };
+          r.info(`❓ ${questionText}`);
+          if (options?.length) r.info(`   ${options.map((o: string, i: number) => `${i + 1}. ${o}`).join("  ")}`);
+          streamer.abort();
+          return;
+        }
+
         r.toolUse(tool.name, detail, false, inp);
         r.startSpinner(agentName, route.model);
         eventBus.publish({ type: "agent:tool", agent: agentName, tool: tool.name, detail });
@@ -506,6 +528,31 @@ export class ReplController {
           } else {
             r.info("Denied. Command was not executed.");
             this.conversation.add({ role: "assistant" as const, content: "(user denied the command)", agentName, tier: route.model, timestamp: new Date().toISOString() });
+            return;
+          }
+        }
+
+        // AskUserQuestion flow: relay question to user, retry with answer
+        if (pendingQuestion) {
+          const { question, options } = pendingQuestion;
+          const answer = await this.askUser(question, options);
+          pendingQuestion = null;
+          if (answer) {
+            // Rebuild command with user's answer appended
+            const withAnswer = input + `\n\n[The agent asked: "${question}" — User answered: "${answer}". Continue with this answer.]`;
+            this.conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
+            const retryPrompt = this.conversation.buildPrompt(withAnswer);
+            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+              prompt: retryPrompt,
+              model: currentProfile.model,
+              systemPrompt,
+              maxTurns: currentProfile.maxTurns,
+              mcpConfig: mcpConfigPath,
+            });
+            attempt--; // Don't count as retry
+            continue;
+          } else {
+            r.info("No answer provided.");
             return;
           }
         }

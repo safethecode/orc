@@ -35,6 +35,9 @@ export async function startTuiRepl(
   // Mutable ref: populated when an approval is pending, resolved by App's Y/N handler
   const approvalRef: { current: { resolve: (approved: boolean) => void } | null } = { current: null };
 
+  // Mutable ref: populated when agent asks user a question, resolved by App's input handler
+  const askUserRef: { current: { resolve: (answer: string) => void; question: string; options?: string[] } | null } = { current: null };
+
   let controller: ReplController | null = null;
 
   const rendererOpts = {
@@ -53,10 +56,20 @@ export async function startTuiRepl(
     });
   };
 
+  // AskUser callback: dispatches SHOW_QUESTION, waits for user answer via Promise
+  const askUserCallback = async (question: string, options?: string[]): Promise<string> => {
+    return new Promise<string>((resolve) => {
+      askUserRef.current = { resolve, question, options };
+      if (dispatchRef.current) {
+        dispatchRef.current({ type: "SHOW_QUESTION", question, options });
+      }
+    });
+  };
+
   const handleSubmit = async (text: string) => {
     if (!controller && dispatchRef.current) {
       const tuiRenderer = createTuiRenderer(dispatchRef.current, rendererOpts);
-      controller = new ReplController({ orchestrator, config, renderer: tuiRenderer, approve: approveCallback });
+      controller = new ReplController({ orchestrator, config, renderer: tuiRenderer, approve: approveCallback, askUser: askUserCallback });
       await controller.initialize();
     }
     if (controller) {
@@ -82,6 +95,7 @@ export async function startTuiRepl(
       onAbort={handleAbort}
       dispatchRef={dispatchRef}
       approvalRef={approvalRef}
+      askUserRef={askUserRef}
       agents={agents}
     />,
   );
@@ -90,7 +104,7 @@ export async function startTuiRepl(
   setTimeout(async () => {
     if (dispatchRef.current) {
       const tuiRenderer = createTuiRenderer(dispatchRef.current, rendererOpts);
-      controller = new ReplController({ orchestrator, config, renderer: tuiRenderer, approve: approveCallback });
+      controller = new ReplController({ orchestrator, config, renderer: tuiRenderer, approve: approveCallback, askUser: askUserCallback });
       await controller.initialize();
     }
   }, 100);
