@@ -100,7 +100,9 @@ export function buildHarness(options: HarnessOptions): HarnessResult {
   const toolInstructions = toolSelector.formatForPrompt(provider);
   const toolSection = toolInstructions ? `\n\n## Tool Usage\n${toolInstructions}` : "";
 
-  const systemPrompt = `${identity}${protocol}${constraints}${providerSection}${toolSection}`;
+  const autonomous = "\n\nIMPORTANT: You are running in autonomous mode. NEVER use AskUserQuestion or ask the user for clarification. Make your best judgment and proceed. If unsure, pick the most reasonable option and execute it. Do not stop to ask — just do it.";
+
+  const systemPrompt = `${identity}${protocol}${constraints}${providerSection}${toolSection}${autonomous}`;
 
   // Rough token estimate: ~1 token per 4 chars
   const tokenEstimate = Math.ceil(systemPrompt.length / 4);
