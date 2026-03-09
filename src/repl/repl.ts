@@ -7,6 +7,7 @@ import { routeTask, suggestAgent, classifyWithSam, type RouteResult, type Classi
 import { buildCommand } from "../agents/provider.ts";
 import { AgentRegistry } from "../agents/registry.ts";
 import { buildHarness } from "../agents/harness.ts";
+import { StallWatchdog } from "./stall-watchdog.ts";
 import { buildDynamicHarnessAsync } from "../agents/dynamic-harness.ts";
 import { AgentStreamer, type ToolUseEvent, type StreamResult } from "./streamer.ts";
 import { Conversation } from "./conversation.ts";
@@ -1130,8 +1131,27 @@ async function handleNaturalInput(
     let queueDrainAbort = false;
     const WRITE_TOOLS = new Set(["write", "edit", "create", "patch", "apply_patch"]);
 
+    // ── Monitoring: stall watchdog + spinner stats ──
+    let toolCount = 0;
+    const spinnerStart = Date.now();
+    const watchdog = new StallWatchdog({
+      onWarn: (ms) => renderer.info(`\x1b[33m⚠ stall: no activity for ${Math.round(ms / 1000)}s\x1b[0m`),
+      onSuggestAbort: (ms) => renderer.info(`\x1b[33m⚠ agent appears stuck (${Math.round(ms / 1000)}s). Press ESC to abort.\x1b[0m`),
+      onAutoAbort: (ms) => {
+        renderer.error(`Auto-aborting: no activity for ${Math.round(ms / 1000)}s`);
+        streamer.abort();
+      },
+    });
+    watchdog.start();
+    const spinnerTicker = setInterval(() => {
+      const elapsed = Math.round((Date.now() - spinnerStart) / 1000);
+      const stats = toolCount > 0 ? ` ${elapsed}s \x1b[2m·\x1b[0m ${toolCount} tools` : ` ${elapsed}s`;
+      renderer.updateSpinner(`${agentName} is thinking...${stats}`);
+    }, 1_000);
+
     // Real-time streaming: open box on first content, stream into it
     streamer.on("text_delta", (delta: string) => {
+      watchdog.touch();
       if (!boxOpen) {
         renderer.stopSpinner();
         renderer.startBox(route.model);
@@ -1143,6 +1163,7 @@ async function handleNaturalInput(
 
     // Restart spinner between streaming blocks (fills the visual gap)
     streamer.on("text_complete", () => {
+      watchdog.touch();
       if (boxOpen) {
         renderer.endBox();
         boxOpen = false;
@@ -1152,10 +1173,13 @@ async function handleNaturalInput(
 
     // Live cost updates for status bar
     streamer.on("usage", (usage: { costUsd: number }) => {
+      watchdog.touch();
       renderer.updateCostLive(usage.costUsd);
     });
 
     streamer.on("tool_use", (tool: ToolUseEvent) => {
+      watchdog.touch();
+      toolCount++;
       const inp = tool.input ?? {};
       const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
 
@@ -1358,6 +1382,8 @@ async function handleNaturalInput(
 
     try {
       const result = await streamer.run(currentCmd, cancellation.signal);
+      watchdog.stop();
+      clearInterval(spinnerTicker);
       renderer.stopSpinner();
       const durationMs = Date.now() - startTime;
 
@@ -1505,6 +1531,8 @@ async function handleNaturalInput(
       break; // Success — exit retry loop
     } catch (e) {
       lastError = (e as Error).message;
+      watchdog.stop();
+      clearInterval(spinnerTicker);
       renderer.stopSpinner();
       if (boxOpen) renderer.endBox();
 
