@@ -1135,10 +1135,16 @@ async function handleNaturalInput(
     let toolCount = 0;
     const spinnerStart = Date.now();
     const watchdog = new StallWatchdog({
-      onWarn: (ms) => renderer.info(`\x1b[33m⚠ stall: no activity for ${Math.round(ms / 1000)}s\x1b[0m`),
-      onSuggestAbort: (ms) => renderer.info(`\x1b[33m⚠ agent appears stuck (${Math.round(ms / 1000)}s). Press ESC to abort.\x1b[0m`),
-      onAutoAbort: (ms) => {
-        renderer.error(`Auto-aborting: no activity for ${Math.round(ms / 1000)}s`);
+      onWarn: (ms, phase) => {
+        const sec = Math.round(ms / 1000);
+        if (phase === "streaming") {
+          renderer.info(`\x1b[33m⚠ stream stalled for ${sec}s. Press ESC to abort.\x1b[0m`);
+        } else {
+          renderer.info(`\x1b[2m⏳ waiting for response... ${sec}s\x1b[0m`);
+        }
+      },
+      onAutoAbort: (ms, phase) => {
+        renderer.error(`Auto-aborting: no activity for ${Math.round(ms / 1000)}s (${phase})`);
         streamer.abort();
       },
     });
@@ -1151,7 +1157,7 @@ async function handleNaturalInput(
 
     // Real-time streaming: open box on first content, stream into it
     streamer.on("text_delta", (delta: string) => {
-      watchdog.touch();
+      watchdog.touch("streaming");
       if (!boxOpen) {
         renderer.stopSpinner();
         renderer.startBox(route.model);
@@ -1163,7 +1169,7 @@ async function handleNaturalInput(
 
     // Restart spinner between streaming blocks (fills the visual gap)
     streamer.on("text_complete", () => {
-      watchdog.touch();
+      watchdog.touch("streaming");
       if (boxOpen) {
         renderer.endBox();
         boxOpen = false;
@@ -1178,19 +1184,27 @@ async function handleNaturalInput(
     });
 
     streamer.on("tool_use", (tool: ToolUseEvent) => {
-      watchdog.touch();
+      watchdog.touch("post_tool");
       toolCount++;
       const inp = tool.input ?? {};
       const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
 
-      // Show tool activity to the user (stop spinner → render → restart)
-      renderer.stopSpinner();
-      if (boxOpen) {
-        renderer.toolUse(tool.name, detail, true);
-      } else {
-        renderer.toolUse(tool.name, detail, false);
+      // ── Harness Enforcer: pre-execution validation ──
+      const enforcer = orchestrator.getHarnessEnforcer();
+      const enforcement = enforcer.check(tool.name, inp as Record<string, unknown>);
+
+      // Suppress display of noop tool calls (bare pwd, echo, etc.)
+      const isNoop = enforcement.violations.some(v => v.ruleId === "noop-tool-call");
+      if (!isNoop) {
+        // Show tool activity to the user (stop spinner → render → restart)
+        renderer.stopSpinner();
+        if (boxOpen) {
+          renderer.toolUse(tool.name, detail, true);
+        } else {
+          renderer.toolUse(tool.name, detail, false);
+        }
+        renderer.startSpinner(agentName, route.model);
       }
-      renderer.startSpinner(agentName, route.model);
 
       // Permission enforcement on tool use
       const permAction = orchestrator.getPermissions().check(tool.name, detail ?? "", agentName);
@@ -1199,10 +1213,6 @@ async function handleNaturalInput(
       } else if (permAction === "ask") {
         renderer.info(`\x1b[33m⚠ UNCONFIRMED:\x1b[0m ${tool.name} ${detail ?? ""} — requires approval`);
       }
-
-      // ── Harness Enforcer: pre-execution validation ──
-      const enforcer = orchestrator.getHarnessEnforcer();
-      const enforcement = enforcer.check(tool.name, inp as Record<string, unknown>);
 
       if (enforcement.askRequired) {
         // Dangerous command needs user approval — abort immediately to prevent execution
@@ -1232,8 +1242,8 @@ async function handleNaturalInput(
         }
       }
 
-      // Warn-level violations
-      for (const v of enforcement.violations.filter(v => v.severity === "warn")) {
+      // Warn-level violations (noop suppressed — already handled above)
+      for (const v of enforcement.violations.filter(v => v.severity === "warn" && v.ruleId !== "noop-tool-call")) {
         renderer.info(`\x1b[33m⚠ ${v.ruleId}:\x1b[0m ${v.message}`);
       }
 

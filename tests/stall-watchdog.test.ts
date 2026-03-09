@@ -1,148 +1,120 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { StallWatchdog } from "../src/repl/stall-watchdog.ts";
+import { describe, it, expect, afterEach } from "bun:test";
+import { StallWatchdog, type StallPhase } from "../src/repl/stall-watchdog.ts";
 
 describe("StallWatchdog", () => {
   let watchdog: StallWatchdog;
-  let warns: number[];
-  let suggestAborts: number[];
-  let autoAborts: number[];
+  let warns: Array<{ ms: number; phase: StallPhase }>;
+  let aborts: Array<{ ms: number; phase: StallPhase }>;
 
-  beforeEach(() => {
+  function create() {
     warns = [];
-    suggestAborts = [];
-    autoAborts = [];
-  });
+    aborts = [];
+    watchdog = new StallWatchdog({
+      onWarn: (ms, phase) => warns.push({ ms, phase }),
+      onAutoAbort: (ms, phase) => aborts.push({ ms, phase }),
+    });
+    return watchdog;
+  }
 
   afterEach(() => {
     watchdog?.stop();
   });
 
-  it("fires onWarn after warnMs of inactivity", async () => {
-    watchdog = new StallWatchdog({
-      warnMs: 50,
-      suggestAbortMs: 200,
-      autoAbortMs: 400,
-      onWarn: (ms) => warns.push(ms),
-      onSuggestAbort: (ms) => suggestAborts.push(ms),
-      onAutoAbort: (ms) => autoAborts.push(ms),
-    });
-    // Manually invoke check to simulate timer tick
-    watchdog.start();
-    // Wait enough for the 5s interval to not fire, then manually check
-    // Use direct check call via reflection for deterministic test
-    watchdog.stop();
-
-    // Simulate passage of time
-    (watchdog as any).lastEventAt = Date.now() - 100;
+  it("init phase: does NOT warn before 180s", () => {
+    create();
+    // 60s into init — no warning (unlike old 30s threshold)
+    (watchdog as any).lastEventAt = Date.now() - 60_000;
     (watchdog as any).check();
-
-    expect(warns.length).toBe(1);
-    expect(warns[0]).toBeGreaterThanOrEqual(50);
-    expect(suggestAborts.length).toBe(0);
-    expect(autoAborts.length).toBe(0);
+    expect(warns.length).toBe(0);
   });
 
-  it("fires onSuggestAbort after suggestAbortMs", () => {
-    watchdog = new StallWatchdog({
-      warnMs: 50,
-      suggestAbortMs: 100,
-      autoAbortMs: 400,
-      onWarn: (ms) => warns.push(ms),
-      onSuggestAbort: (ms) => suggestAborts.push(ms),
-      onAutoAbort: (ms) => autoAborts.push(ms),
-    });
-
-    // Simulate warn first
-    (watchdog as any).lastEventAt = Date.now() - 60;
+  it("init phase: warns after 180s", () => {
+    create();
+    (watchdog as any).lastEventAt = Date.now() - 190_000;
     (watchdog as any).check();
     expect(warns.length).toBe(1);
-
-    // Now simulate suggest abort
-    (watchdog as any).lastEventAt = Date.now() - 150;
-    (watchdog as any).check();
-    expect(suggestAborts.length).toBe(1);
-    expect(suggestAborts[0]).toBeGreaterThanOrEqual(100);
+    expect(warns[0].phase).toBe("init");
   });
 
-  it("fires onAutoAbort after autoAbortMs and stops", () => {
-    watchdog = new StallWatchdog({
-      warnMs: 50,
-      suggestAbortMs: 100,
-      autoAbortMs: 200,
-      onWarn: (ms) => warns.push(ms),
-      onSuggestAbort: (ms) => suggestAborts.push(ms),
-      onAutoAbort: (ms) => autoAborts.push(ms),
-    });
-
-    (watchdog as any).lastEventAt = Date.now() - 250;
+  it("init phase: aborts after 300s", () => {
+    create();
+    (watchdog as any).lastEventAt = Date.now() - 310_000;
     (watchdog as any).check();
-
-    expect(autoAborts.length).toBe(1);
-    expect(autoAborts[0]).toBeGreaterThanOrEqual(200);
-    // Timer should be stopped after auto-abort
-    expect((watchdog as any).timer).toBeNull();
+    expect(aborts.length).toBe(1);
+    expect(aborts[0].phase).toBe("init");
   });
 
-  it("touch() resets flags so warn can fire again", () => {
-    watchdog = new StallWatchdog({
-      warnMs: 50,
-      suggestAbortMs: 200,
-      autoAbortMs: 400,
-      onWarn: (ms) => warns.push(ms),
-      onSuggestAbort: (ms) => suggestAborts.push(ms),
-      onAutoAbort: (ms) => autoAborts.push(ms),
-    });
+  it("streaming phase: warns after 60s", () => {
+    create();
+    watchdog.touch("streaming");
+    (watchdog as any).lastEventAt = Date.now() - 70_000;
+    (watchdog as any).check();
+    expect(warns.length).toBe(1);
+    expect(warns[0].phase).toBe("streaming");
+  });
 
-    // First warn
-    (watchdog as any).lastEventAt = Date.now() - 100;
+  it("streaming phase: aborts after 180s", () => {
+    create();
+    watchdog.touch("streaming");
+    (watchdog as any).lastEventAt = Date.now() - 190_000;
+    (watchdog as any).check();
+    expect(aborts.length).toBe(1);
+  });
+
+  it("post_tool phase: does NOT warn at 60s (normal tool wait)", () => {
+    create();
+    watchdog.touch("post_tool");
+    (watchdog as any).lastEventAt = Date.now() - 60_000;
+    (watchdog as any).check();
+    expect(warns.length).toBe(0);
+  });
+
+  it("post_tool phase: warns after 120s", () => {
+    create();
+    watchdog.touch("post_tool");
+    (watchdog as any).lastEventAt = Date.now() - 130_000;
+    (watchdog as any).check();
+    expect(warns.length).toBe(1);
+    expect(warns[0].phase).toBe("post_tool");
+  });
+
+  it("touch() resets warned flag", () => {
+    create();
+    watchdog.touch("streaming");
+    (watchdog as any).lastEventAt = Date.now() - 70_000;
     (watchdog as any).check();
     expect(warns.length).toBe(1);
 
-    // Second check without touch — should NOT warn again
-    (watchdog as any).check();
-    expect(warns.length).toBe(1);
-
-    // touch resets
-    watchdog.touch();
-    (watchdog as any).lastEventAt = Date.now() - 100;
+    // touch resets — second warn after next stall
+    watchdog.touch("streaming");
+    (watchdog as any).lastEventAt = Date.now() - 70_000;
     (watchdog as any).check();
     expect(warns.length).toBe(2);
   });
 
-  it("stop() prevents further callbacks", () => {
-    watchdog = new StallWatchdog({
-      warnMs: 50,
-      suggestAbortMs: 200,
-      autoAbortMs: 400,
-      onWarn: (ms) => warns.push(ms),
-      onSuggestAbort: (ms) => suggestAborts.push(ms),
-      onAutoAbort: (ms) => autoAborts.push(ms),
-    });
+  it("touch(phase) transitions phase", () => {
+    create();
+    expect((watchdog as any).phase).toBe("init");
+    watchdog.touch("post_tool");
+    expect((watchdog as any).phase).toBe("post_tool");
+    watchdog.touch("streaming");
+    expect((watchdog as any).phase).toBe("streaming");
+  });
 
+  it("stop() clears timer", () => {
+    create();
+    watchdog.start();
+    expect((watchdog as any).timer).not.toBeNull();
     watchdog.stop();
-
-    (watchdog as any).lastEventAt = Date.now() - 100;
-    (watchdog as any).check();
-    // warned flag was reset by stop(), so check() would fire warn
-    // But the point is: the interval timer is null
     expect((watchdog as any).timer).toBeNull();
   });
 
-  it("warn does not fire if touched within threshold", () => {
-    watchdog = new StallWatchdog({
-      warnMs: 100,
-      suggestAbortMs: 200,
-      autoAbortMs: 400,
-      onWarn: (ms) => warns.push(ms),
-      onSuggestAbort: (ms) => suggestAborts.push(ms),
-      onAutoAbort: (ms) => autoAborts.push(ms),
-    });
-
-    // Recent activity — no stall
-    (watchdog as any).lastEventAt = Date.now() - 10;
+  it("no warn if activity is recent", () => {
+    create();
+    watchdog.touch("streaming");
+    (watchdog as any).lastEventAt = Date.now() - 5_000;
     (watchdog as any).check();
     expect(warns.length).toBe(0);
-    expect(suggestAborts.length).toBe(0);
-    expect(autoAborts.length).toBe(0);
+    expect(aborts.length).toBe(0);
   });
 });
