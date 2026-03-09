@@ -42,11 +42,14 @@ export class AgentStreamer extends EventEmitter {
   private textBuffer = "";
   private currentBlockType: string | null = null;
   private totalOutputBytes = 0;
+  // Buffer tool_use blocks: collect name/id at start, accumulate input_json_delta, emit at stop
+  private pendingTool: { name: string; id?: string; inputJson: string } | null = null;
 
   async run(command: string[], signal?: AbortSignal): Promise<StreamResult> {
     this.aborted = false;
     this.textBuffer = "";
     this.currentBlockType = null;
+    this.pendingTool = null;
     this.totalOutputBytes = 0;
 
     // Listen for external abort signal
@@ -153,15 +156,16 @@ export class AgentStreamer extends EventEmitter {
   }
 
   private processMessage(msg: StreamJsonMessage, result: StreamResult): void {
-    // content_block_start: track block type, emit tool_use immediately
+    // content_block_start: track block type
     if (msg.type === "content_block_start" && msg.content_block) {
       this.currentBlockType = msg.content_block.type ?? null;
       if (this.currentBlockType === "tool_use") {
-        this.emit("tool_use", {
+        // Buffer tool — collect input from deltas, emit at content_block_stop
+        this.pendingTool = {
           name: msg.content_block.name ?? "unknown",
           id: msg.content_block.id,
-          input: msg.content_block.input,
-        } satisfies ToolUseEvent);
+          inputJson: "",
+        };
       } else {
         // text block — reset buffer
         this.textBuffer = "";
@@ -169,21 +173,34 @@ export class AgentStreamer extends EventEmitter {
       return;
     }
 
-    // content_block_delta: accumulate text AND emit delta for real-time streaming
+    // content_block_delta: accumulate text or tool input
     if (msg.type === "content_block_delta") {
-      if (msg.delta?.text) {
+      if (this.currentBlockType === "tool_use" && this.pendingTool) {
+        // input_json_delta — accumulate JSON string
+        const partial = (msg.delta as any)?.partial_json ?? (msg.delta as any)?.input_json_delta ?? "";
+        if (partial) this.pendingTool.inputJson += partial;
+      } else if (msg.delta?.text) {
         this.textBuffer += msg.delta.text;
         this.emit("text_delta", msg.delta.text);
       }
       return;
     }
 
-    // content_block_stop: flush text buffer for text blocks
+    // content_block_stop: flush text or emit completed tool_use
     if (msg.type === "content_block_stop") {
       if (this.currentBlockType === "text" && this.textBuffer) {
         result.text += this.textBuffer;
         this.emit("text_complete", this.textBuffer);
         this.textBuffer = "";
+      } else if (this.currentBlockType === "tool_use" && this.pendingTool) {
+        let input: Record<string, unknown> = {};
+        try { input = JSON.parse(this.pendingTool.inputJson || "{}"); } catch {}
+        this.emit("tool_use", {
+          name: this.pendingTool.name,
+          id: this.pendingTool.id,
+          input,
+        } satisfies ToolUseEvent);
+        this.pendingTool = null;
       }
       this.currentBlockType = null;
       return;
