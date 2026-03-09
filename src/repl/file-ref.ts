@@ -54,14 +54,14 @@ export class FileRefResolver {
   }
 
   searchSync(query: string, maxResults = 5): FileMatch[] {
-    if (this.fileCache.length === 0) return [];
+    if (this.fileCache.length === 0 || query.length === 0) return [];
 
     const scored: FileMatch[] = [];
     const queryLower = query.toLowerCase();
 
     for (const filePath of this.fileCache) {
       const score = this.fuzzyScore(queryLower, filePath.toLowerCase());
-      if (score > 0) {
+      if (score >= 0.3) {
         scored.push({
           path: filePath,
           absolutePath: resolve(this.projectDir, filePath),
