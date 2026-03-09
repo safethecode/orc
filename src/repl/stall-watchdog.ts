@@ -1,48 +1,53 @@
+/**
+ * Activity phases determine how long silence is "normal".
+ *
+ * - init:      Waiting for first API token — Opus can take 1-3 min.
+ * - post_tool: Tool just executed, waiting for next API response.
+ * - streaming:  Was actively receiving text — silence is abnormal.
+ */
+export type StallPhase = "init" | "post_tool" | "streaming";
+
 export interface StallWatchdogOptions {
-  warnMs?: number;
-  suggestAbortMs?: number;
-  autoAbortMs?: number;
-  onWarn: (elapsedMs: number) => void;
-  onSuggestAbort: (elapsedMs: number) => void;
-  onAutoAbort: (elapsedMs: number) => void;
+  onWarn: (elapsedMs: number, phase: StallPhase) => void;
+  onAutoAbort: (elapsedMs: number, phase: StallPhase) => void;
 }
 
+const PHASE_THRESHOLDS: Record<StallPhase, { warnMs: number; abortMs: number }> = {
+  init:      { warnMs: 180_000, abortMs: 300_000 }, // 3m warn, 5m abort
+  post_tool: { warnMs: 120_000, abortMs: 240_000 }, // 2m warn, 4m abort
+  streaming: { warnMs:  60_000, abortMs: 180_000 }, // 1m warn, 3m abort
+};
+
 /**
- * Monitors a single-agent streamer for inactivity.
- * Calls back at escalating thresholds when no events arrive.
+ * Phase-aware stall detector for single-agent streamer.
+ * Thresholds adapt based on what the agent was doing when it went silent.
  */
 export class StallWatchdog {
   private lastEventAt = Date.now();
+  private phase: StallPhase = "init";
   private timer: ReturnType<typeof setInterval> | null = null;
   private warned = false;
-  private suggestedAbort = false;
 
-  private readonly warnMs: number;
-  private readonly suggestAbortMs: number;
-  private readonly autoAbortMs: number;
-  private readonly onWarn: (ms: number) => void;
-  private readonly onSuggestAbort: (ms: number) => void;
-  private readonly onAutoAbort: (ms: number) => void;
+  private readonly onWarn: (ms: number, phase: StallPhase) => void;
+  private readonly onAutoAbort: (ms: number, phase: StallPhase) => void;
 
   constructor(opts: StallWatchdogOptions) {
-    this.warnMs = opts.warnMs ?? 30_000;
-    this.suggestAbortMs = opts.suggestAbortMs ?? 60_000;
-    this.autoAbortMs = opts.autoAbortMs ?? 120_000;
     this.onWarn = opts.onWarn;
-    this.onSuggestAbort = opts.onSuggestAbort;
     this.onAutoAbort = opts.onAutoAbort;
   }
 
-  /** Reset inactivity timer — call on every streamer event. */
-  touch(): void {
+  /** Update activity timestamp and phase. */
+  touch(phase?: StallPhase): void {
     this.lastEventAt = Date.now();
+    if (phase) this.phase = phase;
     this.warned = false;
-    this.suggestedAbort = false;
   }
 
   /** Begin monitoring. Checks every 5 seconds. */
   start(): void {
     this.lastEventAt = Date.now();
+    this.phase = "init";
+    this.warned = false;
     this.timer = setInterval(() => this.check(), 5_000);
   }
 
@@ -53,27 +58,21 @@ export class StallWatchdog {
       this.timer = null;
     }
     this.warned = false;
-    this.suggestedAbort = false;
   }
 
   private check(): void {
     const elapsed = Date.now() - this.lastEventAt;
+    const thresholds = PHASE_THRESHOLDS[this.phase];
 
-    if (elapsed >= this.autoAbortMs) {
-      this.onAutoAbort(elapsed);
+    if (elapsed >= thresholds.abortMs) {
+      this.onAutoAbort(elapsed, this.phase);
       this.stop();
       return;
     }
 
-    if (elapsed >= this.suggestAbortMs && !this.suggestedAbort) {
-      this.suggestedAbort = true;
-      this.onSuggestAbort(elapsed);
-      return;
-    }
-
-    if (elapsed >= this.warnMs && !this.warned) {
+    if (elapsed >= thresholds.warnMs && !this.warned) {
       this.warned = true;
-      this.onWarn(elapsed);
+      this.onWarn(elapsed, this.phase);
     }
   }
 }
