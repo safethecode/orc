@@ -69,6 +69,12 @@ export async function startTuiRepl(
     if (controller) controller.abort();
   };
 
+  // Extract agent list for @ picker
+  const agents = orchestrator.getRegistry().list().map((p) => ({
+    name: p.name,
+    role: p.role,
+  }));
+
   const root = createRoot(cliRenderer);
   root.render(
     <App
@@ -76,6 +82,7 @@ export async function startTuiRepl(
       onAbort={handleAbort}
       dispatchRef={dispatchRef}
       approvalRef={approvalRef}
+      agents={agents}
     />,
   );
 
