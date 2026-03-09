@@ -50,7 +50,7 @@ export function StatusBar() {
     return (
       <box height={1} flexShrink={0} flexDirection="row" paddingLeft={1}>
         <text fg="#7aa2f7">{spinner}</text>
-        <text fg="#7aa2f7">{` ${phase}...`}</text>
+        <text fg="#7aa2f7">{` ${phase.charAt(0).toUpperCase() + phase.slice(1)}...`}</text>
         <box flexGrow={1} />
         <text fg="#3d4262">{" │ "}</text>
         <text fg="#e0af68">esc to abort</text>
@@ -61,8 +61,8 @@ export function StatusBar() {
   return (
     <box height={1} flexShrink={0} flexDirection="row" paddingLeft={1}>
       <text fg={tierColor}>{spinner}</text>
-      <text fg={tierColor}>{` ${agentName}`}</text>
-      {tier && <text fg="#565f89">{` (${tier})`}</text>}
+      <text fg={tierColor}>{` ${agentName.charAt(0).toUpperCase() + agentName.slice(1)}`}</text>
+      {tier && <text fg="#565f89">{` (${tier.charAt(0).toUpperCase() + tier.slice(1)})`}</text>}
       {phase && phase !== "idle" && phase !== "done" && (
         <box flexDirection="row">
           <text fg="#3d4262">{" │ "}</text>

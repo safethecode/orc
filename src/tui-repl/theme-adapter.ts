@@ -68,4 +68,5 @@ export const TIER_HEX = {
   opus: "#bb9af7",
   sonnet: "#7dcfff",
   haiku: "#9ece6a",
+  supervisor: "#e0af68",
 } as const;
