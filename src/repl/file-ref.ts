@@ -260,6 +260,10 @@ export class FileRefResolver {
     const filesIncluded: string[] = [];
 
     for (const refInfo of refs) {
+      // Skip simple words without path characters (dots, slashes) —
+      // these are likely @agent mentions, not file references
+      if (/^[a-zA-Z][\w-]*$/.test(refInfo.ref)) continue;
+
       const matches = await this.search(refInfo.ref, 1);
       if (matches.length === 0) continue;
 
