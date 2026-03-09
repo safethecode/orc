@@ -5,6 +5,7 @@ import type { Orchestrator } from "../core/orchestrator.ts";
 import type { OrchestratorConfig, AgentProfile, ModelTier, SubTask, ProviderName, DecompositionResult } from "../config/types.ts";
 import { routeTask, suggestAgent, classifyWithSam, type RouteResult, type Classification } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
+import { AgentRegistry } from "../agents/registry.ts";
 import { buildHarness } from "../agents/harness.ts";
 import { buildDynamicHarnessAsync } from "../agents/dynamic-harness.ts";
 import { AgentStreamer, type ToolUseEvent, type StreamResult } from "./streamer.ts";
@@ -81,6 +82,25 @@ async function pollTeamInbox(): Promise<string | null> {
     /* no teams or read error */
   }
   return null;
+}
+
+/**
+ * Extract an @agent mention from input, disambiguating from @file references.
+ * Agent names are simple words (no dots/slashes), file refs have path characters.
+ */
+function extractAgentMention(
+  input: string,
+  registry: AgentRegistry,
+): { agent: string; cleanedInput: string } | null {
+  const match = input.match(/(?:^|\s)@([a-zA-Z][\w-]*)\b/);
+  if (!match) return null;
+  const name = match[1].toLowerCase();
+  // Check both lowercase and capitalized forms (e.g. "sam" → "Sam")
+  const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+  if (!registry.has(name) && !registry.has(capitalized)) return null;
+  const resolved = registry.has(name) ? name : capitalized;
+  const cleanedInput = input.replace(match[0], "").trim();
+  return { agent: resolved, cleanedInput };
 }
 
 export async function startRepl(
@@ -525,30 +545,40 @@ export async function startRepl(
       // Reset doom loop detector for new message
       orchestrator.getDoomLoop().reset();
 
-      // Resolve @file references before processing
+      // Extract @agent mention before file-ref resolution
+      let mentionedAgent: string | null = null;
       let resolvedInput = trimmed;
       if (trimmed.includes("@")) {
-        const refResult = await fileRef.resolve(trimmed);
-        if (refResult.filesIncluded.length > 0) {
-          // Annotate resolved file content with hashline anchors
-          let annotated = refResult.resolvedInput;
-          for (const filePath of refResult.filesIncluded) {
-            try {
-              const fileObj = Bun.file(filePath);
-              if (await fileObj.exists()) {
-                const content = await fileObj.text();
-                const hashAnnotated = HashlineEditor.formatAnnotated(HashlineEditor.annotate(content));
-                // Replace plain content block with hashline-annotated version
-                const plainBlock = "```\n" + content + "\n```";
-                const hashBlock = "```\n" + hashAnnotated + "\n```";
-                if (annotated.includes(plainBlock)) {
-                  annotated = annotated.replace(plainBlock, hashBlock);
+        const mention = extractAgentMention(trimmed, orchestrator.getRegistry());
+        if (mention) {
+          mentionedAgent = mention.agent;
+          resolvedInput = mention.cleanedInput;
+          renderer.info(`\x1b[36m→ @${mention.agent}\x1b[0m`);
+        }
+        // File refs on remaining input
+        if (resolvedInput.includes("@")) {
+          const refResult = await fileRef.resolve(resolvedInput);
+          if (refResult.filesIncluded.length > 0) {
+            // Annotate resolved file content with hashline anchors
+            let annotated = refResult.resolvedInput;
+            for (const filePath of refResult.filesIncluded) {
+              try {
+                const fileObj = Bun.file(filePath);
+                if (await fileObj.exists()) {
+                  const content = await fileObj.text();
+                  const hashAnnotated = HashlineEditor.formatAnnotated(HashlineEditor.annotate(content));
+                  // Replace plain content block with hashline-annotated version
+                  const plainBlock = "```\n" + content + "\n```";
+                  const hashBlock = "```\n" + hashAnnotated + "\n```";
+                  if (annotated.includes(plainBlock)) {
+                    annotated = annotated.replace(plainBlock, hashBlock);
+                  }
                 }
-              }
-            } catch { /* skip annotation on error */ }
+              } catch { /* skip annotation on error */ }
+            }
+            resolvedInput = annotated;
+            renderer.info(`\x1b[2m@files: ${refResult.filesIncluded.join(", ")} (hashline annotated)\x1b[0m`);
           }
-          resolvedInput = annotated;
-          renderer.info(`\x1b[2m@files: ${refResult.filesIncluded.join(", ")} (hashline annotated)\x1b[0m`);
         }
       }
 
@@ -573,6 +603,7 @@ export async function startRepl(
           cancellation,
           (streamer) => { currentStreamer = streamer; },
           pinnedAgent,
+          mentionedAgent,
           mcpScoutCache,
           skillScoutCache,
           planMode,
@@ -665,6 +696,7 @@ async function handleNaturalInput(
   cancellation: CancellationToken,
   onStreamer: (s: AgentStreamer) => void,
   pinned: string | null,
+  mentioned: string | null,
   mcpScoutCache: ScoutCache,
   skillScoutCache: ScoutCache,
   planMode?: PlanMode,
@@ -685,6 +717,15 @@ async function handleNaturalInput(
     const model = pinnedProfile.model as import("../config/types.ts").ModelTier;
     route = { tier: "medium", model, multiAgent: false, reason: `pinned to ${pinned}` };
     agentName = pinned;
+  } else if (mentioned) {
+    const mentionedProfile = orchestrator.getRegistry().get(mentioned);
+    if (!mentionedProfile) {
+      renderer.error(`Agent "${mentioned}" not found.`);
+      return;
+    }
+    const model = mentionedProfile.model as import("../config/types.ts").ModelTier;
+    route = { tier: "medium", model, multiAgent: false, reason: `mentioned @${mentioned}` };
+    agentName = mentioned;
   } else {
     // Cost-aware routing: estimate cost and pass to router
     const costEstimator = orchestrator.getCostEstimator();
