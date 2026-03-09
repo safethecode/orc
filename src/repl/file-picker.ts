@@ -1,10 +1,17 @@
 import type { FileRefResolver, FileMatch } from "./file-ref.ts";
 
+export interface PickerItem {
+  kind: "file" | "agent";
+  label: string;   // display text
+  value: string;   // insertion value
+  score: number;
+}
+
 interface PickerState {
   active: boolean;
   query: string;
   atIndex: number;
-  results: FileMatch[];
+  results: PickerItem[];
   selected: number;
   renderedLines: number;
 }
@@ -12,6 +19,7 @@ interface PickerState {
 export class FilePicker {
   private state: PickerState;
   private resolver: FileRefResolver;
+  private agents: string[] = [];
   private maxResults = 5;
   private onClear?: () => void;
 
@@ -26,6 +34,10 @@ export class FilePicker {
       selected: 0,
       renderedLines: 0,
     };
+  }
+
+  setAgents(names: string[]): void {
+    this.agents = names;
   }
 
   isActive(): boolean {
@@ -58,7 +70,44 @@ export class FilePicker {
       this.state.selected = 0;
       return;
     }
-    this.state.results = this.resolver.searchSync(query, this.maxResults);
+
+    const queryLower = query.toLowerCase();
+
+    // Match agents by prefix/substring
+    const agentItems: PickerItem[] = [];
+    for (const name of this.agents) {
+      const nameLower = name.toLowerCase();
+      let score = 0;
+      if (nameLower === queryLower) {
+        score = 1.0;
+      } else if (nameLower.startsWith(queryLower)) {
+        score = 0.9;
+      } else if (nameLower.includes(queryLower)) {
+        score = 0.7;
+      }
+      if (score > 0) {
+        agentItems.push({ kind: "agent", label: name, value: name, score });
+      }
+    }
+    agentItems.sort((a, b) => b.score - a.score);
+
+    // Match files
+    const fileMatches = this.resolver.searchSync(query, this.maxResults);
+    const fileItems: PickerItem[] = fileMatches.map((m) => ({
+      kind: "file" as const,
+      label: m.path,
+      value: m.path,
+      score: m.score,
+    }));
+
+    // Merge: agents first (boosted), then files
+    const merged = [
+      ...agentItems.map((a) => ({ ...a, score: a.score + 0.1 })),
+      ...fileItems,
+    ];
+    merged.sort((a, b) => b.score - a.score);
+
+    this.state.results = merged.slice(0, this.maxResults);
     if (this.state.selected >= this.state.results.length) {
       this.state.selected = Math.max(0, this.state.results.length - 1);
     }
@@ -74,7 +123,7 @@ export class FilePicker {
     return this.state.results.length;
   }
 
-  getSelected(): FileMatch | null {
+  getSelected(): PickerItem | null {
     if (this.state.results.length === 0) return null;
     return this.state.results[this.state.selected];
   }
@@ -119,21 +168,23 @@ export class FilePicker {
     // Render results top-to-bottom (index 0 = top of picker)
     // Reverse order: last result at top, first (selected=0) closest to prompt
     for (let i = 0; i < numResults; i++) {
-      // Map: top of picker = results[numResults-1-i] visually
-      // But simpler: just render results[i] at line i (top to bottom)
-      // with selected closest to prompt (bottom of picker)
       const resultIdx = numResults - 1 - i;
       const result = results[resultIdx];
       const isSelected = resultIdx === this.state.selected;
 
-      const maxPathLen = cols - 6;
-      const displayPath = result.path.length > maxPathLen
-        ? "\u2026" + result.path.slice(result.path.length - maxPathLen + 1)
-        : result.path;
+      let displayText: string;
+      if (result.kind === "agent") {
+        displayText = `@${result.label}  \x1b[36magent\x1b[0m\x1b[2m`;
+      } else {
+        const maxPathLen = cols - 6;
+        displayText = result.label.length > maxPathLen
+          ? "\u2026" + result.label.slice(result.label.length - maxPathLen + 1)
+          : result.label;
+      }
 
       const line = isSelected
-        ? `  \x1b[7m ${displayPath} \x1b[0m`
-        : `   \x1b[2m${displayPath}\x1b[0m`;
+        ? `  \x1b[7m ${displayText} \x1b[0m`
+        : `   \x1b[2m${displayText}\x1b[0m`;
 
       buf += `\r\x1b[2K${line}`; // col 1 + clear line + write
       if (i < numResults - 1) buf += "\x1b[B"; // move down (except last)

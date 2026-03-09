@@ -179,6 +179,7 @@ export async function startRepl(
   });
 
   const filePicker = new FilePicker(fileRef, () => refreshLine());
+  filePicker.setAgents(orchestrator.getRegistry().list().map(p => p.name));
 
   // ── Inline ghost hint for / commands ─────────────────────────────
   // Writes dim text AFTER the cursor on the SAME line. No \n ever.
@@ -232,8 +233,8 @@ export async function startRepl(
             const atIdx = filePicker.getAtIndex();
             const before = _pickerSavedLine.slice(0, atIdx);
             const after = _pickerSavedLine.slice(_pickerSavedCursor);
-            (rl as any).line = before + "@" + selected.path + " " + after;
-            (rl as any).cursor = atIdx + 1 + selected.path.length + 1;
+            (rl as any).line = before + "@" + selected.value + " " + after;
+            (rl as any).cursor = atIdx + 1 + selected.value.length + 1;
           }
           refreshLine();
           filePicker.clearRender();
