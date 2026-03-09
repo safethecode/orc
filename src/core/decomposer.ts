@@ -293,7 +293,9 @@ interface SamDecomposition {
 export async function decomposeWithSam(
   prompt: string,
   parentTaskId: string,
+  lang?: string,
 ): Promise<DecompositionResult> {
+  const langNote = lang ? ` (user language: ${lang})` : "";
   const classifyPrompt = [
     `You are a task decomposer. Break this task into subtasks for a multi-agent system.`,
     `Available agent roles: "coder" (implements code), "tester" (writes/runs tests), "architect" (designs systems), "reviewer" (reviews code/security), "design" (UI/UX design specs, color systems, typography, layout), "researcher" (research and analysis), "spec-writer" (documentation), "qa" (quality assurance verification).`,
@@ -306,7 +308,7 @@ export async function decomposeWithSam(
     `- Use dependsOn to order: implementation before testing, design before implementation`,
     `- 1-4 subtasks max`,
     ``,
-    `Task: ${prompt}`,
+    `Task${langNote}: ${prompt}`,
   ].join("\n");
 
   try {

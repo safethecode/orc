@@ -1674,7 +1674,7 @@ async function handleMultiAgent(
 
   // 1. Decompose via Sam (haiku) — falls back to regex-based decomposition
   renderer.info(`\x1b[2m🏷 Sam is decomposing task...\x1b[0m`);
-  const decomposition = await decomposeWithSam(input, taskId);
+  const decomposition = await decomposeWithSam(input, taskId, conversation.getLanguage());
 
   // Single subtask fallback → run as normal single agent
   if (decomposition.subtasks.length <= 1) {
@@ -1706,10 +1706,15 @@ async function handleMultiAgent(
       parentTaskId: "repl",
       isWorker: false,
     });
+    const fallbackLang = conversation.getLanguage();
+    let fallbackSystemPrompt = harness.systemPrompt + `\n\nYou are working in the project at: ${process.cwd()}`;
+    if (fallbackLang && fallbackLang !== "en") {
+      fallbackSystemPrompt += `\n\n[LANGUAGE] The user writes in ${fallbackLang}. Always respond in the same language.`;
+    }
     const cmd = buildCommand(providerConfig, profile, {
       prompt: conversation.buildPrompt(input),
       model: profile.model,
-      systemPrompt: harness.systemPrompt + `\n\nYou are working in the project at: ${process.cwd()}`,
+      systemPrompt: fallbackSystemPrompt,
       maxTurns: profile.maxTurns,
     });
 
@@ -1830,6 +1835,7 @@ async function handleMultiAgent(
   const watcher = orchestrator.getConflictWatcher();
   watcher.clearDiffs();
   const qaHistory: QAIssue[][] = [];
+  const detectedLang = conversation.getLanguage();
 
   // 6. Execute phases
   for (const phase of decomposition.executionPlan.phases) {
@@ -1842,13 +1848,13 @@ async function handleMultiAgent(
 
     if (phaseSubtasks.length > 1) {
       const promises = phaseSubtasks.map(st =>
-        executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator),
+        executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator, detectedLang),
       );
       await Promise.all(promises);
     } else {
       for (const st of phaseSubtasks) {
         if (cancellation.cancelled) break;
-        await executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator);
+        await executeSubtask(st, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator, detectedLang);
       }
     }
   }
@@ -1888,7 +1894,7 @@ async function handleMultiAgent(
     };
 
     renderer.phaseHeader("qa", 1, false);
-    await executeSubtask(qaSubtask, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator);
+    await executeSubtask(qaSubtask, orchestrator, config, cancellation, onStreamer, mcpScoutCache, skillScoutCache, decomposition, collector, qaHistory, propagator, detectedLang);
 
     // Check QA verdict
     const qaResult = collector.getAllResults().find(r => r.role === "qa");
@@ -1971,6 +1977,7 @@ async function executeSubtask(
   collector: ResultCollector,
   qaHistory: QAIssue[][],
   propagator: ContextPropagator,
+  lang?: string,
 ): Promise<void> {
   const agentName = `${subtask.agentRole}-${subtask.id.slice(-4)}`;
   // Use profile model if available, otherwise fall back to subtask.model
@@ -2050,6 +2057,11 @@ async function executeSubtask(
   });
   let systemPrompt = harness.systemPrompt;
   systemPrompt += `\n\nYou are working in the project at: ${process.cwd()}`;
+
+  // Inject response language instruction
+  if (lang && lang !== "en") {
+    systemPrompt += `\n\n[LANGUAGE] The user writes in ${lang}. Always respond in the same language.`;
+  }
 
   // Inject skill bodies
   if (skillBodies.length > 0) {
