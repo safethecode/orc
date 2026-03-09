@@ -18,7 +18,7 @@ import { notify } from "../utils/notifications.ts";
 import { RolloutRecorder } from "../session/rollout.ts";
 import { eventBus } from "../core/events.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
-import { decompose, decomposeWithSam } from "../core/decomposer.ts";
+import { decompose, decomposeWithSam, buildExecutionPlan } from "../core/decomposer.ts";
 import { ResultCollector } from "../core/result-collector.ts";
 import { ContextPropagator } from "../core/context-propagator.ts";
 import { scoutSkills, type ScoutResult } from "./skill-scout.ts";
@@ -708,6 +708,7 @@ async function handleNaturalInput(
 ): Promise<void> {
   let route: RouteResult;
   let agentName: string;
+  let samAgents: string[] | undefined;
 
   if (pinned) {
     const pinnedProfile = orchestrator.getRegistry().get(pinned);
@@ -768,6 +769,7 @@ async function handleNaturalInput(
     if (classification.agents && classification.agents.length > 1) {
       route.multiAgent = true;
       route.reason = `Sam multi-agent: ${classification.agents.join("+")}`;
+      samAgents = classification.agents;
     } else if (classification.type === "conversation") {
       route.multiAgent = false;
     }
@@ -779,7 +781,7 @@ async function handleNaturalInput(
   }
 
   if (route.multiAgent) {
-    await handleMultiAgent(input, orchestrator, config, conversation, rollout, cancellation, onStreamer, mcpScoutCache, skillScoutCache, forkManager);
+    await handleMultiAgent(input, orchestrator, config, conversation, rollout, cancellation, onStreamer, mcpScoutCache, skillScoutCache, forkManager, samAgents);
     return;
   }
 
@@ -1692,12 +1694,42 @@ async function handleMultiAgent(
   mcpScoutCache: ScoutCache,
   skillScoutCache: ScoutCache,
   forkManager?: SessionForkManager,
+  samAgents?: string[],
 ): Promise<void> {
   const taskId = `repl-${Date.now().toString(36)}`;
 
-  // 1. Decompose via Sam (haiku) — falls back to regex-based decomposition
-  renderer.info(`\x1b[2m🏷 Sam is decomposing task...\x1b[0m`);
-  const decomposition = await decomposeWithSam(input, taskId, conversation.getLanguage());
+  let decomposition: DecompositionResult;
+
+  if (samAgents && samAgents.length > 1) {
+    // Sam already classified agents — create parallel subtasks directly (no dependencies)
+    const subtasks: SubTask[] = samAgents.map((role, i) => ({
+      id: `st-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}-${i}`,
+      prompt: input,
+      parentTaskId: taskId,
+      dependencies: [],
+      provider: "claude",
+      model: role === "architect" ? "opus" : "sonnet",
+      agentRole: role,
+      priority: i + 1,
+      status: "queued" as const,
+      result: null,
+      estimatedTokens: 15000,
+      actualTokens: 0,
+      startedAt: null,
+      completedAt: null,
+    }));
+    const noDeps = new Map(subtasks.map(st => [st.id, [] as string[]]));
+    decomposition = {
+      subtasks,
+      executionPlan: buildExecutionPlan(subtasks, noDeps),
+      estimatedTotalCost: 0,
+    };
+    renderer.info(`\x1b[2m🏷 Sam agents: ${samAgents.join(" + ")} (parallel)\x1b[0m`);
+  } else {
+    // 1. Decompose via Sam (haiku) — falls back to regex-based decomposition
+    renderer.info(`\x1b[2m🏷 Sam is decomposing task...\x1b[0m`);
+    decomposition = await decomposeWithSam(input, taskId, conversation.getLanguage());
+  }
 
   // Single subtask fallback → run as normal single agent
   if (decomposition.subtasks.length <= 1) {
