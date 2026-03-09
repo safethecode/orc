@@ -1,25 +1,26 @@
 /** @jsxImportSource @opentui/react */
+import { useState, useEffect } from "react";
 import type { MessageMeta } from "../store.ts";
+import { useStore } from "../store.ts";
+import { SPINNER_FRAMES } from "../theme-adapter.ts";
 
 interface Props {
   meta?: MessageMeta;
 }
 
-const STATUS_ICON: Record<string, string> = {
-  pending: "\u25CB",
-  running: "\u21BB",
-  passed: "\u2713",
-  failed: "\u2717",
-  reviewing: "\u25C9",
-};
+function formatTokens(input?: number, output?: number): string {
+  const total = (input ?? 0) + (output ?? 0);
+  if (total === 0) return "";
+  if (total < 1000) return `${total} tokens`;
+  return `${(total / 1000).toFixed(1)}k tokens`;
+}
 
-const STATUS_COLOR: Record<string, string> = {
-  pending: "#565f89",
-  running: "#7aa2f7",
-  passed: "#9ece6a",
-  failed: "#f7768e",
-  reviewing: "#e0af68",
-};
+function formatElapsed(startMs: number): string {
+  const sec = Math.floor((Date.now() - startMs) / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  return `${min}m ${sec % 60}s`;
+}
 
 function formatDuration(ms?: number): string {
   if (!ms) return "";
@@ -29,29 +30,95 @@ function formatDuration(ms?: number): string {
 
 export function TaskListDisplay({ meta }: Props) {
   const items = meta?.taskItems ?? [];
+  const { state } = useStore();
+  const [frame, setFrame] = useState(0);
+
   if (items.length === 0) return null;
 
-  const total = items.length;
-  const done = items.filter((i) => i.status === "passed" || i.status === "failed").length;
+  const hasRunning = items.some((i) => i.status === "running");
+  const allDone = items.every((i) => i.status === "passed" || i.status === "failed");
+
+  // Spinner animation — only when tasks are running
+  useEffect(() => {
+    if (!hasRunning) return;
+    const id = setInterval(() => setFrame((f) => f + 1), 80);
+    return () => clearInterval(id);
+  }, [hasRunning]);
+
+  const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length];
+  const headerIcon = allDone ? "\u2713" : spinner;
+  const headerColor = allDone ? "#9ece6a" : "#7aa2f7";
+  const description = meta?.taskDescription ?? "Multi-agent execution";
+  const totalTokens = formatTokens(meta?.totalInputTokens, meta?.totalOutputTokens);
+
+  // Find the timestamp of the task_list message for elapsed time
+  const taskListMsg = state.messages.findLast((m) => m.type === "task_list");
+  const elapsed = taskListMsg ? formatElapsed(taskListMsg.timestamp) : "";
+
+  // Worker map for matching running tasks to current tool
+  const workers = state.status.workers;
 
   return (
     <box flexDirection="column" paddingLeft={2} paddingTop={1}>
+      {/* Header row */}
       <box flexDirection="row" gap={1}>
-        <text fg="#7aa2f7" bold>{"\uD83D\uDCCB"}</text>
-        <text fg="#c0caf5" bold>{`Plan (${done}/${total} tasks)`}</text>
+        <text fg={headerColor} bold>{headerIcon}</text>
+        <text fg="#c0caf5" bold>{description.length > 60 ? description.slice(0, 57) + "..." : description}</text>
+        {elapsed && <text fg="#565f89">{elapsed}</text>}
+        {totalTokens && <text fg="#565f89">{totalTokens}</text>}
       </box>
+
+      {/* Subtask rows */}
       {items.map((item, i) => {
-        const icon = STATUS_ICON[item.status] ?? "\u25CB";
-        const color = STATUS_COLOR[item.status] ?? "#565f89";
-        const dur = formatDuration(item.durationMs);
+        const isLast = i === items.length - 1;
+        const connector = isLast ? "\u2514\u2500 " : "\u251C\u2500 ";
+
+        let icon: string;
+        let iconColor: string;
+        switch (item.status) {
+          case "running":
+            icon = spinner;
+            iconColor = "#7aa2f7";
+            break;
+          case "passed":
+            icon = "\u25A0";
+            iconColor = "#9ece6a";
+            break;
+          case "failed":
+            icon = "\u2717";
+            iconColor = "#f7768e";
+            break;
+          default:
+            icon = "\u25A1";
+            iconColor = "#565f89";
+            break;
+        }
+
+        // Right-side info: tool for running, duration+tokens for done, dash for pending
+        let rightInfo = "";
+        if (item.status === "running") {
+          // Find worker with matching taskId
+          for (const [, w] of workers) {
+            if (w.taskId === item.id && w.lastTool) {
+              rightInfo = w.lastTool;
+              break;
+            }
+          }
+        } else if (item.status === "passed" || item.status === "failed") {
+          const dur = formatDuration(item.durationMs);
+          const tok = formatTokens(item.inputTokens, item.outputTokens);
+          rightInfo = [dur, tok].filter(Boolean).join("  ");
+        } else {
+          rightInfo = "\u2014";
+        }
+
         return (
           <box key={item.id} flexDirection="row" paddingLeft={1}>
-            <text fg={color}>{` ${icon} ${i + 1}. `}</text>
+            <text fg="#3d4262">{connector}</text>
+            <text fg={iconColor}>{icon} </text>
             <text fg={item.status === "pending" ? "#565f89" : "#c0caf5"}>{item.label}</text>
             <text fg="#565f89">{`  ${item.role}`}</text>
-            {dur && <text fg="#565f89">{`  ${dur}`}</text>}
-            {item.status === "running" && <text fg="#7aa2f7">{" running"}</text>}
-            {item.status === "reviewing" && <text fg="#e0af68">{" reviewing"}</text>}
+            {rightInfo && <text fg={item.status === "running" ? "#7aa2f7" : "#565f89"}>{`  ${rightInfo}`}</text>}
           </box>
         );
       })}
