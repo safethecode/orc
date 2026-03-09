@@ -74,58 +74,22 @@ describe("routing accuracy matrix", () => {
     }
   });
 
-  describe("multi-agent keyword detection (English)", () => {
-    it("'and then' triggers multi-agent", () => {
-      const result = routeTask("implement auth and then review security", config);
-      expect(result.multiAgent).toBe(true);
+  describe("default parallel execution", () => {
+    it("all tasks default to multi-agent", () => {
+      expect(routeTask("implement auth and then review security", config).multiAgent).toBe(true);
+      expect(routeTask("fix the bug after that run tests", config).multiAgent).toBe(true);
+      expect(routeTask("fix the typo in main.py", config).multiAgent).toBe(true);
+      expect(routeTask("이 버그 고쳐줘", config).multiAgent).toBe(true);
     });
 
-    it("'after that' triggers multi-agent", () => {
-      const result = routeTask("fix the bug after that run tests", config);
-      expect(result.multiAgent).toBe(true);
+    it("greetings also default to multi-agent (Sam classification downgrades later)", () => {
+      expect(routeTask("hello", config).multiAgent).toBe(true);
     });
 
-    it("'followed by' triggers multi-agent", () => {
-      const result = routeTask("implement the feature followed by review", config);
-      expect(result.multiAgent).toBe(true);
-    });
-  });
-
-  describe("multi-agent keyword detection (Korean)", () => {
-    it("'그리고' triggers multi-agent", () => {
-      const result = routeTask("implement auth 그리고 review the code", config);
-      expect(result.multiAgent).toBe(true);
-    });
-
-    it("'동시에' triggers multi-agent", () => {
-      const result = routeTask("test 동시에 fix deploy", config);
-      expect(result.multiAgent).toBe(true);
-    });
-
-    it("'도 해' triggers multi-agent", () => {
-      const result = routeTask("디자인 수정해줘. 테스트도 해", config);
-      expect(result.multiAgent).toBe(true);
-    });
-
-    it("'하고 나서' triggers multi-agent", () => {
-      const result = routeTask("implement 하고 나서 review", config);
-      expect(result.multiAgent).toBe(true);
-    });
-  });
-
-  describe("no false positives", () => {
-    it("simple single-domain prompt is NOT multi-agent", () => {
-      const result = routeTask("fix the typo in main.py", config);
-      expect(result.multiAgent).toBe(false);
-    });
-
-    it("short Korean prompt is NOT multi-agent", () => {
-      const result = routeTask("이 버그 고쳐줘", config);
-      expect(result.multiAgent).toBe(false);
-    });
-
-    it("greeting is NOT multi-agent", () => {
-      const result = routeTask("hello", config);
+    it("cost override can force single-agent", () => {
+      const result = routeTask("fix the typo in main.py", config, {
+        costEstimate: { recommendation: "single", reason: "cheap task", singleAgent: { estimatedCostUsd: 0.01 }, multiAgent: { estimatedCostUsd: 0.05 } } as any,
+      });
       expect(result.multiAgent).toBe(false);
     });
   });

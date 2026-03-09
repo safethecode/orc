@@ -24,14 +24,14 @@ describe("routeTask", () => {
     const result = routeTask("rename the variable foo to bar", config);
     expect(result.tier).toBe("simple");
     expect(result.model).toBe("haiku");
-    expect(result.multiAgent).toBe(false);
+    expect(result.multiAgent).toBe(true);
   });
 
   it("routes medium task with 'refactor' to sonnet", () => {
     const result = routeTask("refactor the auth module", config);
     expect(result.tier).toBe("medium");
     expect(result.model).toBe("sonnet");
-    expect(result.multiAgent).toBe(false);
+    expect(result.multiAgent).toBe(true);
   });
 
   it("routes complex task with 'architect' to opus", () => {
@@ -40,44 +40,18 @@ describe("routeTask", () => {
     expect(result.model).toBe("opus");
   });
 
-  it("unknown prompt falls to default (simple with 0 score)", () => {
+  it("unknown prompt still defaults to multi-agent", () => {
     const result = routeTask("hello world", config);
-    // No keywords match, so bestScore stays 0 and bestTier stays 'simple'
     expect(result.model).toBe("haiku");
-    expect(result.multiAgent).toBe(false);
-  });
-
-  it("multi-agent triggers on keyword 'and then'", () => {
-    const result = routeTask(
-      "implement the auth module and then review the database layer",
-      config,
-    );
     expect(result.multiAgent).toBe(true);
   });
 
-  it("multi-agent triggers on Korean keyword '그리고'", () => {
-    const result = routeTask(
-      "refactor the auth module 그리고 implement the design system",
-      config,
-    );
-    expect(result.multiAgent).toBe(true);
-  });
-
-  it("multi-agent triggers on Korean keyword '도 해'", () => {
-    const result = routeTask(
-      "디자인 수정해줘. 테스트도 해",
-      config,
-    );
-    expect(result.multiAgent).toBe(true);
-  });
-
-  it("multi-agent triggers on long prompts with multiple domains", () => {
-    // 3+ distinct keyword matches across tiers triggers multiAgentByDomains
-    const result = routeTask(
-      "rename variables, refactor code, and architect the design",
-      config,
-    );
-    expect(result.multiAgent).toBe(true);
+  it("all non-cost-overridden tasks default to multi-agent", () => {
+    expect(routeTask("implement the auth module and then review the database layer", config).multiAgent).toBe(true);
+    expect(routeTask("refactor the auth module 그리고 implement the design system", config).multiAgent).toBe(true);
+    expect(routeTask("디자인 수정해줘. 테스트도 해", config).multiAgent).toBe(true);
+    expect(routeTask("rename variables, refactor code, and architect the design", config).multiAgent).toBe(true);
+    expect(routeTask("fix a tiny typo", config).multiAgent).toBe(true);
   });
 
   it("returns reason with keyword match count", () => {
