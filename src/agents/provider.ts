@@ -37,6 +37,7 @@ export function buildCommand(
         "--output-format", "stream-json",
         "--verbose",
         "--dangerously-skip-permissions",
+        "--disallowedTools", "TodoWrite,TodoRead",
       ];
     } else {
       cmd = [
@@ -46,6 +47,7 @@ export function buildCommand(
         "--output-format", "stream-json",
         "--verbose",
         "--dangerously-skip-permissions",
+        "--disallowedTools", "TodoWrite,TodoRead",
       ];
     }
 
