@@ -177,7 +177,7 @@ export function InputArea({ onSubmit, agents = [] }: Props) {
           const after = text.slice(cursor);
           const selected = pk.matches[pk.selected];
           if (selected) {
-            const insertValue = selected.path;
+            const insertValue = selected.name;
             const replacement = `@${insertValue} `;
             const newText = before + replacement + after;
             ta.setText(newText);

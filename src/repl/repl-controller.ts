@@ -25,6 +25,25 @@ import { FileRefResolver } from "./file-ref.ts";
 import { HashlineEditor } from "../core/hashline.ts";
 import { SessionForkManager } from "../core/session-fork.ts";
 import { shouldBrainstorm, brainstorm } from "../core/brainstorm.ts";
+import type { AgentRegistry } from "../agents/registry.ts";
+
+/**
+ * Extract an @agent mention from input, case-insensitive.
+ * Agent names are simple words (no dots/slashes), file refs have path chars.
+ */
+function extractAgentMention(
+  input: string,
+  registry: AgentRegistry,
+): { agent: string; cleanedInput: string } | null {
+  const match = input.match(/(?:^|\s)@([a-zA-Z][\w-]*)\b/);
+  if (!match) return null;
+  const name = match[1].toLowerCase();
+  const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+  if (!registry.has(name) && !registry.has(capitalized)) return null;
+  const resolved = registry.has(name) ? name : capitalized;
+  const cleanedInput = input.replace(match[0], "").trim();
+  return { agent: resolved, cleanedInput };
+}
 
 // ── Approval callback: abstracts interactive approval for both TUI and readline ──
 
@@ -121,13 +140,22 @@ export class ReplController {
       return;
     }
 
-    // Resolve @file references
+    // Extract @agent mention before file-ref resolution
+    let mentionedAgent: string | null = null;
     let resolvedInput = trimmed;
     if (trimmed.includes("@")) {
-      const refResult = await this.fileRef.resolve(trimmed);
-      if (refResult.filesIncluded.length > 0) {
-        resolvedInput = refResult.resolvedInput;
-        this.renderer.info(`@files: ${refResult.filesIncluded.join(", ")}`);
+      const mention = extractAgentMention(trimmed, this.orchestrator.getRegistry());
+      if (mention) {
+        mentionedAgent = mention.agent;
+        resolvedInput = mention.cleanedInput;
+        this.renderer.info(`\x1b[36m→ @${mention.agent}\x1b[0m`);
+      } else {
+        // Only resolve @file references if no agent mention found
+        const refResult = await this.fileRef.resolve(trimmed);
+        if (refResult.filesIncluded.length > 0) {
+          resolvedInput = refResult.resolvedInput;
+          this.renderer.info(`@files: ${refResult.filesIncluded.join(", ")}`);
+        }
       }
     }
 
@@ -139,7 +167,7 @@ export class ReplController {
     this.currentCancellation = cancellation;
 
     try {
-      await this.handleNaturalInput(resolvedInput, cancellation);
+      await this.handleNaturalInput(resolvedInput, cancellation, mentionedAgent);
     } finally {
       this.renderer.phaseUpdate("done");
       this.renderer.notifyIdle();
@@ -153,6 +181,7 @@ export class ReplController {
   private async handleNaturalInput(
     input: string,
     cancellation: CancellationToken,
+    mentionedAgent?: string | null,
   ): Promise<void> {
     const r = this.renderer;
     let route: RouteResult;
@@ -169,6 +198,14 @@ export class ReplController {
       }
       route = { tier: "medium", model: pinnedProfile.model as ModelTier, multiAgent: false, reason: `pinned to ${this.pinnedAgent}` };
       agentName = this.pinnedAgent;
+    } else if (mentionedAgent) {
+      const mentionedProfile = this.orchestrator.getRegistry().get(mentionedAgent);
+      if (!mentionedProfile) {
+        r.error(`Agent "${mentionedAgent}" not found.`);
+        return;
+      }
+      route = { tier: "medium", model: mentionedProfile.model as ModelTier, multiAgent: false, reason: `mentioned @${mentionedAgent}` };
+      agentName = mentionedAgent;
     } else {
       const costEst = this.orchestrator.getCostEstimator().estimate(input);
       route = routeTask(input, this.config.routing, { costEstimate: costEst });
