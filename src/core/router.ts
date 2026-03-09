@@ -19,23 +19,6 @@ export interface Classification {
   reason: string;
 }
 
-const MULTI_AGENT_KEYWORDS = [
-  // English
-  "and then",
-  "after that",
-  "review after",
-  "followed by",
-  "once done",
-  "then have",
-  // Korean
-  "그리고",
-  "그 다음에",
-  "동시에",
-  "도 해",
-  "하고 나서",
-  "그런 다음",
-];
-
 // Patterns that indicate a development/engineering task
 const DEV_PATTERNS = [
   /\.(ts|js|py|go|rs|java|cpp|c|rb|php|yml|yaml|json|toml|sh|css|html|jsx|tsx|sql|proto)\b/,
@@ -202,44 +185,15 @@ export function routeTask(
     }
   }
 
-  const multiAgentByKeyword = MULTI_AGENT_KEYWORDS.some((kw) =>
-    lower.includes(kw),
-  );
+  // Default: multi-agent parallel execution.
+  // Sam classification downgrades to single for conversational prompts.
+  // @mentions and pinned agents also bypass to single.
+  let multiAgent = true;
+  let reason = bestScore > 0 ? `Matched ${bestScore} keyword(s) for tier "${bestTier}"` : "";
 
-  const domainCount = new Set(
-    tierNames.flatMap((t) =>
-      config.tiers[t].keywords
-        .filter((kw) => lower.includes(kw.toLowerCase()))
-        .map((kw) => kw.toLowerCase()),
-    ),
-  ).size;
-
-  const multiAgentByDomains = domainCount >= 3;
-  const heuristicMulti = multiAgentByKeyword || multiAgentByDomains;
-
-  // Cost-aware override: CostEstimator recommendation takes precedence over heuristic
-  let multiAgent: boolean;
-  let reason: string;
-
-  if (options?.costEstimate) {
-    const est = options.costEstimate;
-    if (est.recommendation === "single" && heuristicMulti) {
-      multiAgent = false;
-      reason = `Cost override: ${est.reason}`;
-    } else if (est.recommendation === "multi" && !heuristicMulti) {
-      multiAgent = true;
-      reason = `Cost recommends multi-agent: ${est.reason}`;
-    } else {
-      multiAgent = heuristicMulti;
-      reason = heuristicMulti
-        ? `Heuristic + cost aligned: multi-agent`
-        : bestScore > 0 ? `Matched ${bestScore} keyword(s) for tier "${bestTier}"` : "";
-    }
-  } else {
-    multiAgent = heuristicMulti;
-    reason = bestScore > 0
-      ? `Matched ${bestScore} keyword(s) for tier "${bestTier}"`
-      : "";
+  if (options?.costEstimate && options.costEstimate.recommendation === "single") {
+    multiAgent = false;
+    reason = `Cost override: ${options.costEstimate.reason}`;
   }
 
   const model = config.tiers[bestTier].model;
