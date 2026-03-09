@@ -80,6 +80,7 @@ export class ReplController {
   private skillScoutCache = new ScoutCache();
 
   private currentStreamer: AgentStreamer | null = null;
+  private activeStreamers = new Set<AgentStreamer>();
   private currentCancellation: CancellationToken | null = null;
   private pinnedAgent: string | null = null;
   private lastAgent: string | null = null;
@@ -112,7 +113,7 @@ export class ReplController {
     this.orchestrator.getPrewarmer().prewarm().catch(() => {});
   }
 
-  /** Abort the currently running agent */
+  /** Abort the currently running agent(s) */
   abort(): void {
     if (this.currentCancellation && !this.currentCancellation.cancelled) {
       this.currentCancellation.cancel();
@@ -120,6 +121,11 @@ export class ReplController {
     if (this.currentStreamer?.isRunning) {
       this.currentStreamer.abort();
     }
+    // Kill all multi-agent worker streamers
+    for (const s of this.activeStreamers) {
+      if (s.isRunning) s.abort();
+    }
+    this.activeStreamers.clear();
     this.renderer.stopSpinner();
     this.renderer.notifyIdle();
   }
@@ -608,6 +614,7 @@ export class ReplController {
         r.workerStart(workerName, st.id, profile.model);
 
         const streamer = new AgentStreamer();
+        this.activeStreamers.add(streamer);
         streamer.on("tool_use", (tool: ToolUseEvent) => {
           const detail = (tool.input?.file_path as string) ?? (tool.input?.command as string) ?? undefined;
           r.workerToolUse(workerName, tool.name, detail);
@@ -617,6 +624,7 @@ export class ReplController {
         const workerStartTime = Date.now();
         try {
           const result = await streamer.run(cmd, cancellation.signal);
+          this.activeStreamers.delete(streamer);
           collected.set(st.id, { text: result.text, cost: result.costUsd, inputTokens: result.inputTokens, outputTokens: result.outputTokens });
           completedCount++;
           r.workerDone(workerName);
@@ -627,6 +635,7 @@ export class ReplController {
           }
           r.phaseUpdate("executing", `${completedCount}/${decomposition.subtasks.length} tasks`);
         } catch (e) {
+          this.activeStreamers.delete(streamer);
           r.workerDone(workerName);
           r.taskUpdate(st.id, "failed", Date.now() - workerStartTime);
           r.error(`Worker ${name} failed: ${(e as Error).message}`);
