@@ -403,8 +403,8 @@ export class ReplController {
         const inp = tool.input ?? {};
         const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
         r.stopSpinner();
-        if (boxOpen) r.toolUse(tool.name, detail, true);
-        else r.toolUse(tool.name, detail, false);
+        if (boxOpen) r.toolUse(tool.name, detail, true, inp);
+        else r.toolUse(tool.name, detail, false, inp);
         r.startSpinner(agentName, route.model);
         eventBus.publish({ type: "agent:tool", agent: agentName, tool: tool.name, detail });
 
