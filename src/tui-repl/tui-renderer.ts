@@ -39,7 +39,7 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("tool", "", { toolName: name, toolDetail: detail }) });
     },
     workerToolUse(agentName, toolName, detail) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("tool", "", { agentName, toolName, toolDetail: detail }) });
+      // No APPEND_MESSAGE — worker activity is shown inline in the task tree
       dispatch({ type: "UPDATE_WORKER", name: agentName, partial: { lastTool: `${toolName}${detail ? " " + detail : ""}`, state: "tool_use" } });
     },
     workerFileChange(agentName, action, filePath) {

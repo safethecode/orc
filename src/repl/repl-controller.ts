@@ -227,7 +227,7 @@ export class ReplController {
 
       if (classification.type === "conversation") {
         route.multiAgent = false;
-      } else if (classification.agents && classification.agents.length > 2) {
+      } else if (classification.agents && classification.agents.length > 1) {
         route.multiAgent = true;
       }
     }
