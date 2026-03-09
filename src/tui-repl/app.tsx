@@ -8,6 +8,7 @@ import { StatusBar } from "./components/status-bar.tsx";
 import { ProjectBar } from "./components/project-bar.tsx";
 import { InputArea, type AgentEntry } from "./components/input-area.tsx";
 import { ApprovalDialog } from "./components/approval-dialog.tsx";
+import { QuestionDialog } from "./components/question-dialog.tsx";
 import { createMessage } from "./store.ts";
 
 interface Props {
@@ -15,10 +16,11 @@ interface Props {
   onAbort?: () => void;
   dispatchRef?: { current: ((action: any) => void) | null };
   approvalRef?: { current: { resolve: (approved: boolean) => void } | null };
+  askUserRef?: { current: { resolve: (answer: string) => void; question: string; options?: string[] } | null };
   agents?: AgentEntry[];
 }
 
-export function App({ onSubmit, onAbort, dispatchRef, approvalRef, agents }: Props) {
+export function App({ onSubmit, onAbort, dispatchRef, approvalRef, askUserRef, agents }: Props) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
 
   // Refs for stable access inside useKeyboard callback
@@ -53,6 +55,25 @@ export function App({ onSubmit, onAbort, dispatchRef, approvalRef, agents }: Pro
     approvalRef?.current?.resolve(false);
   }, [approvalRef]);
 
+  const handleQuestionAnswer = useCallback((answer: string) => {
+    dispatch({ type: "RESOLVE_QUESTION" });
+    // If answer is a number and matches an option, use the option text
+    const q = askUserRef?.current;
+    if (q?.options?.length) {
+      const num = parseInt(answer, 10);
+      if (num >= 1 && num <= q.options.length) {
+        askUserRef?.current?.resolve(q.options[num - 1]);
+        return;
+      }
+    }
+    askUserRef?.current?.resolve(answer);
+  }, [askUserRef]);
+
+  const handleQuestionDismiss = useCallback(() => {
+    dispatch({ type: "RESOLVE_QUESTION" });
+    askUserRef?.current?.resolve("");
+  }, [askUserRef]);
+
   // Global keyboard handler via useKeyboard (fires before focused renderables)
   useKeyboard((key: any) => {
     // Ctrl+C: always exit (raw mode doesn't generate SIGINT)
@@ -74,6 +95,17 @@ export function App({ onSubmit, onAbort, dispatchRef, approvalRef, agents }: Pro
       }
       // Block all other keys while approval is active
       key.stopPropagation();
+      return;
+    }
+
+    // Question dialog: Escape dismisses
+    if (stateRef.current.question) {
+      if (key.name === "escape") {
+        handleQuestionDismiss();
+        key.stopPropagation();
+        return;
+      }
+      // Allow all other keys through to the textarea
       return;
     }
 
@@ -103,6 +135,13 @@ export function App({ onSubmit, onAbort, dispatchRef, approvalRef, agents }: Pro
             message={state.approval.message}
             onApprove={handleApprove}
             onDeny={handleDeny}
+          />
+        ) : state.question ? (
+          <QuestionDialog
+            question={state.question.question}
+            options={state.question.options}
+            onAnswer={handleQuestionAnswer}
+            onDismiss={handleQuestionDismiss}
           />
         ) : (
           <InputArea onSubmit={handleSubmit} agents={agents} />

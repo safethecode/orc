@@ -103,6 +103,11 @@ export interface ApprovalRequest {
   message: string;
 }
 
+export interface QuestionRequest {
+  question: string;
+  options?: string[];
+}
+
 export interface StoreState {
   messages: Message[];
   streamingChunk: string;
@@ -110,6 +115,7 @@ export interface StoreState {
   isStreaming: boolean;
   status: StatusBarState;
   approval: ApprovalRequest | null;
+  question: QuestionRequest | null;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────
@@ -128,6 +134,8 @@ type Action =
   | { type: "STATUS_UPDATE"; partial: Partial<StatusBarState> }
   | { type: "SHOW_APPROVAL"; command: string; message: string }
   | { type: "RESOLVE_APPROVAL" }
+  | { type: "SHOW_QUESTION"; question: string; options?: string[] }
+  | { type: "RESOLVE_QUESTION" }
   | { type: "CLEAR" };
 
 function reducer(state: StoreState, action: Action): StoreState {
@@ -211,6 +219,10 @@ function reducer(state: StoreState, action: Action): StoreState {
       return { ...state, approval: { command: action.command, message: action.message } };
     case "RESOLVE_APPROVAL":
       return { ...state, approval: null };
+    case "SHOW_QUESTION":
+      return { ...state, question: { question: action.question, options: action.options } };
+    case "RESOLVE_QUESTION":
+      return { ...state, question: null };
     case "CLEAR":
       return { ...state, messages: [] };
     default:
@@ -224,6 +236,7 @@ const INITIAL_STATE: StoreState = {
   streamingTier: null,
   isStreaming: false,
   approval: null,
+  question: null,
   status: {
     agentState: "idle",
     agentName: "",
