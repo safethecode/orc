@@ -49,7 +49,7 @@ export function buildCommand(
       ];
     }
 
-    const turns = options.maxTurns ?? 25;
+    const turns = options.maxTurns ?? 200;
     cmd.push("--max-turns", String(turns));
 
     if (options.systemPrompt) {
