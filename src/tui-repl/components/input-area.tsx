@@ -2,21 +2,22 @@
 import { useState, useRef, useEffect } from "react";
 import { FileRefResolver } from "../../repl/file-ref.ts";
 import { COMMANDS } from "../../repl/commands.ts";
-import { FilePickerOverlay } from "./file-picker-overlay.tsx";
+import { FilePickerOverlay, type PickerMatch } from "./file-picker-overlay.tsx";
+
+export interface AgentEntry {
+  name: string;
+  role: string;
+}
 
 interface Props {
   onSubmit: (text: string) => void;
-}
-
-interface FileMatch {
-  path: string;
-  name: string;
+  agents?: AgentEntry[];
 }
 
 interface PickerState {
   active: boolean;
   atIndex: number;
-  matches: FileMatch[];
+  matches: PickerMatch[];
   selected: number;
 }
 
@@ -29,9 +30,12 @@ interface CmdHintState {
 const EMPTY_PICKER: PickerState = { active: false, atIndex: 0, matches: [], selected: 0 };
 const EMPTY_HINT: CmdHintState = { active: false, matches: [], selected: 0 };
 
-export function InputArea({ onSubmit }: Props) {
+export function InputArea({ onSubmit, agents = [] }: Props) {
   const textareaRef = useRef<any>(null);
   const fileRef = useRef(new FileRefResolver(process.cwd()));
+
+  const agentsRef = useRef(agents);
+  agentsRef.current = agents;
 
   const [picker, setPicker] = useState<PickerState>(EMPTY_PICKER);
   const pickerRef = useRef<PickerState>(EMPTY_PICKER);
@@ -83,18 +87,57 @@ export function InputArea({ onSubmit }: Props) {
       }
       setCmdHint(EMPTY_HINT);
 
-      // ── @ File picker ──
+      // ── @ File/agent picker ──
       const beforeCursor = text.slice(0, cursor);
       const lastAt = beforeCursor.lastIndexOf("@");
 
       if (lastAt >= 0 && (lastAt === 0 || /\s/.test(text[lastAt - 1]))) {
         const query = text.slice(lastAt + 1, cursor);
         if (!/\s/.test(query)) {
-          const results = fileRef.current.searchSync(query, 6);
+          const queryLower = query.toLowerCase();
+          const scored: Array<{ match: PickerMatch; score: number }> = [];
+
+          // Match agents (show all on bare @, filter when typing)
+          for (const agent of agentsRef.current) {
+            const nameLower = agent.name.toLowerCase();
+            let s = 0;
+            if (query.length === 0) {
+              s = 0.5;
+            } else if (nameLower === queryLower) {
+              s = 1.0;
+            } else if (nameLower.startsWith(queryLower)) {
+              s = 0.9;
+            } else if (nameLower.includes(queryLower)) {
+              s = 0.7;
+            }
+            if (s > 0) {
+              scored.push({
+                match: { kind: "agent", path: agent.name, name: agent.name, role: agent.role },
+                score: s + 0.1, // boost agents above files
+              });
+            }
+          }
+
+          // Match files (skip on empty query)
+          if (query.length > 0) {
+            const fileResults = fileRef.current.searchSync(query, 8);
+            for (const m of fileResults) {
+              const basename = m.path.split("/").pop() ?? m.path;
+              scored.push({
+                match: { kind: "file", path: m.path, name: basename },
+                score: m.score,
+              });
+            }
+          }
+
+          // Sort by score descending, take top 8
+          scored.sort((a, b) => b.score - a.score);
+          const top = scored.slice(0, 8).map((s) => s.match);
+
           setPicker({
             active: true,
             atIndex: lastAt,
-            matches: results.map((m) => ({ path: m.path, name: m.name })),
+            matches: top,
             selected: 0,
           });
           return;
@@ -133,7 +176,8 @@ export function InputArea({ onSubmit }: Props) {
           const after = text.slice(cursor);
           const selected = pk.matches[pk.selected];
           if (selected) {
-            const replacement = `@${selected.path} `;
+            const insertValue = selected.kind === "agent" ? selected.name : selected.path;
+            const replacement = `@${insertValue} `;
             const newText = before + replacement + after;
             ta.setText(newText);
             ta.cursorOffset = before.length + replacement.length;

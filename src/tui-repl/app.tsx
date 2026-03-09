@@ -6,7 +6,7 @@ import { MessageArea } from "./components/message-area.tsx";
 import { StatusBar } from "./components/status-bar.tsx";
 import { WorkerHud } from "./components/worker-hud.tsx";
 import { ProjectBar } from "./components/project-bar.tsx";
-import { InputArea } from "./components/input-area.tsx";
+import { InputArea, type AgentEntry } from "./components/input-area.tsx";
 import { ApprovalDialog } from "./components/approval-dialog.tsx";
 import { createMessage } from "./store.ts";
 
@@ -15,9 +15,10 @@ interface Props {
   onAbort?: () => void;
   dispatchRef?: { current: ((action: any) => void) | null };
   approvalRef?: { current: { resolve: (approved: boolean) => void } | null };
+  agents?: AgentEntry[];
 }
 
-export function App({ onSubmit, onAbort, dispatchRef, approvalRef }: Props) {
+export function App({ onSubmit, onAbort, dispatchRef, approvalRef, agents }: Props) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
 
   // Refs for stable access inside useKeyboard callback
@@ -100,7 +101,7 @@ export function App({ onSubmit, onAbort, dispatchRef, approvalRef }: Props) {
             onDeny={handleDeny}
           />
         ) : (
-          <InputArea onSubmit={handleSubmit} />
+          <InputArea onSubmit={handleSubmit} agents={agents} />
         )}
       </box>
     </StoreContext.Provider>
