@@ -6,7 +6,7 @@ export interface RendererPort {
   startBox(tier: ModelTier): void;
   endBox(): void;
   text(content: string): void;
-  toolUse(name: string, detail?: string, insideBox?: boolean): void;
+  toolUse(name: string, detail?: string, insideBox?: boolean, input?: Record<string, unknown>): void;
   workerToolUse(agentName: string, toolName: string, detail?: string): void;
   workerFileChange(agentName: string, action: string, filePath: string): void;
   cost(usd: number, inputTokens: number, outputTokens: number, durationMs?: number): void;

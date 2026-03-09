@@ -20,6 +20,7 @@ export interface MessageMeta {
   reason?: string;
   toolName?: string;
   toolDetail?: string;
+  toolInput?: Record<string, unknown>;
   cost?: number;
   inputTokens?: number;
   outputTokens?: number;

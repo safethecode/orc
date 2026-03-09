@@ -25,7 +25,7 @@ function renderMessage(msg: Message) {
     case "agent_header":
       return <AgentHeader key={msg.id} name={msg.meta?.agentName ?? msg.content} tier={msg.meta?.tier} reason={msg.meta?.reason} />;
     case "tool":
-      return <ToolBadge key={msg.id} name={msg.meta?.toolName ?? ""} detail={msg.meta?.toolDetail} agent={msg.meta?.agentName} />;
+      return <ToolBadge key={msg.id} name={msg.meta?.toolName ?? ""} detail={msg.meta?.toolDetail} agent={msg.meta?.agentName} input={msg.meta?.toolInput} />;
     case "system":
       return <SystemInfo key={msg.id} content={msg.content} meta={msg.meta} />;
     case "error":
