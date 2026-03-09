@@ -898,10 +898,8 @@ async function handleNaturalInput(
   }
 
   const lang = conversation.getLanguage();
-  if (lang) {
-    systemPrompt = systemPrompt
-      ? `${systemPrompt}\n\nAlways respond in ${lang}.`
-      : `Always respond in ${lang}.`;
+  if (lang && lang !== "en") {
+    systemPrompt += `\n\n[LANGUAGE] The user writes in ${lang}. Always respond in the same language.`;
   }
 
   // Inject relevant memories into system prompt
