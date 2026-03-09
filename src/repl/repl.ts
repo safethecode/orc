@@ -1102,6 +1102,7 @@ async function handleNaturalInput(
   let handlerStartTime = Date.now();
   let midTurnDrains = 0;
   const MAX_MID_TURN_DRAINS = 5; // Prevent infinite queue drain loops
+  let summaryRetried = false;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (cancellation.cancelled) break;
@@ -1499,6 +1500,28 @@ async function handleNaturalInput(
           conversation.add({ role: "assistant", content: "(user denied the command — execution aborted)", agentName, tier: route.model, timestamp: new Date().toISOString() });
           return;
         }
+      }
+
+      // Empty-response guard: agent produced tool calls but no text → ask for summary
+      if (!result.text?.trim() && toolCount > 0 && !summaryRetried) {
+        summaryRetried = true;
+        const followUp = "You completed tool operations but provided no text response. Briefly summarize what you did and the result.";
+        const followUpTurn = { role: "user" as const, content: followUp, timestamp: new Date().toISOString() };
+        conversation.add(followUpTurn);
+        forkManager?.addTurn(followUpTurn);
+
+        conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? route.model] ?? TIER_BUDGETS.sonnet);
+        const newPrompt = conversation.buildPrompt(followUp);
+        currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+          prompt: newPrompt,
+          model: currentProfile.model,
+          systemPrompt,
+          maxTurns: 1,
+          mcpConfig: mcpConfigPath,
+        });
+        renderer.startSpinner(agentName, displayModel);
+        attempt = -1;
+        continue;
       }
 
       // Quality gate
