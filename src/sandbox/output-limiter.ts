@@ -23,12 +23,19 @@ export function truncateOutput(output: string, maxBytes: number): string {
 }
 
 export function killProcessGroup(pid: number): void {
+  // Try process group kill first, fall back to individual pid
+  let groupKilled = false;
   try {
     process.kill(-pid, "SIGTERM");
-    setTimeout(() => {
-      try {
-        process.kill(-pid, "SIGKILL");
-      } catch {}
-    }, 2000);
-  } catch {}
+    groupKilled = true;
+  } catch {
+    // Process group kill failed (not a group leader) — kill individual pid
+    try { process.kill(pid, "SIGTERM"); } catch {}
+  }
+  setTimeout(() => {
+    try {
+      if (groupKilled) process.kill(-pid, "SIGKILL");
+    } catch {}
+    try { process.kill(pid, "SIGKILL"); } catch {}
+  }, 1000);
 }
