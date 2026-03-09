@@ -55,6 +55,11 @@ export function App({ onSubmit, onAbort, dispatchRef, approvalRef, agents }: Pro
 
   // Global keyboard handler via useKeyboard (fires before focused renderables)
   useKeyboard((key: any) => {
+    // Ctrl+C: always exit (raw mode doesn't generate SIGINT)
+    if (key.name === "c" && key.ctrl) {
+      process.exit(0);
+    }
+
     // Approval dialog: Y/N/Escape
     if (stateRef.current.approval) {
       if (key.name === "y") {
