@@ -84,6 +84,7 @@ export class ReplController {
   private currentCancellation: CancellationToken | null = null;
   private pinnedAgent: string | null = null;
   private lastAgent: string | null = null;
+  private stickyAgent: string | null = null;  // Set by @mention, persists until new @mention
 
   constructor(opts: ReplControllerOptions) {
     this.orchestrator = opts.orchestrator;
@@ -195,8 +196,8 @@ export class ReplController {
     mentionedAgent?: string | null,
   ): Promise<void> {
     const r = this.renderer;
-    let route: RouteResult;
-    let agentName: string;
+    let route!: RouteResult;
+    let agentName!: string;
 
     r.phaseUpdate("routing");
     r.startSpinner("routing", "haiku");
@@ -217,7 +218,33 @@ export class ReplController {
       }
       route = { tier: "medium", model: mentionedProfile.model as ModelTier, multiAgent: false, reason: `mentioned @${mentionedAgent}` };
       agentName = mentionedAgent;
-    } else {
+      this.stickyAgent = mentionedAgent; // Persist until next @mention
+    } else if (this.stickyAgent) {
+      // Continue with last @mentioned agent unless Sam sees a clear domain switch
+      const stickyProfile = this.orchestrator.getRegistry().get(this.stickyAgent);
+      if (!stickyProfile) {
+        this.stickyAgent = null;
+      } else {
+        r.phaseUpdate("classifying");
+        const classification = await classifyWithSam(input, this.stickyAgent);
+        // Only switch away if Sam explicitly returns a DIFFERENT single agent
+        if (classification.agent === this.stickyAgent || classification.type === "conversation") {
+          route = { tier: "medium", model: stickyProfile.model as ModelTier, multiAgent: false, reason: `sticky @${this.stickyAgent}` };
+          agentName = this.stickyAgent;
+        } else {
+          // Sam wants a different agent — respect it but keep sticky
+          const costEst = this.orchestrator.getCostEstimator().estimate(input);
+          route = routeTask(input, this.config.routing, { costEstimate: costEst });
+          agentName = classification.agent;
+          r.info(classification.reason);
+          if (classification.agents && classification.agents.length > 1) {
+            route.multiAgent = true;
+          }
+        }
+      }
+    }
+
+    if (!route) {
       const costEst = this.orchestrator.getCostEstimator().estimate(input);
       route = routeTask(input, this.config.routing, { costEstimate: costEst });
 
