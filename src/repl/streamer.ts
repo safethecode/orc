@@ -228,8 +228,11 @@ export class AgentStreamer extends EventEmitter {
         result.costUsd = msg.total_cost_usd;
       }
       if (msg.usage) {
-        result.inputTokens = msg.usage.input_tokens ?? result.inputTokens;
-        result.outputTokens = msg.usage.output_tokens ?? result.outputTokens;
+        // Prefer larger value: result message may report only last-turn usage
+        const ri = msg.usage.input_tokens ?? 0;
+        const ro = msg.usage.output_tokens ?? 0;
+        result.inputTokens = Math.max(result.inputTokens, ri);
+        result.outputTokens = Math.max(result.outputTokens, ro);
       }
       this.emit("usage", {
         inputTokens: result.inputTokens,
