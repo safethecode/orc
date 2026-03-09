@@ -179,7 +179,7 @@ export async function startRepl(
   });
 
   const filePicker = new FilePicker(fileRef, () => refreshLine());
-  filePicker.setAgents(orchestrator.getRegistry().list().map(p => p.name));
+  filePicker.setAgents(orchestrator.getRegistry().list().map(p => ({ name: p.name, role: p.role ?? "" })));
 
   // ── Inline ghost hint for / commands ─────────────────────────────
   // Writes dim text AFTER the cursor on the SAME line. No \n ever.
