@@ -46,15 +46,48 @@ The Orchestrator project implements a complete multi-agent system:
 - Terminal operations: use `\x1b[2J\x1b[3J\x1b[H` for full clear with scrollback
 - CJK input: skip custom escape codes and let readline handle it
 
-## Commit Verification Checklist
+## Commit Execution Rules (CRITICAL — Zero Tolerance)
 
-Before pushing ANY commit:
-1. Run `git log -1 --oneline` to see the last commit
-2. Verify format matches `<type>: <subject>` (e.g., `docs: add CLAUDE.md`)
-3. Ensure NO co-author tags in the commit message
-4. Verify only ONE logical change in the commit
-5. If commit message doesn't follow format, use `git commit --amend` to fix before pushing
-6. Only then push to remote
+**The #1 rule: NEVER claim a commit was created without actual `git commit` Bash tool output proving it.**
+
+### Per-commit workflow (mandatory for EVERY commit):
+1. **`git add <files>`** — stage specific files, show Bash output
+2. **`git commit -m "..."`** — run the actual commit, show Bash output with the new hash
+3. **`git log --oneline -3`** — verify the commit exists in history, show output
+4. Only THEN report the commit to the user, including the hash from `git log`
+
+### Hard rules:
+- **NO batching claims**: Do NOT say "8개의 커밋을 생성했습니다" unless you ran `git commit` 8 separate times and each produced a hash
+- **NO planning-as-doing**: Listing what you *will* commit is NOT the same as having committed it. The word "완료" (done) must ONLY appear after `git log` confirms the commit exists
+- **NO skipping tool calls**: Every `git add` and `git commit` MUST go through the Bash tool. Describing the command in text is not executing it
+- **One commit = one Bash call with visible output**: If there's no Bash tool output showing `[main abc1234] feat: ...`, the commit did not happen
+- **After ALL commits are done**: Run `git log --oneline -N` (where N = number of commits) to show the full list as final proof
+
+### Before pushing:
+1. Verify format matches `<type>: <subject>` (e.g., `docs: add CLAUDE.md`)
+2. Ensure NO co-author tags in the commit message
+3. Verify only ONE logical change per commit
+4. If commit message doesn't follow format, use `git commit --amend` BEFORE pushing
+5. Only then push to remote
+
+## Lint Compliance (CRITICAL)
+
+When generating or editing code, ALWAYS comply with the project's linter rules:
+
+1. **Detect linter on session start**: Check for `biome.json`, `biome.jsonc`, `.eslintrc*`, `.prettierrc*`, `deno.json`, or lint scripts in `package.json`
+2. **Read the config**: Understand active rules (formatting, naming, imports, etc.) before writing code
+3. **Generate compliant code**: Follow the detected rules from the start — don't write code and fix lint errors after
+4. **Run linter before commit**: Execute the project's lint command (e.g., `npx biome check`, `npx eslint`) and fix all errors before committing
+5. **Common rules to respect**:
+   - Import ordering/grouping (biome: `organizeImports`)
+   - No unused variables/imports
+   - Consistent quotes (single vs double)
+   - Trailing commas, semicolons
+   - Naming conventions (camelCase, PascalCase, etc.)
+   - No `any` types when avoidable
+   - Prefer `const` over `let` when variable is not reassigned
+
+If no linter is configured, still follow TypeScript best practices and the project's existing code style.
 
 ## Testing & Verification
 
@@ -110,3 +143,17 @@ Before pushing ANY commit:
 - Never dismiss user feedback — they are seeing the actual state
 - Run `git log` immediately to see the current state
 - Only claim completion after addressing the specific concern user raised
+
+### Mistake 5: Claiming Commits Were Created Without Running git commit
+**What I did wrong:**
+- Listed 8 planned commits with descriptions
+- Said "순서대로 커밋하겠습니다" (I'll commit in order) but never actually ran `git commit`
+- Immediately said "완료했습니다! 총 8개의 커밋을 생성했습니다" without a single Bash tool call for git
+- Confused *planning what to do* with *actually doing it*
+
+**How to prevent:**
+- Planning a commit list is NOT creating commits — the Bash tool must run `git commit` for each one
+- NEVER say "N개의 커밋을 생성했습니다" without N corresponding `git commit` Bash outputs with hashes
+- After claiming commits: immediately run `git log --oneline -N` and show the output
+- If the `git log` output doesn't match the claim, acknowledge the error instead of ignoring it
+- Rule of thumb: if you didn't see a commit hash in Bash output, the commit doesn't exist
