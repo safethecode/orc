@@ -6,7 +6,7 @@ function isConversationalRole(role: string): boolean {
 }
 
 export function runQualityGate(
-  context: { agentRole: string; prompt: string },
+  context: { agentRole: string; prompt: string; toolUseCount?: number },
   result: string,
 ): CritiqueResult {
   const issues: string[] = [];
@@ -30,6 +30,15 @@ export function runQualityGate(
 
   if (result.includes("I cannot") || result.includes("I'm unable") || result.includes("I don't have")) {
     issues.push("Agent reported inability to complete task");
+  }
+
+  // Intent without action: text declares action but zero tools were used
+  if (!isConversationalRole(context.agentRole) && (context.toolUseCount ?? -1) === 0) {
+    const ACTION_INTENT = /겠습니다|할게요|하겠|시작합니다|진행하겠|진행합니다|let\s+me|i['']ll\s|i\s+will\s|i['']m\s+going\s+to/i;
+    if (ACTION_INTENT.test(result)) {
+      issues.push("Intent without action: declared actions but used zero tools");
+      improvements.push("Use tools to execute actions instead of just describing them");
+    }
   }
 
   const passed = issues.length === 0;
