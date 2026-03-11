@@ -4,6 +4,16 @@ const INTERACTIVE_COMMANDS = [
   "less", "more", "htop", "top", "man", "ssh",
 ];
 
+/** Git subcommands with interactive flags that silently fail or no-op in agent mode */
+const INTERACTIVE_GIT_PATTERNS: Array<{ pattern: RegExp; label: string; suggestion: string }> = [
+  { pattern: /\bgit\s+rebase\s+(-\w*i|--interactive)\b/, label: "git rebase -i", suggestion: "Use git reset --soft + individual git commit, or git rebase --onto" },
+  { pattern: /\bgit\s+add\s+(-\w*i|--interactive)\b/, label: "git add -i", suggestion: "Use git add <specific files> instead" },
+  { pattern: /\bgit\s+add\s+(-\w*p|--patch)\b/, label: "git add -p", suggestion: "Use git add <specific files> instead" },
+  { pattern: /\bgit\s+stash\s+(-\w*p|--patch)\b/, label: "git stash -p", suggestion: "Use git stash push <specific files> instead" },
+  { pattern: /\bgit\s+checkout\s+(-\w*p|--patch)\b/, label: "git checkout -p", suggestion: "Use git checkout -- <specific files> instead" },
+  { pattern: /\bgit\s+commit\s+--amend(?!\s+(-m|--message))\b/, label: "git commit --amend (no -m)", suggestion: "Use git commit --amend -m 'message' to avoid opening editor" },
+];
+
 /** Git-specific env vars to prevent interactive prompts */
 const GIT_NON_INTERACTIVE_ENV: Record<string, string> = {
   GIT_TERMINAL_PROMPT: "0",
@@ -23,14 +33,30 @@ export class NonInteractiveGuard {
     this.interactiveSet = new Set(INTERACTIVE_COMMANDS);
   }
 
-  /** Check if a command string starts with an interactive program */
+  /** Check if a command string starts with an interactive program or uses interactive flags */
   isInteractive(command: string): boolean {
     const trimmed = command.trim();
     if (!trimmed) return false;
 
     // Extract the base command (first token), handling env prefixes and sudo
     const baseCommand = this.extractBaseCommand(trimmed);
-    return this.interactiveSet.has(baseCommand);
+    if (this.interactiveSet.has(baseCommand)) return true;
+
+    // Check git subcommands with interactive flags
+    for (const { pattern } of INTERACTIVE_GIT_PATTERNS) {
+      if (pattern.test(trimmed)) return true;
+    }
+
+    return false;
+  }
+
+  /** Get detailed info for an interactive git command */
+  getInteractiveGitInfo(command: string): { label: string; suggestion: string } | null {
+    const trimmed = command.trim();
+    for (const { pattern, label, suggestion } of INTERACTIVE_GIT_PATTERNS) {
+      if (pattern.test(trimmed)) return { label, suggestion };
+    }
+    return null;
   }
 
   /** Get env vars that should be set for all git commands */
@@ -58,6 +84,10 @@ export class NonInteractiveGuard {
 
   /** Get a warning message for interactive commands */
   getWarning(command: string): string {
+    const gitInfo = this.getInteractiveGitInfo(command);
+    if (gitInfo) {
+      return `Blocked: "${gitInfo.label}" requires interactive input that doesn't work in agent mode. ${gitInfo.suggestion}.`;
+    }
     const baseCommand = this.extractBaseCommand(command.trim());
     return `Blocked: "${baseCommand}" is an interactive command that would hang in agent mode. Use a non-interactive alternative instead.`;
   }
