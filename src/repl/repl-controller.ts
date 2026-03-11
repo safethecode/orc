@@ -248,6 +248,10 @@ export class ReplController {
             route.multiAgent = true;
           }
         }
+        // Store detected language for system prompt injection
+        if (classification.lang) {
+          this.conversation.setLanguage(classification.lang);
+        }
       }
     }
 
@@ -276,6 +280,11 @@ export class ReplController {
         route.multiAgent = false;
       } else if (classification.agents && classification.agents.length > 1) {
         route.multiAgent = true;
+      }
+
+      // Store detected language for system prompt injection
+      if (classification.lang) {
+        this.conversation.setLanguage(classification.lang);
       }
     }
 
@@ -816,7 +825,7 @@ export class ReplController {
     if (skillBodies.length > 0) sp += "\n\n" + skillBodies.join("\n\n");
 
     const lang = this.conversation.getLanguage();
-    if (lang) sp += `\n\nAlways respond in ${lang}.`;
+    if (lang && lang !== "en") sp += `\n\n[LANGUAGE] The user writes in ${lang}. Always respond in the same language.`;
 
     const memories = o.getMemory().getRelevantMemories(input, profile.name, 5);
     const memoryCtx = o.getMemory().formatForPrompt(memories);
