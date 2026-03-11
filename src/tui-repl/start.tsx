@@ -29,6 +29,12 @@ export async function startTuiRepl(
   // Must use realWrite since OpenTUI intercepts process.stdout.write
   realWrite("\x1b[?2004h");
 
+  // Ensure terminal modes are reset on ANY exit (including process.exit(0) from Ctrl+C)
+  // process.on("exit") fires synchronously, so realWrite still works
+  process.on("exit", () => {
+    realWrite("\x1b[?2004l\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?1006l");
+  });
+
   // Mutable ref: populated once App mounts and useReducer dispatch is available
   const dispatchRef: { current: ((action: any) => void) | null } = { current: null };
 
@@ -112,8 +118,9 @@ export async function startTuiRepl(
   // Keep process alive until renderer is destroyed
   await new Promise<void>((resolve) => {
     cliRenderer.on("destroy", () => {
-      // Disable bracketed paste mode on exit
-      realWrite("\x1b[?2004l");
+      // Disable bracketed paste mode and mouse tracking on exit
+      // Mouse: 1000=basic, 1002=button-event, 1003=any-event, 1006=SGR format
+      realWrite("\x1b[?2004l\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?1006l");
       resolve();
     });
   });
