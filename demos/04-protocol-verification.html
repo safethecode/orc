@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="ko" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>프로토콜 검증 — 프로젝트 관리 대시보드</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Pretendard Variable', 'Pretendard', 'system-ui', 'sans-serif'], mono: ['JetBrains Mono', 'D2Coding', 'monospace'] },
+          colors: {
+            primary: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',500:'#6366f1',600:'#4f46e5',700:'#4338ca',900:'#312e81' },
+            accent: '#f4f4f5',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* ── Shimmer skeleton (State Machine Protocol) ── */
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, #ebebeb 25%, #f5f5f5 50%, #ebebeb 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s ease-in-out infinite;
+      border-radius: 4px;
+    }
+
+    /* ── Entrance animations (Micro-Interaction Protocol) ── */
+    @keyframes fade-in-up {
+      from { opacity:0; transform:translateY(8px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    @keyframes fade-in-scale {
+      from { opacity:0; transform:scale(0.95); }
+      to   { opacity:1; transform:scale(1); }
+    }
+    @keyframes slide-in-right {
+      from { opacity:0; transform:translateX(100%); }
+      to   { opacity:1; transform:translateX(0); }
+    }
+    @keyframes slide-out-left {
+      from { opacity:1; transform:translateX(0); }
+      to   { opacity:0; transform:translateX(-8px); }
+    }
+    @keyframes progress-shrink {
+      from { width: 100%; }
+      to   { width: 0%; }
+    }
+    .animate-fade-in-up    { animation: fade-in-up 300ms cubic-bezier(0.16,1,0.3,1) forwards; }
+    .animate-fade-in-scale { animation: fade-in-scale 200ms cubic-bezier(0.16,1,0.3,1) forwards; }
+    .animate-slide-in-right{ animation: slide-in-right 300ms cubic-bezier(0.16,1,0.3,1) forwards; }
+    .animate-slide-out-left{ animation: slide-out-left 150ms cubic-bezier(0.4,0,1,1) forwards; }
+
+    /* ── Scrollbar styling ── */
+    .scrollbar-thin::-webkit-scrollbar { width:4px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background:transparent; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background:#d4d4d8; border-radius:2px; }
+
+    /* ── Global ── */
+    *, *::before, *::after { box-sizing:border-box; }
+    body { font-family:'Pretendard Variable',sans-serif; word-break:keep-all; overflow-wrap:break-word; letter-spacing:-0.01em; }
+    h1,h2,h3,h4 { letter-spacing:-0.02em; }
+
+    /* ── Focus ring (Micro-Interaction Protocol) ── */
+    :focus-visible { outline:none; box-shadow:0 0 0 2px white, 0 0 0 4px rgba(99,102,241,0.5); border-radius:6px; }
+  </style>
+</head>
+
+<body class="bg-gray-50 text-gray-900 antialiased">
+  <div id="app" class="flex h-screen overflow-hidden">
+
+    <!-- ════════════ SIDEBAR (Component Contract: Sidebar) ════════════ -->
+    <aside id="sidebar" class="hidden lg:flex flex-col w-60 border-r border-gray-200 bg-white transition-all duration-300 ease-out overflow-hidden shrink-0">
+      <!-- Sidebar header — sticky -->
+      <div id="sidebar-header" class="sticky top-0 h-14 flex items-center justify-between border-b border-gray-100 shrink-0" style="padding:0 12px">
+        <div data-sidebar-logo class="flex items-center gap-2 min-w-0">
+          <div class="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
+          </div>
+          <span data-sidebar-label class="font-semibold text-sm whitespace-nowrap">플로우보드</span>
+        </div>
+        <button onclick="toggleSidebar()" class="p-1.5 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors duration-150 cursor-pointer shrink-0" title="사이드바 접기/펼치기">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+        </button>
+      </div>
+
+      <!-- Nav — scrollable -->
+      <nav class="flex-1 overflow-y-auto scrollbar-thin py-2">
+        <div data-sidebar-label class="px-3 py-2"><span class="text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">메뉴</span></div>
+        <a href="#" class="sidebar-nav-item flex items-center gap-2 mx-2 h-9 px-3 rounded-md text-sm bg-accent text-gray-900 font-medium cursor-pointer" title="대시보드">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>
+          <span data-sidebar-label class="whitespace-nowrap">대시보드</span>
+        </a>
+        <a href="#" class="sidebar-nav-item flex items-center gap-2 mx-2 h-9 px-3 rounded-md text-sm text-gray-600 hover:bg-accent hover:text-gray-900 transition-colors duration-150 cursor-pointer" title="프로젝트">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+          <span data-sidebar-label class="whitespace-nowrap">프로젝트</span>
+        </a>
+        <a href="#" class="sidebar-nav-item flex items-center gap-2 mx-2 h-9 px-3 rounded-md text-sm text-gray-600 hover:bg-accent hover:text-gray-900 transition-colors duration-150 cursor-pointer" title="팀원">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+          <span data-sidebar-label class="whitespace-nowrap">팀원</span>
+        </a>
+        <a href="#" class="sidebar-nav-item flex items-center gap-2 mx-2 h-9 px-3 rounded-md text-sm text-gray-600 hover:bg-accent hover:text-gray-900 transition-colors duration-150 cursor-pointer" title="설정">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span data-sidebar-label class="whitespace-nowrap">설정</span>
+        </a>
+      </nav>
+
+      <!-- Footer — sticky -->
+      <div class="sticky bottom-0 py-3 border-t border-gray-100 shrink-0" style="padding-left:12px;padding-right:12px">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-full bg-primary-100 text-primary-700 font-mono flex items-center justify-center text-sm shrink-0">손</div>
+          <div data-sidebar-label class="flex-1 min-w-0">
+            <p class="text-sm font-medium truncate max-w-[120px] whitespace-nowrap">손아론 매니저</p>
+            <p class="text-xs text-gray-400 truncate max-w-[160px] whitespace-nowrap">aaron.son@flowboard.kr</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ════════════ MAIN ════════════ -->
+    <div class="flex-1 flex flex-col min-w-0">
+
+      <!-- ── HEADER (Multi-Page Consistency: breadcrumb, never unmounts) ── -->
+      <header class="sticky top-0 z-10 h-14 px-4 lg:px-6 flex items-center justify-between border-b border-gray-200 bg-white/95 backdrop-blur-sm">
+        <div class="flex items-center gap-2">
+          <!-- Mobile hamburger -->
+          <button onclick="toggleMobileMenu()" class="lg:hidden p-2 -ml-2 rounded-md text-gray-500 hover:bg-gray-100 transition-colors duration-150 cursor-pointer">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+          </button>
+          <!-- Breadcrumb (Multi-Page Protocol) -->
+          <nav class="flex items-center text-sm">
+            <span class="text-gray-400">대시보드</span>
+            <span class="text-gray-300 mx-1.5">/</span>
+            <span class="text-gray-900 font-medium">프로젝트 현황</span>
+          </nav>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="showToast('info','알림이 없습니다.')" class="relative p-2 rounded-md text-gray-500 hover:bg-gray-100 transition-colors duration-150 cursor-pointer">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- ── CONTENT ── -->
+      <main class="flex-1 overflow-y-auto">
+        <div class="max-w-6xl mx-auto px-4 lg:px-6 py-6 space-y-6">
+
+          <!-- Page title -->
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 class="text-xl lg:text-2xl font-semibold">프로젝트 현황</h1>
+              <p class="text-sm text-gray-500 mt-0.5">팀의 모든 프로젝트를 한 곳에서 관리하세요.</p>
+            </div>
+            <button onclick="openModal()" class="inline-flex items-center justify-center gap-1.5 h-10 px-4 text-sm font-medium rounded-md bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700 transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary-500/50 focus-visible:ring-offset-2 cursor-pointer">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              새 프로젝트
+            </button>
+          </div>
+
+          <!-- ── STAT CARDS (staggered entrance) ── -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+            <div class="opacity-0 animate-fade-in-up rounded-xl border border-gray-200 bg-white p-4 transition-colors duration-200 hover:bg-gray-50/50 hover:border-primary-200" style="animation-delay:0ms;animation-fill-mode:forwards">
+              <p class="text-xs font-medium text-gray-500">전체 프로젝트</p>
+              <p class="text-2xl font-semibold mt-1 font-mono">24</p>
+              <p class="text-xs text-green-600 mt-1">+3 이번 달</p>
+            </div>
+            <div class="opacity-0 animate-fade-in-up rounded-xl border border-gray-200 bg-white p-4 transition-colors duration-200 hover:bg-gray-50/50 hover:border-primary-200" style="animation-delay:75ms;animation-fill-mode:forwards">
+              <p class="text-xs font-medium text-gray-500">진행 중</p>
+              <p class="text-2xl font-semibold mt-1 font-mono">12</p>
+              <p class="text-xs text-gray-400 mt-1">전체의 50%</p>
+            </div>
+            <div class="opacity-0 animate-fade-in-up rounded-xl border border-gray-200 bg-white p-4 transition-colors duration-200 hover:bg-gray-50/50 hover:border-primary-200" style="animation-delay:150ms;animation-fill-mode:forwards">
+              <p class="text-xs font-medium text-gray-500">예산 총액</p>
+              <p class="text-2xl font-semibold mt-1 font-mono">₩2.4억</p>
+              <p class="text-xs text-gray-400 mt-1">집행률 67%</p>
+            </div>
+            <div class="opacity-0 animate-fade-in-up rounded-xl border border-gray-200 bg-white p-4 transition-colors duration-200 hover:bg-gray-50/50 hover:border-primary-200" style="animation-delay:225ms;animation-fill-mode:forwards">
+              <p class="text-xs font-medium text-gray-500">지연 프로젝트</p>
+              <p class="text-2xl font-semibold mt-1 text-red-600 font-mono">2</p>
+              <p class="text-xs text-red-500 mt-1">즉시 확인 필요</p>
+            </div>
+          </div>
+
+          <!-- ── STATE TOGGLE (for testing 4-state machine) ── -->
+          <div class="flex items-center gap-1.5 p-1 bg-gray-100 rounded-lg w-fit">
+            <button onclick="setState('loading')" id="btn-loading" class="h-8 px-3 text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer bg-white text-gray-900">로딩</button>
+            <button onclick="setState('error')"   id="btn-error"   class="h-8 px-3 text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer text-gray-500 hover:text-gray-700">에러</button>
+            <button onclick="setState('empty')"   id="btn-empty"   class="h-8 px-3 text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer text-gray-500 hover:text-gray-700">빈 상태</button>
+            <button onclick="setState('data')"    id="btn-data"    class="h-8 px-3 text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer text-gray-500 hover:text-gray-700">데이터</button>
+          </div>
+
+          <!-- ═══ STATE: LOADING (skeleton) ═══ -->
+          <div id="state-loading" class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-100">
+              <div class="skeleton h-4 w-24"></div>
+            </div>
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-gray-100">
+                  <th class="px-4 py-2.5 text-left"><div class="skeleton h-3 w-16"></div></th>
+                  <th class="px-4 py-2.5 text-left"><div class="skeleton h-3 w-12"></div></th>
+                  <th class="px-4 py-2.5 text-left"><div class="skeleton h-3 w-14"></div></th>
+                  <th class="px-4 py-2.5 text-left hidden sm:table-cell"><div class="skeleton h-3 w-16"></div></th>
+                  <th class="px-4 py-2.5 text-left hidden md:table-cell"><div class="skeleton h-3 w-12"></div></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-b border-gray-100"><td class="px-4 py-3" colspan="5"><div class="flex items-center gap-3"><div class="skeleton w-8 h-8 rounded-full shrink-0"></div><div class="space-y-1.5 flex-1"><div class="skeleton h-3.5 w-3/4"></div><div class="skeleton h-3 w-1/2"></div></div></div></td></tr>
+                <tr class="border-b border-gray-100"><td class="px-4 py-3" colspan="5"><div class="flex items-center gap-3"><div class="skeleton w-8 h-8 rounded-full shrink-0"></div><div class="space-y-1.5 flex-1"><div class="skeleton h-3.5 w-2/3"></div><div class="skeleton h-3 w-2/5"></div></div></div></td></tr>
+                <tr class="border-b border-gray-100"><td class="px-4 py-3" colspan="5"><div class="flex items-center gap-3"><div class="skeleton w-8 h-8 rounded-full shrink-0"></div><div class="space-y-1.5 flex-1"><div class="skeleton h-3.5 w-4/5"></div><div class="skeleton h-3 w-1/3"></div></div></div></td></tr>
+                <tr><td class="px-4 py-3" colspan="5"><div class="flex items-center gap-3"><div class="skeleton w-8 h-8 rounded-full shrink-0"></div><div class="space-y-1.5 flex-1"><div class="skeleton h-3.5 w-1/2"></div><div class="skeleton h-3 w-2/5"></div></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- ═══ STATE: ERROR ═══ -->
+          <div id="state-error" class="hidden rounded-xl border border-gray-200 bg-white overflow-hidden">
+            <div class="flex flex-col items-center justify-center py-16 px-6 text-center">
+              <div class="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mb-4">
+                <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+              </div>
+              <h3 class="text-base font-semibold text-gray-900">데이터를 불러올 수 없습니다</h3>
+              <p class="text-sm text-gray-500 mt-1 max-w-sm">서버 연결에 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.</p>
+              <button onclick="setState('loading');setTimeout(()=>setState('data'),800)" class="mt-4 inline-flex items-center gap-1.5 h-9 px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors duration-150 cursor-pointer">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182"/></svg>
+                다시 시도
+              </button>
+            </div>
+          </div>
+
+          <!-- ═══ STATE: EMPTY ═══ -->
+          <div id="state-empty" class="hidden rounded-xl border border-gray-200 bg-white overflow-hidden">
+            <div class="flex flex-col items-center justify-center py-16 px-6 text-center">
+              <div class="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+              </div>
+              <h3 class="text-base font-semibold text-gray-900">프로젝트가 없습니다</h3>
+              <p class="text-sm text-gray-500 mt-1 max-w-sm">첫 번째 프로젝트를 만들어 팀의 업무를 체계적으로 관리하세요.</p>
+              <button onclick="openModal()" class="mt-4 inline-flex items-center gap-1.5 h-10 px-4 text-sm font-medium rounded-md bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700 transition-colors duration-150 cursor-pointer">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                새 프로젝트 만들기
+              </button>
+            </div>
+          </div>
+
+          <!-- ═══ STATE: DATA (real table with edge-case data) ═══ -->
+          <div id="state-data" class="hidden rounded-xl border border-gray-200 bg-white overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <h2 class="text-sm font-semibold">프로젝트 목록</h2>
+              <span class="text-xs text-gray-400">총 6건</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[640px]">
+                <thead>
+                  <tr class="border-b border-gray-100">
+                    <th class="sticky top-0 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-2 text-left">프로젝트</th>
+                    <th class="sticky top-0 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-2 text-left">담당자</th>
+                    <th class="sticky top-0 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-2 text-left">상태</th>
+                    <th class="sticky top-0 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-2 text-left">예산</th>
+                    <th class="sticky top-0 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-2 text-left">수정일</th>
+                    <th class="sticky top-0 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider px-3 py-2 text-left w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Row 1: Normal -->
+                  <tr class="border-b border-gray-100 hover:bg-gray-50 h-10 group">
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0"><span class="text-gray-600 text-xs font-semibold">B2</span></div>
+                        <div class="min-w-0">
+                          <p class="text-sm font-medium text-gray-900 truncate max-w-[200px]">B2B SaaS 대시보드 리디자인</p>
+                          <p class="text-xs text-gray-400 truncate max-w-[200px]">디자인 시스템 v3 기반 전면 개편</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full bg-primary-100 text-primary-700 font-mono flex items-center justify-center text-xs shrink-0">김</div>
+                        <span class="text-sm text-gray-900 truncate max-w-[120px]">김민수</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">● 진행 중</span></td>
+                    <td class="px-3 py-2 text-sm text-gray-900 font-mono">₩45,000,000</td>
+                    <td class="px-3 py-2 text-sm text-gray-500">3분 전</td>
+                    <td class="px-3 py-2">
+                      <button onclick="openRowMenu(this)" class="p-1.5 rounded-md text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600 transition-all duration-150 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+
+                  <!-- Row 2: Long name (Real Data Resilience) -->
+                  <tr class="border-b border-gray-100 hover:bg-gray-50 h-10 group">
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0"><span class="text-gray-600 text-xs font-semibold">EC</span></div>
+                        <div class="min-w-0">
+                          <p class="text-sm font-medium text-gray-900 truncate max-w-[200px]" title="이커머스 플랫폼 결제 시스템 리뉴얼 프로젝트 2차">이커머스 플랫폼 결제 시스템 리뉴얼 프로젝트 2차</p>
+                          <p class="text-xs text-gray-400 truncate max-w-[200px]">PG사 연동 및 정산 자동화 포함</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full bg-primary-100 text-primary-700 font-mono flex items-center justify-center text-xs shrink-0">박</div>
+                        <span class="text-sm text-gray-900 truncate max-w-[120px]" title="박서연희 리드 매니저">박서연희 리드 매니저</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600">● 지연</span></td>
+                    <td class="px-3 py-2 text-sm text-gray-900 font-mono">₩1.2억</td>
+                    <td class="px-3 py-2 text-sm text-gray-500">2시간 전</td>
+                    <td class="px-3 py-2">
+                      <button class="p-1.5 rounded-md text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600 transition-all duration-150 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+
+                  <!-- Row 3: Zero budget, old date -->
+                  <tr class="border-b border-gray-100 hover:bg-gray-50 h-10 group">
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0"><span class="text-gray-600 text-xs font-semibold">내</span></div>
+                        <div class="min-w-0">
+                          <p class="text-sm font-medium text-gray-900 truncate max-w-[200px]">내부 위키 시스템</p>
+                          <p class="text-xs text-gray-400 truncate max-w-[200px]">사내 문서 통합 관리</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full bg-primary-100 text-primary-700 font-mono flex items-center justify-center text-xs shrink-0">이</div>
+                        <span class="text-sm text-gray-900 truncate max-w-[120px]">이정현</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">● 완료</span></td>
+                    <td class="px-3 py-2 text-sm text-gray-900 font-mono">0</td>
+                    <td class="px-3 py-2 text-sm text-gray-500">2024년 11월 3일</td>
+                    <td class="px-3 py-2">
+                      <button class="p-1.5 rounded-md text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600 transition-all duration-150 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+
+                  <!-- Row 4: English mixed, large budget -->
+                  <tr class="border-b border-gray-100 hover:bg-gray-50 h-10 group">
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0"><span class="text-gray-600 text-xs font-semibold">AI</span></div>
+                        <div class="min-w-0">
+                          <p class="text-sm font-medium text-gray-900 truncate max-w-[200px]">AI Chatbot 고객 응대 자동화</p>
+                          <p class="text-xs text-gray-400 truncate max-w-[200px]">GPT-4o 기반 상담봇 구축</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full bg-primary-100 text-primary-700 font-mono flex items-center justify-center text-xs shrink-0">C</div>
+                        <span class="text-sm text-gray-900 truncate max-w-[120px]" title="Christopher Langston">Christopher Langston</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">● 진행 중</span></td>
+                    <td class="px-3 py-2 text-sm text-gray-900 font-mono">₩78,500,000</td>
+                    <td class="px-3 py-2 text-sm text-gray-500">방금 전</td>
+                    <td class="px-3 py-2">
+                      <button class="p-1.5 rounded-md text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600 transition-all duration-150 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+
+                  <!-- Row 5: No description (em dash) -->
+                  <tr class="border-b border-gray-100 hover:bg-gray-50 h-10 group">
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0"><span class="text-gray-600 text-xs font-semibold">보</span></div>
+                        <div class="min-w-0">
+                          <p class="text-sm font-medium text-gray-900 truncate max-w-[200px]">보안 감사 준비</p>
+                          <p class="text-xs text-gray-400">—</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full bg-gray-200 text-gray-600 font-mono flex items-center justify-center text-xs shrink-0">?</div>
+                        <span class="text-sm text-gray-400">미배정</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">○ 대기</span></td>
+                    <td class="px-3 py-2 text-sm text-gray-400">—</td>
+                    <td class="px-3 py-2 text-sm text-gray-500">5일 전</td>
+                    <td class="px-3 py-2">
+                      <button class="p-1.5 rounded-md text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600 transition-all duration-150 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+
+                  <!-- Row 6: Overdue, amber warning -->
+                  <tr class="hover:bg-gray-50 h-10 group">
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0"><span class="text-gray-600 text-xs font-semibold">모</span></div>
+                        <div class="min-w-0">
+                          <p class="text-sm font-medium text-gray-900 truncate max-w-[200px]">모바일 앱 Flutter 마이그레이션</p>
+                          <p class="text-xs text-gray-400 truncate max-w-[200px]">React Native → Flutter 전환</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full bg-primary-100 text-primary-700 font-mono flex items-center justify-center text-xs shrink-0">최</div>
+                        <span class="text-sm text-gray-900 truncate max-w-[120px]">최유진</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-600">● 주의</span></td>
+                    <td class="px-3 py-2 text-sm text-gray-900 font-mono">₩2.1만</td>
+                    <td class="px-3 py-2 text-sm text-gray-500">3월 1일</td>
+                    <td class="px-3 py-2">
+                      <button class="p-1.5 rounded-md text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600 transition-all duration-150 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ── Button variants showcase ── -->
+          <div id="state-data-buttons" class="hidden rounded-xl border border-gray-200 bg-white p-5">
+            <h2 class="text-sm font-semibold mb-4">버튼 시스템</h2>
+            <div class="flex flex-wrap items-center gap-2">
+              <button class="inline-flex items-center justify-center h-10 px-4 text-sm font-medium rounded-md bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700 transition-colors duration-150 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary-500/50 focus-visible:ring-offset-2">Primary</button>
+              <button class="inline-flex items-center justify-center h-10 px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors duration-150 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary-500/50 focus-visible:ring-offset-2">Secondary</button>
+              <button class="inline-flex items-center justify-center h-10 px-4 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary-500/50 focus-visible:ring-offset-2">Ghost</button>
+              <button class="inline-flex items-center justify-center h-10 px-4 text-sm font-medium rounded-md bg-red-500 text-white hover:bg-red-600 active:bg-red-700 transition-colors duration-150 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary-500/50 focus-visible:ring-offset-2">Danger</button>
+              <button class="inline-flex items-center justify-center h-10 px-4 text-sm font-medium rounded-md border border-primary-300 text-primary-600 hover:bg-primary-50 transition-colors duration-150 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary-500/50 focus-visible:ring-offset-2">Outline</button>
+              <button class="inline-flex items-center justify-center h-10 px-4 text-sm font-medium rounded-md bg-primary-500 text-white opacity-50 pointer-events-none cursor-not-allowed" disabled>Disabled</button>
+            </div>
+            <div class="flex flex-wrap items-end gap-2 mt-4">
+              <button class="inline-flex items-center justify-center h-7 px-2 text-xs font-medium rounded-md bg-primary-500 text-white cursor-pointer">XS</button>
+              <button class="inline-flex items-center justify-center h-8 px-3 text-xs font-medium rounded-md bg-primary-500 text-white cursor-pointer">SM</button>
+              <button class="inline-flex items-center justify-center h-10 px-4 text-sm font-medium rounded-md bg-primary-500 text-white cursor-pointer">MD</button>
+              <button class="inline-flex items-center justify-center h-12 px-6 text-sm font-medium rounded-md bg-primary-500 text-white cursor-pointer">LG</button>
+            </div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ════════════ MODAL (Interaction Layer + Dialog Contract) ════════════ -->
+  <div id="modal-backdrop" class="hidden fixed inset-0 z-[1200] bg-black/50" onclick="closeModal()"></div>
+  <div id="modal-panel" class="hidden fixed inset-0 z-[1300] flex items-center justify-center p-4" onclick="event.target===this&&closeModal()">
+    <div class="bg-white rounded-xl w-full max-w-lg max-h-[90vh] flex flex-col animate-fade-in-scale" onclick="event.stopPropagation()">
+      <!-- Modal header -->
+      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="font-semibold text-lg">새 프로젝트 만들기</h2>
+        <button onclick="closeModal()" class="p-2 -mr-2 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors duration-150 cursor-pointer">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Modal body (scrollable) -->
+      <div class="px-6 py-5 overflow-y-auto space-y-4">
+        <!-- Input: default -->
+        <div>
+          <label class="text-sm font-medium text-gray-700 mb-1.5 block">프로젝트 이름 <span class="text-red-500">*</span></label>
+          <input type="text" placeholder="예: 신규 앱 개발 프로젝트" class="w-full h-10 px-3 text-sm rounded-md border border-gray-300 bg-white transition-colors duration-150 focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 focus:outline-none" />
+        </div>
+
+        <!-- Input: error state -->
+        <div>
+          <label class="text-sm font-medium text-gray-700 mb-1.5 block">프로젝트 코드</label>
+          <input type="text" value="PRJ-001" class="w-full h-10 px-3 text-sm rounded-md border border-red-500 bg-white transition-colors duration-150 focus:ring-2 focus:ring-red-500/50 focus:border-red-500 focus:outline-none" />
+          <p class="text-xs text-red-500 mt-1">이미 사용 중인 코드입니다.</p>
+        </div>
+
+        <!-- Select (simulated) -->
+        <div>
+          <label class="text-sm font-medium text-gray-700 mb-1.5 block">담당자</label>
+          <div class="relative">
+            <select class="w-full h-10 px-3 text-sm rounded-md border border-gray-300 bg-white transition-colors duration-150 focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 focus:outline-none appearance-none cursor-pointer">
+              <option value="">선택하세요</option>
+              <option>김민수</option>
+              <option>박서연희 리드 매니저</option>
+              <option>이정현</option>
+              <option>Christopher Langston</option>
+              <option>최유진</option>
+            </select>
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+          </div>
+        </div>
+
+        <!-- Input: budget -->
+        <div>
+          <label class="text-sm font-medium text-gray-700 mb-1.5 block">예산 (원)</label>
+          <input type="text" placeholder="₩0" class="w-full h-10 px-3 text-sm rounded-md border border-gray-300 bg-white transition-colors duration-150 focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 focus:outline-none font-mono" />
+        </div>
+
+        <!-- Textarea -->
+        <div>
+          <label class="text-sm font-medium text-gray-700 mb-1.5 block">설명</label>
+          <textarea rows="3" placeholder="프로젝트에 대한 간단한 설명을 입력하세요." class="w-full px-3 py-2.5 text-sm rounded-md border border-gray-300 bg-white transition-colors duration-150 focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 focus:outline-none resize-none"></textarea>
+        </div>
+
+        <!-- Input: disabled -->
+        <div>
+          <label class="text-sm font-medium text-gray-400 mb-1.5 block">생성일</label>
+          <input type="text" value="2026년 3월 8일" disabled class="w-full h-10 px-3 text-sm rounded-md border border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-50" />
+        </div>
+      </div>
+
+      <!-- Modal footer -->
+      <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+        <button onclick="closeModal()" class="inline-flex items-center justify-center h-10 px-4 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors duration-150 cursor-pointer">취소</button>
+        <button onclick="closeModal();showToast('success','프로젝트가 생성되었습니다.')" class="inline-flex items-center justify-center h-10 px-4 text-sm font-medium rounded-md bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700 transition-colors duration-150 cursor-pointer">생성하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════ MOBILE MENU (bottom drawer) ════════════ -->
+  <div id="mobile-backdrop" class="hidden fixed inset-0 z-[1200] bg-black/50 lg:hidden" onclick="closeMobileMenu()"></div>
+  <div id="mobile-drawer" class="hidden fixed bottom-0 left-0 right-0 z-[1300] bg-white rounded-t-xl max-h-[70vh] overflow-y-auto lg:hidden animate-fade-in-up">
+    <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-3 mb-2"></div>
+    <nav class="px-4 pb-6 space-y-1">
+      <a href="#" class="flex items-center gap-3 h-12 px-3 rounded-md text-sm bg-accent text-gray-900 font-medium">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>
+        대시보드
+      </a>
+      <a href="#" class="flex items-center gap-3 h-12 px-3 rounded-md text-sm text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+        프로젝트
+      </a>
+      <a href="#" class="flex items-center gap-3 h-12 px-3 rounded-md text-sm text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+        팀원
+      </a>
+      <a href="#" class="flex items-center gap-3 h-12 px-3 rounded-md text-sm text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        설정
+      </a>
+    </nav>
+  </div>
+
+  <!-- ════════════ TOAST CONTAINER ════════════ -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-[1400] flex flex-col-reverse gap-2 pointer-events-none"></div>
+
+  <!-- ════════════ ROW DROPDOWN (Interaction Layer: z-1000 portal) ════════════ -->
+  <div id="row-menu" class="hidden fixed z-[1000] bg-white border border-gray-200 rounded-lg py-1 w-40 animate-fade-in-scale" style="box-shadow:0 4px 6px -1px rgba(0,0,0,.05)">
+    <button onclick="closeRowMenu();openModal()" class="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150 cursor-pointer">수정하기</button>
+    <button onclick="closeRowMenu();showToast('info','링크가 복사되었습니다.')" class="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150 cursor-pointer">링크 복사</button>
+    <div class="border-t border-gray-100 my-1"></div>
+    <button onclick="closeRowMenu();showToast('error','삭제 권한이 없습니다.')" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-150 cursor-pointer">삭제하기</button>
+  </div>
+
+  <script>
+    /* ── State Machine (Protocol #2) ── */
+    const states = ['loading','error','empty','data'];
+    function setState(name) {
+      states.forEach(s => {
+        document.getElementById(`state-${s}`).classList.toggle('hidden', s !== name);
+        const btn = document.getElementById(`btn-${s}`);
+        if (s === name) { btn.classList.add('bg-white','text-gray-900'); btn.classList.remove('text-gray-500','hover:text-gray-700'); }
+        else { btn.classList.remove('bg-white','text-gray-900'); btn.classList.add('text-gray-500','hover:text-gray-700'); }
+      });
+      const buttonsPanel = document.getElementById('state-data-buttons');
+      if (buttonsPanel) buttonsPanel.classList.toggle('hidden', name !== 'data');
+    }
+
+    /* ── Modal (Interaction Layer Protocol) ── */
+    function openModal() {
+      closeRowMenu(); // close dropdown first, then open modal
+      document.getElementById('modal-backdrop').classList.remove('hidden');
+      document.getElementById('modal-panel').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      // Focus trap: focus first input
+      setTimeout(() => { document.querySelector('#modal-panel input')?.focus(); }, 100);
+    }
+    function closeModal() {
+      document.getElementById('modal-backdrop').classList.add('hidden');
+      document.getElementById('modal-panel').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+    // ESC closes topmost overlay
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        if (!document.getElementById('modal-panel').classList.contains('hidden')) { closeModal(); return; }
+        if (!document.getElementById('row-menu').classList.contains('hidden')) { closeRowMenu(); return; }
+        if (!document.getElementById('mobile-drawer').classList.contains('hidden')) { closeMobileMenu(); return; }
+      }
+    });
+
+    /* ── Row dropdown (Interaction Layer: z-1000) ── */
+    function openRowMenu(btn) {
+      const menu = document.getElementById('row-menu');
+      const rect = btn.getBoundingClientRect();
+      menu.style.top = `${rect.bottom + 4}px`;
+      menu.style.left = `${rect.right - 160}px`;
+      menu.classList.remove('hidden');
+      const close = (e) => { if (!menu.contains(e.target) && e.target !== btn) { closeRowMenu(); document.removeEventListener('click', close); }};
+      setTimeout(() => document.addEventListener('click', close), 0);
+    }
+    function closeRowMenu() { document.getElementById('row-menu').classList.add('hidden'); }
+
+    /* ── Mobile menu (Responsive Protocol: bottom drawer) ── */
+    function toggleMobileMenu() {
+      const isOpen = !document.getElementById('mobile-drawer').classList.contains('hidden');
+      if (isOpen) closeMobileMenu(); else openMobileMenu();
+    }
+    function openMobileMenu() {
+      document.getElementById('mobile-backdrop').classList.remove('hidden');
+      document.getElementById('mobile-drawer').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeMobileMenu() {
+      document.getElementById('mobile-backdrop').classList.add('hidden');
+      document.getElementById('mobile-drawer').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    /* ── Sidebar collapse (Sidebar Contract: w-60 ↔ w-16, icons only when collapsed) ── */
+    let sidebarCollapsed = false;
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const header = document.getElementById('sidebar-header');
+      sidebarCollapsed = !sidebarCollapsed;
+
+      if (sidebarCollapsed) {
+        sidebar.classList.remove('w-60');
+        sidebar.classList.add('w-16');
+        // Hide logo + all text labels
+        sidebar.querySelector('[data-sidebar-logo]').style.display = 'none';
+        sidebar.querySelectorAll('[data-sidebar-label]').forEach(el => {
+          el.style.display = 'none';
+        });
+        // Center header toggle button
+        header.classList.remove('justify-between');
+        header.classList.add('justify-center');
+        // Center nav icons
+        sidebar.querySelectorAll('.sidebar-nav-item').forEach(el => {
+          el.classList.remove('gap-2', 'px-3');
+          el.classList.add('justify-center', 'px-0');
+        });
+      } else {
+        sidebar.classList.remove('w-16');
+        sidebar.classList.add('w-60');
+        // Show logo + text labels
+        sidebar.querySelector('[data-sidebar-logo]').style.display = '';
+        sidebar.querySelectorAll('[data-sidebar-label]').forEach(el => {
+          el.style.display = '';
+        });
+        // Restore header layout
+        header.classList.add('justify-between');
+        header.classList.remove('justify-center');
+        // Restore nav layout
+        sidebar.querySelectorAll('.sidebar-nav-item').forEach(el => {
+          el.classList.add('gap-2', 'px-3');
+          el.classList.remove('justify-center', 'px-0');
+        });
+      }
+    }
+
+    /* ── Toast (Component Contract: Toast) ── */
+    let toastCount = 0;
+    function showToast(type, message) {
+      const container = document.getElementById('toast-container');
+      if (container.children.length >= 3) container.lastElementChild?.remove();
+
+      const id = `toast-${++toastCount}`;
+      const borderColor = { success:'border-l-green-500', error:'border-l-red-500', warning:'border-l-amber-500', info:'border-l-gray-300' }[type] || 'border-l-gray-300';
+      const iconColor = { success:'text-green-500', error:'text-red-500', warning:'text-amber-500', info:'text-gray-400' }[type] || 'text-gray-400';
+      const iconPath = {
+        success:'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+        error:'M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z',
+        warning:'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z',
+        info:'M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z'
+      }[type] || '';
+
+      const toast = document.createElement('div');
+      toast.id = id;
+      toast.className = `pointer-events-auto w-80 bg-white border border-gray-200 border-l-4 ${borderColor} rounded-lg p-4 flex items-start gap-3 animate-slide-in-right relative overflow-hidden`;
+      toast.innerHTML = `
+        <svg class="w-5 h-5 ${iconColor} shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="${iconPath}"/></svg>
+        <p class="text-sm text-gray-900 flex-1">${message}</p>
+        <button onclick="dismissToast('${id}')" class="p-1 -mr-1 -mt-1 rounded-md text-gray-400 hover:text-gray-600 transition-colors duration-150 cursor-pointer"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>
+        <div class="absolute bottom-0 left-0 h-0.5 bg-gray-200" style="animation:progress-shrink 5s linear forwards;width:100%"></div>
+      `;
+      container.prepend(toast);
+
+      // Auto-dismiss 5s
+      setTimeout(() => dismissToast(id), 5000);
+    }
+    function dismissToast(id) {
+      const toast = document.getElementById(id);
+      if (!toast) return;
+      toast.classList.remove('animate-slide-in-right');
+      toast.classList.add('animate-slide-out-left');
+      setTimeout(() => toast.remove(), 150);
+    }
+  </script>
+</body>
+</html>
