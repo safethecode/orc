@@ -1308,7 +1308,8 @@ async function handleNaturalInput(
       if (tool.name === "bash" && inp.command) {
         const niGuard = orchestrator.getNonInteractiveGuard();
         if (niGuard.isInteractive(inp.command as string)) {
-          renderer.info(`\x1b[33m⚠ non-interactive:\x1b[0m command "${(inp.command as string).slice(0, 40)}" may be interactive — sanitized`);
+          const warning = niGuard.getWarning(inp.command as string);
+          renderer.error(`\x1b[33m⚠ non-interactive:\x1b[0m ${warning}`);
         }
       }
 

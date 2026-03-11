@@ -471,6 +471,15 @@ export class ReplController {
           return;
         }
 
+        // Non-interactive env guard for bash commands
+        if (tool.name === "bash" && inp.command) {
+          const niGuard = this.orchestrator.getNonInteractiveGuard();
+          if (niGuard.isInteractive(inp.command as string)) {
+            const warning = niGuard.getWarning(inp.command as string);
+            r.error(`\x1b[33m⚠ non-interactive:\x1b[0m ${warning}`);
+          }
+        }
+
         r.toolUse(tool.name, detail, false, inp);
         r.startSpinner(agentName, route.model);
         eventBus.publish({ type: "agent:tool", agent: agentName, tool: tool.name, detail });
