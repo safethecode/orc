@@ -1493,8 +1493,16 @@ async function handleNaturalInput(
           renderer.info("  \x1b[32mApproved.\x1b[0m Retrying...");
           pendingApproval = null;
 
+          // Preserve Claude's partial output so it knows what it already did
+          if (result.text) {
+            conversation.add({
+              role: "assistant", content: result.text, agentName,
+              tier: route.model, timestamp: new Date().toISOString(),
+            });
+          }
+
           // Inject context so agent knows the command was approved
-          const approvalMsg = `The user approved this command: \`${command}\`. Execute it now and continue.`;
+          const approvalMsg = `The user approved this command: \`${command}\`. Execute it now and continue from where you left off.`;
           const approvalTurn = { role: "user" as const, content: approvalMsg, timestamp: new Date().toISOString() };
           conversation.add(approvalTurn);
           forkManager?.addTurn(approvalTurn);
@@ -1568,6 +1576,33 @@ async function handleNaturalInput(
         continue;
       }
 
+      // Zero-tool intent guard: agent declared actions but used no tools at all
+      if (result.text?.trim() && toolCount === 0 && !incompleteRetried) {
+        const ACTION_INTENT = /겠습니다|할게요|하겠|시작합니다|진행하겠|진행합니다|let\s+me|i['']ll\s|i\s+will\s|i['']m\s+going\s+to/i;
+        if (ACTION_INTENT.test(result.text)) {
+          incompleteRetried = true;
+          renderer.info(`\x1b[2m⚡ intent without action — auto-retrying\x1b[0m`);
+          const followUp = "[IMPORTANT: Your previous response only described what you would do without actually doing it. You MUST use tools (Read, Edit, Bash, etc.) to complete the task. Do not describe — act.]";
+          const followUpTurn = { role: "user" as const, content: followUp, timestamp: new Date().toISOString() };
+          conversation.add({ role: "assistant", content: result.text, agentName, tier: route.model, timestamp: new Date().toISOString() });
+          conversation.add(followUpTurn);
+          forkManager?.addTurn(followUpTurn);
+
+          conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? route.model] ?? TIER_BUDGETS.sonnet);
+          const newPrompt = conversation.buildPrompt(followUp);
+          currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+            prompt: newPrompt,
+            model: currentProfile.model,
+            systemPrompt,
+            maxTurns: currentProfile.maxTurns,
+            mcpConfig: mcpConfigPath,
+          });
+          renderer.startSpinner(agentName, displayModel);
+          attempt = -1;
+          continue;
+        }
+      }
+
       // Incomplete-response guard: agent stated intent to act but stopped prematurely
       if (result.text?.trim() && toolCount > 0 && !incompleteRetried) {
         const lastLine = result.text.trim().split("\n").pop() ?? "";
@@ -1598,7 +1633,7 @@ async function handleNaturalInput(
 
       // Quality gate
       if (result.text) {
-        const critique = runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input }, result.text);
+        const critique = runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input, toolUseCount: toolCount }, result.text);
         renderer.qualityGate(critique.passes, critique.issues);
       }
 
