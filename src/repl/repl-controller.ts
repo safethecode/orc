@@ -32,6 +32,23 @@ const ROLE_TO_PROFILE: Record<string, string> = {
   tester: "coder", "spec-writer": "writer", qa: "reviewer",
 };
 
+const DESIGN_PLAN_PROMPT = `
+
+[DESIGN PLAN-FIRST MODE — Phase 1]
+You are in PLAN phase. Do NOT write any code or modify any files.
+Your task is to produce a detailed design specification:
+
+1. **Reference**: Name the specific products/patterns you will follow (e.g., "Linear's issue list + Vercel's dashboard nav")
+2. **Layout**: Describe the visual structure, grid system, and spacing
+3. **Colors**: List the exact color palette (hex values) and where each color is used
+4. **Typography**: Font family, sizes, and weights for each text level
+5. **Components**: List every component you will create with a brief description
+6. **Interactions**: Describe hover states, transitions, and animations
+7. **Responsive**: How the layout adapts across breakpoints
+
+Be specific and concrete. The user will review this plan before you implement it.
+DO NOT use any tools. DO NOT write any code. Text output only.`;
+
 /**
  * Extract an @agent mention from input, case-insensitive.
  * Agent names are simple words (no dots/slashes), file refs have path chars.
@@ -409,8 +426,99 @@ export class ReplController {
       mcpConfig: mcpConfigPath,
     });
 
-    // Execute with retry
-    await this.executeWithRetry(cmd, agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input);
+    // Design agents: plan-first preview flow
+    const isDesignAgent = (profile.role ?? "").toLowerCase().includes("design");
+    if (isDesignAgent) {
+      await this.executeDesignPreview(agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input);
+    } else {
+      await this.executeWithRetry(cmd, agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input);
+    }
+  }
+
+  /** Design agent 2-phase flow: plan first, then execute on approval */
+  private async executeDesignPreview(
+    agentName: string,
+    route: RouteResult,
+    profile: any,
+    providerConfig: any,
+    systemPrompt: string,
+    fullPrompt: string,
+    mcpConfigPath: string | undefined,
+    cancellation: CancellationToken,
+    input: string,
+  ): Promise<void> {
+    const r = this.renderer;
+
+    // Phase 1: Plan-only run (maxTurns=1, no tool use)
+    const planSystemPrompt = systemPrompt + DESIGN_PLAN_PROMPT;
+    const planCmd = buildCommand(providerConfig, profile, {
+      prompt: fullPrompt,
+      model: profile.model,
+      systemPrompt: planSystemPrompt,
+      maxTurns: 1,
+      mcpConfig: mcpConfigPath,
+    });
+
+    r.info("design preview: generating plan...");
+    const streamer = new AgentStreamer();
+    this.currentStreamer = streamer;
+    let boxOpen = false;
+
+    streamer.on("text_delta", (delta: string) => {
+      if (!boxOpen) { r.stopSpinner(); r.startBox(route.model); boxOpen = true; }
+      r.text(delta);
+    });
+    streamer.on("text_complete", () => {
+      if (boxOpen) { r.endBox(); boxOpen = false; }
+    });
+
+    let planResult: StreamResult;
+    try {
+      planResult = await streamer.run(planCmd, cancellation.signal);
+    } catch {
+      r.stopSpinner();
+      if (boxOpen) r.endBox();
+      r.error("design preview: plan generation failed.");
+      return;
+    }
+    r.stopSpinner();
+    if (boxOpen) r.endBox();
+
+    if (planResult.inputTokens > 0) {
+      r.cost(planResult.costUsd, planResult.inputTokens, planResult.outputTokens);
+    }
+
+    if (!planResult.text.trim() || cancellation.cancelled) return;
+
+    // Ask for approval
+    const answer = await this.askUser(
+      "이 디자인 설계안을 승인하시겠습니까?",
+      ["승인 — 이대로 구현", "거부 — 취소"],
+    );
+
+    if (!answer || answer.includes("거부") || answer.includes("취소")) {
+      r.info("design preview: plan rejected.");
+      this.conversation.add({ role: "assistant" as const, content: planResult.text, agentName, tier: route.model, timestamp: new Date().toISOString() });
+      return;
+    }
+
+    // Phase 2: Execute with approved plan as context
+    r.info("design preview: executing approved plan...");
+    r.startSpinner(agentName, route.model);
+
+    this.conversation.setTokenBudget(TIER_BUDGETS[(profile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
+    const execPrompt = this.conversation.buildPrompt(
+      `${input}\n\n[APPROVED DESIGN PLAN]\n${planResult.text}\n[END PLAN]\n\nExecute this approved design plan now. Implement exactly as described.`,
+    );
+    const execCmd = buildCommand(providerConfig, profile, {
+      prompt: execPrompt,
+      model: profile.model,
+      systemPrompt,
+      maxTurns: profile.maxTurns,
+      mcpConfig: mcpConfigPath,
+    });
+
+    await this.executeWithRetry(execCmd, agentName, route, profile, providerConfig, systemPrompt, execPrompt, mcpConfigPath, cancellation, input);
   }
 
   /** Execute streamer with retry and fallback */
