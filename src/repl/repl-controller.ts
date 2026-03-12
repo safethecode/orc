@@ -418,20 +418,22 @@ export class ReplController {
       } catch { /* deliberation non-fatal */ }
     }
 
+    const sessionId = crypto.randomUUID();
     const cmd = buildCommand(providerConfig, profile, {
       prompt: fullPrompt,
       model: profile.model,
       systemPrompt,
       maxTurns: profile.maxTurns,
       mcpConfig: mcpConfigPath,
+      sessionId,
     });
 
     // Design agents: plan-first preview flow
     const isDesignAgent = (profile.role ?? "").toLowerCase().includes("design");
     if (isDesignAgent) {
-      await this.executeDesignPreview(agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input);
+      await this.executeDesignPreview(agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input, sessionId);
     } else {
-      await this.executeWithRetry(cmd, agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input);
+      await this.executeWithRetry(cmd, agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input, sessionId);
     }
   }
 
@@ -446,6 +448,7 @@ export class ReplController {
     mcpConfigPath: string | undefined,
     cancellation: CancellationToken,
     input: string,
+    sessionId: string,
   ): Promise<void> {
     const r = this.renderer;
 
@@ -457,6 +460,7 @@ export class ReplController {
       systemPrompt: planSystemPrompt,
       maxTurns: 1,
       mcpConfig: mcpConfigPath,
+      sessionId,
     });
 
     r.info("design preview: generating plan...");
@@ -502,23 +506,21 @@ export class ReplController {
       return;
     }
 
-    // Phase 2: Execute with approved plan as context
+    // Phase 2: Execute with approved plan (session has full Phase 1 context)
     r.info("design preview: executing approved plan...");
     r.startSpinner(agentName, route.model);
 
-    this.conversation.setTokenBudget(TIER_BUDGETS[(profile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
-    const execPrompt = this.conversation.buildPrompt(
-      `${input}\n\n[APPROVED DESIGN PLAN]\n${planResult.text}\n[END PLAN]\n\nExecute this approved design plan now. Implement exactly as described.`,
-    );
+    const execPrompt = "The user approved your design plan. Execute it now. Implement exactly as described.";
     const execCmd = buildCommand(providerConfig, profile, {
       prompt: execPrompt,
       model: profile.model,
       systemPrompt,
       maxTurns: profile.maxTurns,
       mcpConfig: mcpConfigPath,
+      resumeSession: sessionId,
     });
 
-    await this.executeWithRetry(execCmd, agentName, route, profile, providerConfig, systemPrompt, execPrompt, mcpConfigPath, cancellation, input);
+    await this.executeWithRetry(execCmd, agentName, route, profile, providerConfig, systemPrompt, execPrompt, mcpConfigPath, cancellation, input, sessionId);
   }
 
   /** Execute streamer with retry and fallback */
@@ -533,6 +535,7 @@ export class ReplController {
     mcpConfigPath: string | undefined,
     cancellation: CancellationToken,
     input: string,
+    sessionId?: string,
   ): Promise<void> {
     const r = this.renderer;
     const maxRetries = this.config.supervisor?.maxRetries ?? 2;
@@ -665,16 +668,15 @@ export class ReplController {
               this.forkManager.addTurn(partialTurn);
             }
 
-            // Inject approval context so Claude continues (not restarts)
+            // Continue session with approval context
             const approvalMsg = `The user approved the command: \`${command}\`. Execute it now and continue from where you left off.`;
-            this.conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
-            const retryPrompt = this.conversation.buildPrompt(approvalMsg);
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: retryPrompt,
+              prompt: approvalMsg,
               model: currentProfile.model,
               systemPrompt,
               maxTurns: currentProfile.maxTurns,
               mcpConfig: mcpConfigPath,
+              resumeSession: sessionId,
             });
             attempt--; // Retry same attempt
             continue;
@@ -691,16 +693,15 @@ export class ReplController {
           const answer = await this.askUser(question, options);
           pendingQuestion = null;
           if (answer) {
-            // Rebuild command with user's answer appended
-            const withAnswer = input + `\n\n[The agent asked: "${question}" — User answered: "${answer}". Continue with this answer.]`;
-            this.conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
-            const retryPrompt = this.conversation.buildPrompt(withAnswer);
+            // Continue session with user's answer
+            const withAnswer = `[The agent asked: "${question}" — User answered: "${answer}". Continue with this answer.]`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: retryPrompt,
+              prompt: withAnswer,
               model: currentProfile.model,
               systemPrompt,
               maxTurns: currentProfile.maxTurns,
               mcpConfig: mcpConfigPath,
+              resumeSession: sessionId,
             });
             attempt--; // Don't count as retry
             continue;
@@ -718,15 +719,14 @@ export class ReplController {
           // Auto-retry on intent without action (agent described what it would do but used no tools)
           if (!critique.passes && critique.issues.includes("Intent without action: declared actions but used zero tools") && attempt < maxAttempts - 1) {
             r.info("auto-retry: agent declared intent but used no tools, reinforcing...");
-            const reinforced = input + "\n\n[IMPORTANT: Your previous response only described what you would do without actually doing it. You MUST use tools (Read, Edit, Bash, etc.) to complete the task. Do not describe — act.]";
-            this.conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
-            const retryPrompt = this.conversation.buildPrompt(reinforced);
+            const reinforced = "[IMPORTANT: Your previous response only described what you would do without actually doing it. You MUST use tools (Read, Edit, Bash, etc.) to complete the task. Do not describe — act.]";
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: retryPrompt,
+              prompt: reinforced,
               model: currentProfile.model,
               systemPrompt,
               maxTurns: currentProfile.maxTurns,
               mcpConfig: mcpConfigPath,
+              resumeSession: sessionId,
             });
             lastError = "intent without action";
             continue;
@@ -735,15 +735,14 @@ export class ReplController {
           // Auto-retry on suspiciously short response from non-conversational agents
           if (!critique.passes && critique.issues.includes("Result is suspiciously short") && attempt < maxAttempts - 1) {
             r.info("auto-retry: response too short, reinforcing prompt...");
-            const reinforced = input + "\n\n[IMPORTANT: Your previous attempt produced an incomplete response. You MUST use tools (Read, Edit, Bash, etc.) to actually complete the task. Do not just acknowledge — take action immediately.]";
-            this.conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
-            const retryPrompt = this.conversation.buildPrompt(reinforced);
+            const reinforced = "[IMPORTANT: Your previous attempt produced an incomplete response. You MUST use tools (Read, Edit, Bash, etc.) to actually complete the task. Do not just acknowledge — take action immediately.]";
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: retryPrompt,
+              prompt: reinforced,
               model: currentProfile.model,
               systemPrompt,
               maxTurns: currentProfile.maxTurns,
               mcpConfig: mcpConfigPath,
+              resumeSession: sessionId,
             });
             lastError = "suspiciously short response";
             continue;
@@ -759,17 +758,16 @@ export class ReplController {
             );
             if (designIssues.length > 0) {
               r.info(`auto-retry: design violations — ${designIssues.join(", ")}`);
-              const reinforced = input + "\n\n[DESIGN VIOLATION] Your previous output violates production design rules:\n" +
+              const reinforced = "[DESIGN VIOLATION] Your previous output violates production design rules:\n" +
                 designIssues.map((i: string) => `- ${i}`).join("\n") +
                 "\n\nFix ALL issues. Reference-First Protocol is MANDATORY. No gradients, no glassmorphism, no rainbow badges, no oversized radius, no scale() hover, no heavy shadows, no hand-written SVG.";
-              this.conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
-              const retryPrompt = this.conversation.buildPrompt(reinforced);
               currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-                prompt: retryPrompt,
+                prompt: reinforced,
                 model: currentProfile.model,
                 systemPrompt,
                 maxTurns: currentProfile.maxTurns,
                 mcpConfig: mcpConfigPath,
+                resumeSession: sessionId,
               });
               lastError = "design quality violations";
               continue;
@@ -801,16 +799,15 @@ export class ReplController {
             r.info("Approved. Retrying...");
             pendingApproval = null;
 
-            // Inject approval context so Claude continues (not restarts)
+            // Continue session with approval context
             const approvalMsg = `The user approved the command: \`${command}\`. Execute it now and continue from where you left off.`;
-            this.conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
-            const retryPrompt = this.conversation.buildPrompt(approvalMsg);
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: retryPrompt,
+              prompt: approvalMsg,
               model: currentProfile.model,
               systemPrompt,
               maxTurns: currentProfile.maxTurns,
               mcpConfig: mcpConfigPath,
+              resumeSession: sessionId,
             });
             attempt--; // Retry same attempt
             continue;
