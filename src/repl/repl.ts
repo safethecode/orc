@@ -894,7 +894,7 @@ async function handleNaturalInput(
 
   // Set tier-specific token budget before building prompt
   conversation.setTokenBudget(TIER_BUDGETS[route.model] ?? TIER_BUDGETS.sonnet);
-  const fullPrompt = conversation.buildPrompt(input);
+  let fullPrompt = conversation.buildPrompt(input);
 
   // Record user turn
   const userTurn = {
@@ -1129,13 +1129,70 @@ Violations trigger automatic retry with a penalty prompt. Pass on first attempt.
     }
   }
 
-  const cmd = buildCommand(providerConfig, profile, {
+  let cmd = buildCommand(providerConfig, profile, {
     prompt: fullPrompt,
     model: profile.model,
     systemPrompt,
     maxTurns: profile.maxTurns,
     mcpConfig: mcpConfigPath,
   });
+
+  // Design agent plan-first preview flow
+  const isDesignAgent = (profile.role ?? "").toLowerCase().includes("design");
+  if (isDesignAgent && !cancellation.cancelled) {
+    renderer.info("design preview: generating plan...");
+    const planSystemPrompt = systemPrompt + `\n\n[DESIGN PLAN-FIRST MODE — Phase 1]\nYou are in PLAN phase. Do NOT write any code or modify any files.\nYour task is to produce a detailed design specification:\n\n1. **Reference**: Name the specific products/patterns you will follow\n2. **Layout**: Describe the visual structure, grid system, and spacing\n3. **Colors**: List the exact color palette (hex values) and where each color is used\n4. **Typography**: Font family, sizes, and weights for each text level\n5. **Components**: List every component you will create with a brief description\n6. **Interactions**: Describe hover states, transitions, and animations\n7. **Responsive**: How the layout adapts across breakpoints\n\nBe specific and concrete. The user will review this plan before you implement it.\nDO NOT use any tools. DO NOT write any code. Text output only.`;
+    const planCmd = buildCommand(providerConfig, profile, {
+      prompt: fullPrompt,
+      model: profile.model,
+      systemPrompt: planSystemPrompt,
+      maxTurns: 1,
+      mcpConfig: mcpConfigPath,
+    });
+    const planStreamer = new AgentStreamer();
+    onStreamer(planStreamer);
+    let planBoxOpen = false;
+    planStreamer.on("text_delta", (delta: string) => {
+      if (!planBoxOpen) { renderer.stopSpinner(); renderer.startBox(route.model); planBoxOpen = true; }
+      renderer.text(delta);
+    });
+    planStreamer.on("text_complete", () => {
+      if (planBoxOpen) { renderer.endBox(); planBoxOpen = false; }
+    });
+    try {
+      const planResult = await planStreamer.run(planCmd, cancellation.signal);
+      renderer.stopSpinner();
+      if (planBoxOpen) renderer.endBox();
+      if (planResult.inputTokens > 0) {
+        renderer.cost(planResult.costUsd, planResult.inputTokens, planResult.outputTokens);
+      }
+      if (planResult.text.trim() && !cancellation.cancelled && rl) {
+        const answer = await rl.question("  이 디자인 설계안을 승인하시겠습니까? [Y/n] ");
+        if (answer.trim().toLowerCase() === "n") {
+          renderer.info("design preview: plan rejected.");
+          conversation.add({ role: "assistant" as const, content: planResult.text, agentName, tier: route.model, timestamp: new Date().toISOString() });
+          return;
+        }
+        renderer.info("design preview: executing approved plan...");
+        renderer.startSpinner(agentName, route.model);
+        conversation.setTokenBudget(TIER_BUDGETS[(profile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
+        fullPrompt = conversation.buildPrompt(
+          `${input}\n\n[APPROVED DESIGN PLAN]\n${planResult.text}\n[END PLAN]\n\nExecute this approved design plan now. Implement exactly as described.`,
+        );
+        cmd = buildCommand(providerConfig, profile, {
+          prompt: fullPrompt,
+          model: profile.model,
+          systemPrompt,
+          maxTurns: profile.maxTurns,
+          mcpConfig: mcpConfigPath,
+        });
+      }
+    } catch {
+      renderer.stopSpinner();
+      if (planBoxOpen) renderer.endBox();
+      renderer.error("design preview: plan generation failed.");
+    }
+  }
 
   // Retry loop with provider fallback
   const maxRetries = config.supervisor?.maxRetries ?? 2;
