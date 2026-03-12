@@ -7,6 +7,7 @@ export interface StreamResult {
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+  sessionId?: string;
 }
 
 export interface ToolUseEvent {
@@ -30,6 +31,7 @@ interface StreamJsonMessage {
   // result message
   result?: string;
   total_cost_usd?: number;
+  session_id?: string;
   usage?: { input_tokens?: number; output_tokens?: number };
 }
 
@@ -251,6 +253,9 @@ export class AgentStreamer extends EventEmitter {
       }
       if (msg.total_cost_usd) {
         result.costUsd = msg.total_cost_usd;
+      }
+      if (msg.session_id) {
+        result.sessionId = msg.session_id;
       }
       if (msg.usage) {
         // Prefer larger value: result message may report only last-turn usage
