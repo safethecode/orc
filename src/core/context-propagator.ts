@@ -28,6 +28,7 @@ export class ContextPropagator {
     subtask: SubTask,
     decomposition: DecompositionResult,
     collector: ResultCollector,
+    conflictResolutions?: Array<{ resolution: string; chosenApproach: string; corrections: string[] }>,
   ): Promise<string> {
     const original = subtask.prompt;
     const parent = this.buildParentContext(subtask, decomposition);
@@ -36,8 +37,9 @@ export class ContextPropagator {
     const knowledge = await this.buildKnowledgeContext(subtask);
     const bus = this.buildBusMessageContext(subtask);
     const protocol = this.buildBusProtocolInstructions();
+    const resolutions = this.buildConflictResolutionContext(conflictResolutions);
 
-    const assembled = this.assemblePrompt(original, parent, sibling, completed, knowledge, bus, protocol);
+    const assembled = this.assemblePrompt(original, parent, sibling, completed, knowledge, bus, protocol, resolutions);
 
     const estimatedTokens = this.estimateTokens(assembled);
     eventBus.publish({
@@ -148,6 +150,19 @@ export class ContextPropagator {
     return `## Worker Bus Messages\n${formatted.join("\n")}`;
   }
 
+  private buildConflictResolutionContext(
+    resolutions?: Array<{ resolution: string; chosenApproach: string; corrections: string[] }>,
+  ): string {
+    if (!resolutions || resolutions.length === 0) return "";
+    const sections = resolutions.map((r, i) => [
+      `### Resolution ${i + 1}`,
+      `Chosen approach: ${r.chosenApproach}`,
+      `Details: ${r.resolution}`,
+      ...(r.corrections.length > 0 ? [`Corrections: ${r.corrections.join("; ")}`] : []),
+    ].join("\n"));
+    return `## Resolved Conflicts\n${sections.join("\n\n")}`;
+  }
+
   private assemblePrompt(
     original: string,
     parent: string,
@@ -156,16 +171,18 @@ export class ContextPropagator {
     knowledge: string,
     bus: string,
     protocol: string = "",
+    resolutions: string = "",
   ): string {
-    // Priority order: original > parent > completed > sibling > knowledge > bus > protocol
+    // Priority order: original > parent > completed > resolutions > sibling > knowledge > bus > protocol
     const sections = [
       { text: original, priority: 0 },
       { text: parent, priority: 1 },
       { text: completed, priority: 2 },
-      { text: sibling, priority: 3 },
-      { text: knowledge, priority: 4 },
-      { text: bus, priority: 5 },
-      { text: protocol, priority: 6 },
+      { text: resolutions, priority: 3 },
+      { text: sibling, priority: 4 },
+      { text: knowledge, priority: 5 },
+      { text: bus, priority: 6 },
+      { text: protocol, priority: 7 },
     ].filter(s => s.text.length > 0);
 
     let result = "";
