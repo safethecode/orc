@@ -713,7 +713,7 @@ export class ReplController {
 
         // Quality gate
         if (result.text) {
-          const critique = runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input, toolUseCount }, result.text);
+          const critique = await runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input, toolUseCount }, result.text);
           r.qualityGate(critique.passes, critique.issues);
 
           // Auto-retry on intent without action (agent described what it would do but used no tools)
