@@ -68,6 +68,28 @@ const ROLE_CONSTRAINTS: Record<AgentRole, string> = {
     "When your task is complete, ALWAYS end with a brief text summary of what you changed and why. Never end with just a tool call.",
 };
 
+const COMMIT_ROLES = new Set<AgentRole>(["coder", "architect", "tester", "design", "writer"]);
+
+const GIT_WORKFLOW = `## Git Workflow — Atomic Commits
+You MUST commit after every logical unit of work. Do NOT batch all changes into one big commit at the end.
+
+Rules:
+1. **Atomic commits**: Each commit = one logical change (add a function, fix a bug, update a style, add a test)
+2. **Karma convention**: \`<type>: <subject>\` — types: feat, fix, refactor, test, docs, chore, style
+   - Example: \`feat: add user avatar component\`, \`fix: prevent null ref in sidebar\`, \`test: add login validation tests\`
+3. **Commit early, commit often**: As soon as a file edit is complete and working, stage and commit it
+4. **One file per commit when possible**: If changes span multiple files for one logical unit, that's fine, but prefer smaller commits
+5. **Never squash**: Keep the full atomic history
+6. **Push at the end**: After all work is done, run \`git push\` once to push all commits
+
+Workflow per change:
+\`\`\`
+git add <specific-files>
+git commit -m "<type>: <subject>"
+\`\`\`
+
+Do NOT wait until the task is finished to commit. Commit as you go.`;
+
 const PROVIDER_HINTS: Partial<Record<ProviderName, string>> = {
   codex: "Prefer writing code directly. Use tool calls for file edits.",
   gemini: "Be concise. Avoid verbose explanations. Lead with the result.",
@@ -100,9 +122,12 @@ export function buildHarness(options: HarnessOptions): HarnessResult {
   const toolInstructions = toolSelector.formatForPrompt(provider);
   const toolSection = toolInstructions ? `\n\n## Tool Usage\n${toolInstructions}` : "";
 
+  // Layer 6 — Git workflow (code-modifying roles only)
+  const gitSection = COMMIT_ROLES.has(role) ? `\n\n${GIT_WORKFLOW}` : "";
+
   const autonomous = "\n\nIMPORTANT: You are running in autonomous mode. NEVER use AskUserQuestion or ask the user for clarification. Make your best judgment and proceed. If unsure, pick the most reasonable option and execute it. Do not stop to ask — just do it.";
 
-  const systemPrompt = `${identity}${protocol}${constraints}${providerSection}${toolSection}${autonomous}`;
+  const systemPrompt = `${identity}${protocol}${constraints}${providerSection}${toolSection}${gitSection}${autonomous}`;
 
   // Rough token estimate: ~1 token per 4 chars
   const tokenEstimate = Math.ceil(systemPrompt.length / 4);
