@@ -67,6 +67,7 @@ export class Supervisor {
   private multiTurnConfig: Required<MultiTurnConfig>;
   private todoContinuation: TodoContinuationEnforcer;
   private tracer: DistributedTracer | null = null;
+  private conflictResolutions: Array<{ resolution: string; chosenApproach: string; corrections: string[] }> = [];
 
   constructor(deps: SupervisorDeps, options?: SupervisorOptions) {
     this.deps = deps;
@@ -213,7 +214,7 @@ export class Supervisor {
         }
 
         // After each phase: run conflict analysis on completed results, then clear diffs to avoid re-detection
-        this.analyzePhaseConflicts(phaseSubtasks, collector);
+        await this.analyzePhaseConflicts(phaseSubtasks, collector);
         this.deps.conflictWatcher?.clearDiffs();
       }
 
@@ -443,7 +444,7 @@ export class Supervisor {
     let enrichedPrompt: string;
     try {
       enrichedPrompt = await this.contextPropagator.buildWorkerPrompt(
-        subtask, decomposition, collector,
+        subtask, decomposition, collector, this.conflictResolutions,
       );
     } catch {
       enrichedPrompt = subtask.prompt;
@@ -607,6 +608,12 @@ export class Supervisor {
             });
           }
 
+          // 11.5. Send structured injection to still-running sibling workers
+          const siblingUpdate = this.formatSiblingInjection(subtask, outcome.result, collector);
+          for (const [runningName] of this.workerBus.getRunningWorkers(subtask.parentTaskId, agentName)) {
+            this.deps.sessionManager.sendInput(runningName, siblingUpdate).catch(() => {});
+          }
+
           // 12. Collect result
           const collectCtx = (workerSpanCtx && this.tracer)
             ? this.tracer.startSpan(workerSpanCtx, "result.collect", "result-collector", {
@@ -693,7 +700,7 @@ export class Supervisor {
     }
   }
 
-  private analyzePhaseConflicts(subtasks: SubTask[], collector: ResultCollector): void {
+  private async analyzePhaseConflicts(subtasks: SubTask[], collector: ResultCollector): Promise<void> {
     if (!this.deps.conflictWatcher) return;
 
     // Record diffs from completed subtasks in this phase
@@ -718,7 +725,24 @@ export class Supervisor {
         severity: conflict.severity,
         agents: [conflict.agentA, conflict.agentB],
       });
+
+      // Auto-resolve critical conflicts via LLM
+      if (conflict.severity === "critical") {
+        const aResult = collector.getAllResults().find(r => r.agentName === conflict.agentA)?.result ?? "";
+        const bResult = collector.getAllResults().find(r => r.agentName === conflict.agentB)?.result ?? "";
+        const resolution = await this.deps.conflictWatcher.autoResolve(conflict, aResult, bResult);
+        this.conflictResolutions.push(resolution);
+        this.deps.conflictWatcher.resolve(conflict.id);
+        eventBus.publish({
+          type: "conflict:resolved",
+          id: conflict.id,
+        });
+      }
     }
+  }
+
+  getConflictResolutions(): Array<{ resolution: string; chosenApproach: string; corrections: string[] }> {
+    return this.conflictResolutions;
   }
 
   private async executeSingleFallback(
@@ -897,6 +921,19 @@ export class Supervisor {
   private inferDomain(subtask: SubTask): string {
     const domains = detectDomains(subtask.prompt);
     return domains[0] ?? "general";
+  }
+
+  private formatSiblingInjection(subtask: SubTask, result: string, collector: ResultCollector): string {
+    const summary = result.length > 2000 ? result.slice(0, 2000) + "\n...[truncated]" : result;
+    const files = collector.getResult(subtask.id)?.files ?? [];
+    const apis = collector.extractApis(result);
+    return [
+      `\n[SIBLING_COMPLETE: ${subtask.agentRole}/${subtask.id}]`,
+      `Files: ${files.join(", ") || "none"}`,
+      `APIs: ${apis.join(", ") || "none"}`,
+      `Summary:\n${summary}`,
+      `[/SIBLING_COMPLETE]`,
+    ].join("\n");
   }
 
   private buildCapabilities(config: OrchestratorConfig): ProviderCapability[] {
