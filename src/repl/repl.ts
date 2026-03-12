@@ -1062,10 +1062,10 @@ async function handleNaturalInput(
     }
   }
 
-  // Inject actual source file contents into system prompt
+  // Inject relevant source file contents into system prompt
   const contentCollector = orchestrator.getCodebaseContent();
-  const codebaseContent = contentCollector.collect();
-  if (codebaseContent.files.length > 0) {
+  const codebaseContent = contentCollector.collect(input);
+  if (codebaseContent.files.length > 0 || codebaseContent.allPaths.length > 0) {
     systemPrompt += "\n\n" + contentCollector.formatForPrompt(codebaseContent);
   }
 
