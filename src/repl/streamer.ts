@@ -52,11 +52,6 @@ export class AgentStreamer extends EventEmitter {
     this.pendingTool = null;
     this.totalOutputBytes = 0;
 
-    // Listen for external abort signal
-    if (signal) {
-      signal.addEventListener("abort", () => this.abort(), { once: true });
-    }
-
     const result: StreamResult = {
       text: "",
       inputTokens: 0,
@@ -64,11 +59,24 @@ export class AgentStreamer extends EventEmitter {
       costUsd: 0,
     };
 
+    // Early exit if already aborted before spawning
+    if (signal?.aborted) {
+      this.aborted = true;
+      this.emit("abort");
+      this.emit("exit", result);
+      return result;
+    }
+
     this.proc = Bun.spawn(command, {
       stdout: "pipe",
       stderr: "pipe",
       stdin: "ignore",
     });
+
+    // Listen for external abort signal AFTER proc exists so abort() can kill it
+    if (signal) {
+      signal.addEventListener("abort", () => this.abort(), { once: true });
+    }
 
     this.reader = (this.proc.stdout as ReadableStream<Uint8Array>).getReader();
     const reader = this.reader;
