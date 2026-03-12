@@ -859,6 +859,13 @@ export class ReplController {
       sp += "\n\n" + o.getCodebaseScanner().formatForPrompt(scanResult, profile.role);
     }
 
+    // Codebase content: inject actual source file contents
+    const contentCollector = o.getCodebaseContent();
+    const codebaseContent = contentCollector.collect();
+    if (codebaseContent.files.length > 0) {
+      sp += "\n\n" + contentCollector.formatForPrompt(codebaseContent);
+    }
+
     if (skillBodies.length > 0) sp += "\n\n" + skillBodies.join("\n\n");
 
     const lang = this.conversation.getLanguage();
