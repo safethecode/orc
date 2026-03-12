@@ -73,7 +73,10 @@ routing:
       keywords: ["architect", "design", "security", "optimize", "migrate"]
 
 mcp:
-  servers: {}
+  servers:
+    sequential-thinking:
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-sequential-thinking"]
 
 supervisor:
   enabled: true
