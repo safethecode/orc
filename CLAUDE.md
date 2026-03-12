@@ -70,6 +70,13 @@ The Orchestrator project implements a complete multi-agent system:
 4. If commit message doesn't follow format, use `git commit --amend` BEFORE pushing
 5. Only then push to remote
 
+## Code Style (Strict)
+
+- **No JSX comments**: Never write `{/* */}` comments in JSX/TSX
+- **No blank lines between sibling elements**: Write `</div>\n<div>`, NOT `</div>\n\n<div>`
+- **No pointless wrapper divs**: Only add elements that serve a structural or styling purpose
+- **Icons: always use `lucide-react`**: Never hand-write `<svg>`, `<path>`, `<circle>`. Import from `lucide-react`. Install the package if not present in the project
+
 ## Lint Compliance (CRITICAL)
 
 When generating or editing code, ALWAYS comply with the project's linter rules:
