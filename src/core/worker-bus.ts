@@ -109,6 +109,15 @@ export class WorkerBus extends EventEmitter {
     });
   }
 
+  getRunningWorkers(taskRef: string, excludeAgent: string): Map<string, WorkerManifest> {
+    const prefix = taskRef.slice(0, 8);
+    return new Map(
+      [...this.manifests].filter(
+        ([name, m]) => name !== excludeAgent && m.subtaskId.startsWith(prefix),
+      ),
+    );
+  }
+
   getSiblings(taskRef: string, excludeAgent?: string): WorkerManifest[] {
     const prefix = taskRef.slice(0, 8);
     return [...this.manifests.values()]
