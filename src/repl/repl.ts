@@ -1713,7 +1713,7 @@ Violations trigger automatic retry with a penalty prompt. Pass on first attempt.
 
       // Quality gate
       if (result.text) {
-        const critique = runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input, toolUseCount: toolCount }, result.text);
+        const critique = await runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input, toolUseCount: toolCount }, result.text);
         renderer.qualityGate(critique.passes, critique.issues);
 
         // Auto-retry on design quality violations
@@ -2602,7 +2602,7 @@ async function executeSubtask(
 
       // Quality gate + QA history tracking
       if (result.text) {
-        const critique = runQualityGate({ agentRole: subtask.agentRole, prompt: subtask.prompt }, result.text);
+        const critique = await runQualityGate({ agentRole: subtask.agentRole, prompt: subtask.prompt }, result.text);
         renderer.qualityGate(critique.passes, critique.issues);
         // Track issues for recurring issue detection
         if (critique.issues.length > 0) {
