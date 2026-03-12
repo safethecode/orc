@@ -268,14 +268,6 @@ These are actual values extracted from production services. Use them as concrete
 
 ##### Global SaaS Products
 
-**GL-1** — Project management benchmark
-- Color: Semantic variables, 4-tier text hierarchy (primary/secondary/tertiary/quaternary)
-- Status: Gray dots + text (NOT colored badges). Only red/green for urgent semantic meaning
-- Font: Custom sans, multiple weights (medium + semibold prominent)
-- Signature: Extreme restraint, `text-wrap: balance`, animated dot-grid patterns, monospace for technical
-- Does NOT use: Colored status badges, gradient backgrounds, decorative illustrations, large border-radius
-- Hover: bg-color shift only, instant (no transition duration)
-
 **GL-2** — Developer platform benchmark
 - Color: Black `#000` / White `#fff` as primary (light/dark). Minimal accent
 - Font: system-ui stack + custom mono (custom monospace)
@@ -526,7 +518,7 @@ These are actual values extracted from production services. Use them as concrete
 **GL-61** — AI-native project management
 - Primary: `#6366F1` (indigo) | Text: adaptive | BG: white/dark adaptive
 - Font: Inter + custom sans
-- Signature: Linear-inspired restraint, AI-native features, clean task lists, indigo accent, keyboard-first UX
+- Signature: Extreme restraint, AI-native features, clean task lists, indigo accent, keyboard-first UX
 - Does NOT use: Heavy illustrations, playful branding, dense marketing, gradient backgrounds
 
 **GL-62** — Presentation platform
@@ -789,10 +781,10 @@ These are actual values extracted from production services. Use them as concrete
 
 | UI Type | MUST Reference (pick 2+) | WHY |
 |---|---|---|
-| Dashboard / Analytics | GL-1, GL-12, GL-13, KR-1, KR-9, GL-100, GL-101 | Information density + color restraint + analytics patterns + open-source analytics |
-| Project Management | GL-1, GL-5, GL-31, GL-61, KR-4, GL-96 | Task-centric, status-driven, scheduling, action density |
+| Dashboard / Analytics | GL-12, GL-13, KR-1, KR-9, GL-100, GL-101 | Information density + color restraint + analytics patterns + open-source analytics |
+| Project Management | GL-10, GL-5, GL-31, GL-61, KR-4, GL-96 | Task-centric, status-driven, scheduling, action density |
 | Korean Marketplace / Tool | KR-3, KR-7, KR-13, KR-14, KR-15 | Korean density, portal-adjacent, local marketplace, mobile-first |
-| CRM / Sales / Data | KR-6, GL-1, GL-68, KR-10, GL-95 | Data tables, functional color, semantic tokens, display-p3 |
+| CRM / Sales / Data | KR-6, GL-68, KR-10, GL-95 | Data tables, functional color, semantic tokens, display-p3 |
 | Developer Tool / CLI UI | GL-2, GL-7, GL-14, GL-34, GL-85, GL-97 | Monospace, dark mode, launcher/terminal UX, precision, API dev |
 | Korean B2B SaaS | KR-4, KR-5, KR-6, KR-9, KR-25 | Korean typography, professional density, `keep-all` |
 | Document / Note | GL-6, GL-56, GL-57, KR-1, GL-98 | Content-first, minimal chrome, generous whitespace, signing |
@@ -804,7 +796,7 @@ These are actual values extracted from production services. Use them as concrete
 | Education / EdTech | KR-11, KR-12, KR-26, GL-35 | Content sections, teal/coral accents, learning cards |
 | Developer Docs / API | GL-35, GL-34, GL-32, GL-48 | Code-first, documentation excellence, dark mode |
 | Design Tool / Prototyping | GL-37, GL-36, GL-8, GL-50, GL-81 | Typography-first, creative personality, panel precision |
-| Data / Spreadsheet | GL-38, GL-1, KR-6, GL-49 | Multi-color labels, data grids, table-first layouts |
+| Data / Spreadsheet | GL-38, KR-6, GL-49 | Multi-color labels, data grids, table-first layouts |
 | Fashion / E-commerce | KR-13, KR-14, KR-16, KR-27 | Black-dominant, photography-first, mobile-first cards |
 | Food / Delivery | KR-17, KR-18, GL-77 | Product grids, photography, trust/review patterns |
 | Travel / Accommodation | KR-20, GL-77, KR-21 | Map integration, card grids, date picker, deal urgency |
@@ -825,17 +817,17 @@ Follow this tree to pick references. Start at the top, answer each question, fol
 START: What are you building?
 │
 ├─ SaaS App (dashboard, settings, data views)?
-│  ├─ Korean market? → KR-4 + KR-6 + GL-1
+│  ├─ Korean market? → KR-4 + KR-6 + GL-10
 │  │  └─ Fintech? → KR-1 + KR-22 + GL-3 (trust-first, spacious)
 │  │  └─ HR / enterprise? → KR-4 + KR-10 (module colors, blue accent)
-│  │  └─ CRM / data-heavy? → KR-6 + GL-1 + GL-68 (dark tables, dot status)
+│  │  └─ CRM / data-heavy? → KR-6 + GL-68 + GL-10 (dark tables, dot status)
 │  │  └─ Analytics? → KR-9 + GL-12 + GL-42 (dark-first, functional)
 │  │  └─ Payment? → KR-23 + KR-1 + GL-75 (yellow/teal accent, trust)
-│  └─ Global market? → GL-1 + GL-2
+│  └─ Global market? → GL-6 + GL-2
 │     └─ Developer tool? → GL-2 + GL-7 + GL-14 + GL-85 (monospace, dark, precision)
-│     └─ Project management? → GL-1 + GL-10 + GL-61 (restraint, lists, dot status)
+│     └─ Project management? → GL-10 + GL-61 + GL-31 (restraint, lists, dot status)
 │     └─ Email / communication? → GL-9 + GL-52 + KR-5 (speed, density, channels)
-│     └─ Database / spreadsheet? → GL-38 + GL-1 + GL-46 (multi-color labels, data grids)
+│     └─ Database / spreadsheet? → GL-38 + GL-46 + GL-49 (multi-color labels, data grids)
 │     └─ DevOps / monitoring? → GL-40 + GL-41 + GL-42 (purple, metric dashboards)
 │     └─ Auth / security? → GL-45 + GL-59 (circuit board, trust, clean forms)
 │
@@ -891,7 +883,7 @@ START: What are you building?
 - Always pick at least 2 references (prevents copying a single product)
 - Mix regions when appropriate: Korean product + Global product
 - When mixing: Korean ref sets the density/typography, Global ref sets the component patterns
-- If no Korean reference fits: use GL-1 as anchor (safest default)
+- If no Korean reference fits: use GL-6 as anchor (safest default)
 - If no Global reference fits: use KR-2 as anchor (cleanest Korean SaaS)
 
 **Component Library**: For detailed component patterns from each reference, see `profiles/design-components.md`
@@ -907,7 +899,7 @@ After generating UI code, perform this element-by-element comparison against you
 5. **Hover effects** — Does the reference use scale/glow? If not → Simplify to bg-shift
 6. **Typography count** — How many font sizes does the reference use on one screen? → Match that count
 7. **Decoration** — Does the reference have decorative blobs/illustrations? If not → Remove yours
-8. **Badge colors** — How many badge colors does the reference use? GL-1 uses 2 (gray + 1). Match that restraint
+8. **Badge colors** — How many badge colors does the reference use? GL-6 uses 2 (gray + 1). Match that restraint
 
 **If your output has 3+ differences from the declared reference → REWRITE entirely, don't patch.**
 
@@ -915,21 +907,21 @@ After generating UI code, perform this element-by-element comparison against you
 
 | What AI Generates | What Real Products Actually Do |
 |---|---|
-| Purple-blue gradient hero | KR-1: solid `#f2f4f6`. GL-1: solid dark. GL-3: photography + subtle overlay. GL-33: pure black/white |
-| Glassmorphism cards | GL-1: `border` only. GL-2: flat + `border`. KR-2: `#fafafa` bg + `8px` radius. GL-12: flat functional |
-| Bento grid for everything | GL-1: list views. GL-3: content sections. GL-35: docs layout. Bento only for landing page feature grids |
-| 6+ colored status badges | GL-1: gray dots + text. GL-3: almost all gray. KR-1: `#3182f6` + gray only. GL-12: minimal semantic |
-| `rounded-2xl` everywhere | GL-2: 8px max. GL-1: 6px cards. KR-3: minimal radius. GL-33: near-zero radius |
+| Purple-blue gradient hero | KR-1: solid `#f2f4f6`. GL-2: solid dark. GL-3: photography + subtle overlay. GL-33: pure black/white |
+| Glassmorphism cards | GL-6: `border` only. GL-2: flat + `border`. KR-2: `#fafafa` bg + `8px` radius. GL-12: flat functional |
+| Bento grid for everything | GL-6: list views. GL-3: content sections. GL-35: docs layout. Bento only for landing page feature grids |
+| 6+ colored status badges | GL-6: gray dots + text. GL-3: almost all gray. KR-1: `#3182f6` + gray only. GL-12: minimal semantic |
+| `rounded-2xl` everywhere | GL-2: 8px max. GL-6: 6px cards. KR-3: minimal radius. GL-33: near-zero radius |
 | `scale(1.05)` on hover | ALL 100 references: bg-color shift only. Zero use `scale()` on card hover |
 | Decorative blob shapes | Zero of 100 reference products use abstract decorative blobs. Zero |
-| Dark sidebar + light content | GL-1: unified dark. GL-2: unified light. GL-34: unified dark. KR-1: unified light. Never mixed mode |
-| `shadow-lg` on cards | GL-1: no shadow. GL-2: no shadow. GL-33: no shadow. KR-2: no shadow. Border only |
-| Neon accent on dark mode | GL-2: white on black. GL-1: muted on dark. GL-34: muted green on dark. No neon. Ever |
+| Dark sidebar + light content | GL-2: unified light. GL-34: unified dark. KR-1: unified light. Never mixed mode |
+| `shadow-lg` on cards | GL-6: no shadow. GL-2: no shadow. GL-33: no shadow. KR-2: no shadow. Border only |
+| Neon accent on dark mode | GL-2: white on black. GL-34: muted green on dark. No neon. Ever |
 
 ### Design Philosophy — CORE PRINCIPLE
 
 You are a senior product designer at a respected SaaS company.
-Your design taste is shaped by products like GL-1, GL-6, GL-2, GL-3 Dashboard,
+Your design taste is shaped by products like GL-6, GL-2, GL-3 Dashboard,
 GL-7, and GL-8 — not by CodePen showcases or Dribbble shots.
 
 **CORE PRINCIPLE: Real product design is about restraint, not decoration.**
@@ -1081,7 +1073,7 @@ Squint Test: zoom to 50%. Can you tell which library? → Bad. Custom product fe
 
 | UI Type | Reference Products | Key Design Trait to Borrow |
 |---|---|---|
-| Project Management / Task | **GL-1**, GL-10, GL-11, GL-31 | Gray status dots, list-first, extreme restraint, scheduling |
+| Project Management / Task | **GL-10**, GL-61, GL-11, GL-31 | Gray status dots, list-first, extreme restraint, scheduling |
 | Note / Document | **GL-6**, GL-16, GL-17 | Content-first, minimal chrome, generous whitespace |
 | Dashboard / Analytics | **GL-2** Analytics, **GL-12**, GL-13, KR-9 | Black/white, data-dense, no decoration, open-source analytics |
 | Developer Tool / CLI | GL-7, **GL-2**, GL-14, **GL-34** | Monospace, dark mode, precision, no playful elements |
@@ -1098,7 +1090,7 @@ Squint Test: zoom to 50%. Can you tell which library? → Bad. Custom product fe
 | Developer Docs / API | **GL-35**, **GL-32**, GL-33 | Code examples, documentation-first, developer minimalism |
 | Education / EdTech | **KR-11**, **KR-12**, GL-35 | Coral/teal accents, content sections, learning cards |
 | Design Tool / Prototyping | **GL-37**, **GL-36**, GL-8 | Typography-first, creative personality, precision panels |
-| Data / Spreadsheet | **GL-38**, GL-1, KR-6 | Multi-color labels, data grids, table-first layouts |
+| Data / Spreadsheet | **GL-38**, GL-49, KR-6 | Multi-color labels, data grids, table-first layouts |
 | Fashion / E-commerce | **KR-13**, **KR-14**, KR-7 | Black-dominant, photography-first, mobile-first cards |
 
 **Critical question after every generation:**
@@ -1108,7 +1100,7 @@ Squint Test: zoom to 50%. Can you tell which library? → Bad. Custom product fe
 
 1. **GENERATE** — Follow tokens and philosophy
 2. **MENTAL RENDER** — Describe rendered result in one sentence
-3. **COMPARE** — "Does this belong in GL-1/GL-6/GL-3?"
+3. **COMPARE** — "Does this belong in GL-6/GL-2/GL-3?"
 4. **IDENTIFY VIOLATIONS** — Run QA checklist
 5. **FIX AND REPEAT** — Fix all. If 3+ violations, repeat from step 2
 6. **DELIVER** — Final code with reference alignment note
@@ -1149,7 +1141,7 @@ Buttons on every row = visual noise.
 
 **FAILURE #9: MULTI-COLUMN HEIGHT MISMATCH**
 Dashboard with 2+ columns where one is significantly taller. Right column ends early, full-width section below looks "attached" to left but "detached" from right.
-→ Before choosing multi-column: estimate content height. If difference >30%, stack smaller widgets in the short column (like GL-6/GL-1 dashboards), give shorter section fixed height with scroll, or rethink grid entirely. "Scroll test": at any position, do both columns have content visible?
+→ Before choosing multi-column: estimate content height. If difference >30%, stack smaller widgets in the short column (like GL-6/GL-2 dashboards), give shorter section fixed height with scroll, or rethink grid entirely. "Scroll test": at any position, do both columns have content visible?
 
 **FAILURE #10: ICON-TEXT VERTICAL MISALIGNMENT**
 Icon and text not vertically centered. Icon sits 1-3px higher/lower than text baseline. Common in buttons ("+ New"), menu items, nav links.
@@ -1173,12 +1165,12 @@ Clickable divs/spans with onClick but no cursor: pointer. User hovers, cursor st
 
 **FAILURE #16: UNNECESSARY SCROLLBARS**
 Containers with `overflow-auto` or fixed heights that create scrollbars when content could fit naturally. A card with `max-h-64 overflow-y-auto` showing 3 items. A sidebar section with `h-[300px] overflow-auto` that's half empty. A dashboard widget with a scrollbar for 5 list items. These micro-scrollbars make the UI feel like an iframe patchwork, not a cohesive product.
-→ RULES: (1) Never add `overflow-auto/scroll` preemptively "just in case." Only add when you KNOW content will exceed the container in normal use. (2) Fixed heights on content containers are almost always wrong — let content determine height, use `flex-grow` or `min-h` instead. (3) If a list might grow long, paginate or "show more" — don't scroll. (4) The ONLY acceptable scrollable areas: the page itself, code blocks, modal bodies with long forms, data tables with 50+ rows, and chat/log feeds. (5) "Scrollbar audit": after generating, mentally scan every container — if you see a scrollbar, ask "would GL-1/GL-6 scroll here?" If no, remove it. (6) Nested scrollbars (scroll inside scroll) are NEVER acceptable.
+→ RULES: (1) Never add `overflow-auto/scroll` preemptively "just in case." Only add when you KNOW content will exceed the container in normal use. (2) Fixed heights on content containers are almost always wrong — let content determine height, use `flex-grow` or `min-h` instead. (3) If a list might grow long, paginate or "show more" — don't scroll. (4) The ONLY acceptable scrollable areas: the page itself, code blocks, modal bodies with long forms, data tables with 50+ rows, and chat/log feeds. (5) "Scrollbar audit": after generating, mentally scan every container — if you see a scrollbar, ask "would GL-6/GL-2 scroll here?" If no, remove it. (6) Nested scrollbars (scroll inside scroll) are NEVER acceptable.
 
 **FAILURE #15: RAINBOW BADGE / TAG SYNDROME**
-Every status badge uses a different color: blue for active, green for complete, amber for pending, purple for review, pink for draft, teal for archived. The page looks like a color palette demo, not a professional tool. Real SaaS products (GL-1, GL-6, GL-3) use color sparingly — most statuses are gray.
-→ RULES: (1) Gray is the DEFAULT badge color. Use `bg-gray-100 text-gray-600` for any status that does not require immediate user attention: draft, active, pending, in review, archived, default, unknown. (2) Color is RESERVED for exactly 3 situations: red = danger/error/overdue/failed, amber = warning/needs attention, green = success/complete/approved. (3) Maximum 3 distinct badge colors on any single page (gray + up to 2 semantic colors). If you have 4+ colored badge variants, demote the least urgent ones to gray. (4) Never use blue, purple, pink, teal, or indigo for status badges — these are decorative, not semantic. The accent color (blue) is for interactive elements (buttons, links), NOT for status indicators. (5) "Traffic light test": if your badge colors don't map to red/amber/green intuition, they're decorative. (6) Reference: look at GL-1's status badges — most are subtle gray dots with text. GL-3's dashboard — statuses are almost entirely gray with only red for failed. That's the standard.
-→ EXTENDS TO NON-BADGE ELEMENTS: This rule applies to ALL repeated visual elements in lists/tables, not just badges. (7) **Project/entity icons** in a table or list: use ONE neutral color (`bg-gray-100 text-gray-600`) for all items. Each row having a different icon color (blue, amber, green, violet, orange) is the same rainbow problem — it makes the table look like a children's toy. (8) **Avatar fallbacks** in a table or list: use ONE color scheme (`bg-primary-100 text-primary-700`) for all avatars. Never assign each user a different avatar color (rose, emerald, violet, orange). Real products like GL-1 use a single gray or brand-colored avatar fallback. (9) "Color audit" for tables: scan every column. If any column has 3+ distinct colors across rows, unify to one neutral color. The only column allowed multiple colors is the status badge column — and even that follows rules (1)-(6).
+Every status badge uses a different color: blue for active, green for complete, amber for pending, purple for review, pink for draft, teal for archived. The page looks like a color palette demo, not a professional tool. Real SaaS products (GL-6, GL-2, GL-3) use color sparingly — most statuses are gray.
+→ RULES: (1) Gray is the DEFAULT badge color. Use `bg-gray-100 text-gray-600` for any status that does not require immediate user attention: draft, active, pending, in review, archived, default, unknown. (2) Color is RESERVED for exactly 3 situations: red = danger/error/overdue/failed, amber = warning/needs attention, green = success/complete/approved. (3) Maximum 3 distinct badge colors on any single page (gray + up to 2 semantic colors). If you have 4+ colored badge variants, demote the least urgent ones to gray. (4) Never use blue, purple, pink, teal, or indigo for status badges — these are decorative, not semantic. The accent color (blue) is for interactive elements (buttons, links), NOT for status indicators. (5) "Traffic light test": if your badge colors don't map to red/amber/green intuition, they're decorative. (6) Reference: look at GL-6's status badges — most are subtle gray dots with text. GL-3's dashboard — statuses are almost entirely gray with only red for failed. That's the standard.
+→ EXTENDS TO NON-BADGE ELEMENTS: This rule applies to ALL repeated visual elements in lists/tables, not just badges. (7) **Project/entity icons** in a table or list: use ONE neutral color (`bg-gray-100 text-gray-600`) for all items. Each row having a different icon color (blue, amber, green, violet, orange) is the same rainbow problem — it makes the table look like a children's toy. (8) **Avatar fallbacks** in a table or list: use ONE color scheme (`bg-primary-100 text-primary-700`) for all avatars. Never assign each user a different avatar color (rose, emerald, violet, orange). Real products like GL-6 use a single gray or brand-colored avatar fallback. (9) "Color audit" for tables: scan every column. If any column has 3+ distinct colors across rows, unify to one neutral color. The only column allowed multiple colors is the status badge column — and even that follows rules (1)-(6).
 
 ### Interaction Layer Protocol
 
