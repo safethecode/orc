@@ -967,10 +967,10 @@ export class ReplController {
       sp += "\n\n" + o.getCodebaseScanner().formatForPrompt(scanResult, profile.role);
     }
 
-    // Codebase content: inject actual source file contents
+    // Codebase content: inject relevant source file contents
     const contentCollector = o.getCodebaseContent();
-    const codebaseContent = contentCollector.collect();
-    if (codebaseContent.files.length > 0) {
+    const codebaseContent = contentCollector.collect(input);
+    if (codebaseContent.files.length > 0 || codebaseContent.allPaths.length > 0) {
       sp += "\n\n" + contentCollector.formatForPrompt(codebaseContent);
     }
 
