@@ -36,7 +36,7 @@ export class FileRefResolver {
   }
 
   parseRef(input: string): { ref: string; lineRange?: { start: number; end: number } } | null {
-    const match = input.match(/@([\w.\/\-]+)(#L(\d+)(-(\d+))?)?/);
+    const match = input.match(/@([\w.\/\-\[\]()]+)(#L(\d+)(-(\d+))?)?/);
     if (!match) return null;
 
     const ref = match[1];
@@ -232,7 +232,7 @@ export class FileRefResolver {
   }
 
   async resolve(input: string): Promise<{ resolvedInput: string; filesIncluded: string[] }> {
-    const refPattern = /@([\w.\/\-]+)(#L(\d+)(-(\d+))?)?/g;
+    const refPattern = /@([\w.\/\-\[\]()]+)(#L(\d+)(-(\d+))?)?/g;
     const refs: Array<{
       fullMatch: string;
       ref: string;
