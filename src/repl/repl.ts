@@ -1076,6 +1076,21 @@ async function handleNaturalInput(
       : "Keep responses concise and under 200 words.";
   }
 
+  // Design enforcer: hard enforcement block for design agents
+  if ((profile.role ?? "").toLowerCase().includes("design")) {
+    systemPrompt += `\n\n[DESIGN ENFORCER — AUTO-VERIFIED]
+Your output will be automatically scanned for these violations. If ANY are found, your entire output is rejected and you must redo:
+1. MISSING REFERENCE: You MUST write "This UI follows [X]'s [pattern] + [Y]'s [pattern]" before any code
+2. GRADIENT: No linear-gradient or radial-gradient except on progress bars
+3. RAINBOW BADGES: Max 3 colors total (gray + red + green). All other statuses = gray
+4. GLASSMORPHISM: No backdrop-blur-lg/xl, no glass effects
+5. BORDER-RADIUS: Max rounded-xl (12px). Never rounded-2xl or rounded-full on containers
+6. HOVER: bg-color shift only. Never scale(), translateY(), or shadow changes on hover
+7. SHADOWS: Use border instead. No shadow-lg, shadow-xl, shadow-2xl
+8. ICONS: Import from lucide-react. Never write <svg> manually
+Violations trigger automatic retry with a penalty prompt. Pass on first attempt.`;
+  }
+
   // MCP integration: CLI passthrough for Claude, prompt injection for others
   const mcpServerNames = profile.mcpServers ?? (mcpMgr.getConnectedServers().length > 0 ? undefined : []);
   let mcpConfigPath: string | undefined;
@@ -1636,6 +1651,34 @@ async function handleNaturalInput(
       if (result.text) {
         const critique = runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input, toolUseCount: toolCount }, result.text);
         renderer.qualityGate(critique.passes, critique.issues);
+
+        // Auto-retry on design quality violations
+        if (!critique.passes && (currentProfile.role ?? "").toLowerCase().includes("design") && attempt < maxAttempts - 1) {
+          const designIssues = critique.issues.filter((i: string) =>
+            i.includes("reference declaration") || i.includes("Gradient") ||
+            i.includes("Rainbow") || i.includes("Glassmorphism") ||
+            i.includes("border-radius") || i.includes("scale()") ||
+            i.includes("shadows") || i.includes("SVG icons")
+          );
+          if (designIssues.length > 0) {
+            renderer.info(`auto-retry: design violations — ${designIssues.join(", ")}`);
+            const reinforced = input + "\n\n[DESIGN VIOLATION] Your previous output violates production design rules:\n" +
+              designIssues.map((i: string) => `- ${i}`).join("\n") +
+              "\n\nFix ALL issues. Reference-First Protocol is MANDATORY. No gradients, no glassmorphism, no rainbow badges, no oversized radius, no scale() hover, no heavy shadows, no hand-written SVG.";
+            conversation.setTokenBudget(TIER_BUDGETS[(currentProfile.model as ModelTier) ?? route.model] ?? TIER_BUDGETS.sonnet);
+            const retryPrompt = conversation.buildPrompt(reinforced);
+            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+              prompt: retryPrompt,
+              model: currentProfile.model,
+              systemPrompt,
+              maxTurns: currentProfile.maxTurns,
+              mcpConfig: mcpConfigPath,
+            });
+            lastError = "design quality violations";
+            renderer.startSpinner(agentName, displayModel);
+            continue;
+          }
+        }
       }
 
       // Record statistics for this turn
