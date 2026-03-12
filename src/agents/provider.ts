@@ -12,6 +12,8 @@ export interface CommandOptions {
   useStdin?: boolean;
   maxTurns?: number;
   mcpConfig?: string;
+  sessionId?: string;
+  resumeSession?: string;
 }
 
 /** Shell-escape a single argument by wrapping in single quotes. */
@@ -50,6 +52,12 @@ export function buildCommand(
     }
 
     cmd.push("--max-turns", String(options.maxTurns ?? 1000));
+
+    if (options.resumeSession) {
+      cmd.push("--resume", options.resumeSession);
+    } else if (options.sessionId) {
+      cmd.push("--session-id", options.sessionId);
+    }
 
     if (options.systemPrompt) {
       cmd.push("--system-prompt", options.systemPrompt);
