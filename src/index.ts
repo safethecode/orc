@@ -9,7 +9,6 @@ const args = process.argv.slice(2);
 
 let configPath: string | undefined;
 let verbose = false;
-let useClassic = false;
 
 // Strip global flags from args, leaving positional command + rest
 const positional: string[] = [];
@@ -25,11 +24,6 @@ for (let i = 0; i < args.length; i++) {
 
   if (arg === "--verbose") {
     verbose = true;
-    continue;
-  }
-
-  if (arg === "--classic") {
-    useClassic = true;
     continue;
   }
 
@@ -70,7 +64,6 @@ Commands:
 Flags:
   -v, --version       Print version and exit
   --config <path>     Override config file path
-  --classic           Use legacy readline REPL
   --verbose           Show stack traces on error
 `);
   process.exit(0);
@@ -196,13 +189,8 @@ async function main() {
     }
 
     case undefined: {
-      if (useClassic) {
-        const { startRepl } = await import("./repl/repl.ts");
-        await startRepl(orchestrator, config);
-      } else {
-        const { startTuiRepl } = await import("./tui-repl/start.tsx");
-        await startTuiRepl(orchestrator, config);
-      }
+      const { startTuiRepl } = await import("./tui-repl/start.tsx");
+      await startTuiRepl(orchestrator, config);
       break;
     }
 
