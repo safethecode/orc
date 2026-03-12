@@ -6,17 +6,17 @@ linked_to: design.md
 
 # Component-Level Reference Library
 
-> Extracted from 36 production services (KR-1~KR-14, GL-1~GL-38).
+> Extracted from 36 production services (KR-1~KR-14, GL-2~GL-38).
 > Each pattern shows the REAL approach used by production products, not theoretical best practices.
 
 ---
 
 ## 1. Navigation
 
-### Top Nav — Sticky Light (GL-1, KR-1, KR-2)
+### Top Nav — Sticky Light (GL-6, KR-1, KR-2)
 
 ```html
-<!-- GL-1 style: 48px, bg-blur, tab-based active state -->
+<!-- GL-6 style: 48px, bg-blur, tab-based active state -->
 <header class="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur-md">
   <div class="mx-auto flex h-12 max-w-6xl items-center justify-between px-4">
     <div class="flex items-center gap-6">
@@ -90,7 +90,7 @@ linked_to: design.md
 
 ## 2. Buttons
 
-### Primary — Solid (GL-1, KR-1)
+### Primary — Solid (GL-6, KR-1)
 
 ```html
 <button class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5
@@ -113,7 +113,7 @@ linked_to: design.md
 </button>
 ```
 
-### Secondary — Border (GL-1, GL-3)
+### Secondary — Border (GL-6, GL-3)
 
 ```html
 <button class="rounded-md border border-gray-200 px-3 py-1.5 text-[13px] text-gray-500
@@ -156,7 +156,7 @@ linked_to: design.md
 
 ## 3. Cards
 
-### Stat Card — Light (KR-1, GL-1)
+### Stat Card — Light (KR-1, GL-6)
 
 ```html
 <div class="rounded-md border border-gray-200 bg-white p-4">
@@ -203,7 +203,7 @@ linked_to: design.md
 
 ## 4. Data Tables
 
-### Light Table (GL-1, KR-1)
+### Light Table (GL-6, KR-1)
 
 ```html
 <section class="rounded-md border border-gray-200 bg-white">
@@ -257,7 +257,7 @@ linked_to: design.md
 </div>
 ```
 
-### Status Indicators (GL-1 style)
+### Status Indicators (GL-6 style)
 
 ```html
 <!-- Dot status — NOT colored badges -->
@@ -308,7 +308,7 @@ linked_to: design.md
 </div>
 ```
 
-### Search Input — Light (GL-1)
+### Search Input — Light (GL-6)
 
 ```html
 <div class="relative">
@@ -330,7 +330,7 @@ linked_to: design.md
 
 ## 6. Badges & Tags
 
-### Status Dot (GL-1 — preferred)
+### Status Dot (GL-6 — preferred)
 
 ```html
 <span class="inline-flex items-center gap-1.5">
@@ -372,7 +372,7 @@ linked_to: design.md
 
 ## 7. Modals & Dialogs
 
-### Modal — Light (GL-1, GL-6)
+### Modal — Light (GL-6, GL-2)
 
 ```html
 <!-- Overlay -->
@@ -418,7 +418,7 @@ linked_to: design.md
 
 ## 8. Toast / Alert
 
-### Toast — Bottom Right (GL-1)
+### Toast — Bottom Right (GL-6)
 
 ```html
 <div class="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-md border border-gray-200
