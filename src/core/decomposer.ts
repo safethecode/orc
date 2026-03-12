@@ -13,6 +13,7 @@ const DOMAIN_PATTERNS: Record<string, RegExp> = {
   docs: /\b(document|readme|api.?doc|jsdoc|swagger|openapi|changelog)\b/i,
   security: /\b(security|vulnerability|xss|csrf|injection|sanitize|encrypt|ssl|tls)\b/i,
   design: /\b(design system|color palette|typography|font pair|spacing scale|ui kit|wireframe|mockup|prototype|dark mode|gradient|hero section|landing page|card design)\b/i,
+  research: /\b(research|investigate|analyze|compare|benchmark|survey|explore|study|evaluate options)\b/i,
 };
 
 // Role mapping by domain
@@ -27,6 +28,7 @@ const DOMAIN_ROLE_MAP: Record<string, AgentRole> = {
   docs: "spec-writer",
   security: "reviewer",
   design: "design",
+  research: "researcher",
 };
 
 // Dependency rules: if task A is in domainA and task B is in domainB, B depends on A
@@ -41,6 +43,13 @@ const DEPENDENCY_RULES: Array<{ before: string; after: string }> = [
   { before: "backend", after: "testing" },
   { before: "testing", after: "docs" },
   { before: "design", after: "frontend" },
+  { before: "research", after: "implementation" },
+  { before: "research", after: "frontend" },
+  { before: "research", after: "backend" },
+  { before: "research", after: "database" },
+  { before: "research", after: "auth" },
+  { before: "research", after: "design" },
+  { before: "research", after: "testing" },
 ];
 
 // Domains that always need a coder companion — they can't work alone
