@@ -37,6 +37,7 @@ import { RecoveryManager } from "./recovery.ts";
 import { TaskLogger } from "../logging/task-logger.ts";
 import { CodebaseMap } from "../memory/codebase-map.ts";
 import { CodebaseScanner } from "../memory/codebase-scanner.ts";
+import { CodebaseContentCollector } from "../memory/codebase-content.ts";
 import { ContextBuilder } from "../memory/context-builder.ts";
 import { DynamicSecurityProfile } from "../sandbox/dynamic-profile.ts";
 import { initParser } from "../sandbox/safety.ts";
@@ -148,6 +149,7 @@ export class Orchestrator {
   private taskLogger: TaskLogger;
   private codemap!: CodebaseMap;
   private codebaseScanner!: CodebaseScanner;
+  private codebaseContent: CodebaseContentCollector;
   private contextBuilder!: ContextBuilder;
   private dynamicSecurity: DynamicSecurityProfile;
   private accountManager: AccountManager;
@@ -327,6 +329,7 @@ export class Orchestrator {
     this.escalationManager = new EscalationManager();
     this.distributedTracer = new DistributedTracer();
     this.harnessEnforcer = new HarnessEnforcer("coder");
+    this.codebaseContent = new CodebaseContentCollector(process.cwd());
     this.accountManager = new AccountManager();
     this.health = new HealthChecker(config.orchestrator.sessionPrefix, async (status) => {
       this.logger.error(status.agentName, "", `Agent unhealthy: ${status.consecutiveFailures} consecutive failures`);
@@ -1038,6 +1041,10 @@ export class Orchestrator {
 
   getCodebaseScanner(): CodebaseScanner {
     return this.codebaseScanner;
+  }
+
+  getCodebaseContent(): CodebaseContentCollector {
+    return this.codebaseContent;
   }
 
   getContextBuilder(): ContextBuilder {
