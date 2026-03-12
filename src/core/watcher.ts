@@ -151,6 +151,55 @@ export class ConflictWatcher {
     return conflicts;
   }
 
+  async autoResolve(
+    conflict: LogicalConflict,
+    agentAResult: string,
+    agentBResult: string,
+  ): Promise<{ resolution: string; chosenApproach: string; corrections: string[] }> {
+    const prompt = [
+      "You are resolving a conflict between two agents in a multi-agent system.",
+      "",
+      `## Conflict: ${conflict.description}`,
+      `Severity: ${conflict.severity}`,
+      `Agent A (${conflict.agentA}):`,
+      agentAResult.slice(0, 3000),
+      "",
+      `Agent B (${conflict.agentB}):`,
+      agentBResult.slice(0, 3000),
+      "",
+      "Respond with ONLY a JSON object:",
+      '{"resolution":"explanation of how to resolve","chosenApproach":"which approach wins and why","corrections":["list of corrections needed"]}',
+    ].join("\n");
+
+    try {
+      const proc = Bun.spawn(
+        ["claude", "-p", prompt, "--model", "sonnet", "--output-format", "text", "--max-turns", "1"],
+        { stdout: "pipe", stderr: "pipe", stdin: "ignore" },
+      );
+
+      const timer = setTimeout(() => proc.kill(), 30_000);
+      const output = await new Response(proc.stdout).text();
+      clearTimeout(timer);
+      await proc.exited;
+
+      const jsonMatch = output.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("no JSON in output");
+
+      const parsed = JSON.parse(jsonMatch[0]) as { resolution: string; chosenApproach: string; corrections: string[] };
+      return {
+        resolution: parsed.resolution ?? "unknown",
+        chosenApproach: parsed.chosenApproach ?? "unknown",
+        corrections: parsed.corrections ?? [],
+      };
+    } catch {
+      return {
+        resolution: `Auto-resolution failed for: ${conflict.description}`,
+        chosenApproach: "manual review needed",
+        corrections: [],
+      };
+    }
+  }
+
   buildConflictPrompt(conflict: LogicalConflict): string {
     return `A logical conflict has been detected between agents:
 
