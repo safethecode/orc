@@ -87,6 +87,7 @@ export class ReplController {
 
   private currentStreamer: AgentStreamer | null = null;
   private activeStreamers = new Set<AgentStreamer>();
+  private activeWorkerNames = new Set<string>();
   private currentCancellation: CancellationToken | null = null;
   private pinnedAgent: string | null = null;
   private lastAgent: string | null = null;
@@ -134,6 +135,11 @@ export class ReplController {
       if (s.isRunning) s.abort();
     }
     this.activeStreamers.clear();
+    // Clean up worker UI indicators
+    for (const name of this.activeWorkerNames) {
+      this.renderer.workerDone(name);
+    }
+    this.activeWorkerNames.clear();
     this.renderer.stopSpinner();
     this.renderer.notifyIdle();
   }
@@ -699,6 +705,7 @@ export class ReplController {
     r.phaseUpdate("decomposing");
     const taskId = `repl-${Date.now().toString(36)}`;
     const decomposition = await decomposeWithSam(input, taskId);
+    if (cancellation.cancelled) return;
 
     if (decomposition.subtasks.length <= 1) {
       const st = decomposition.subtasks[0];
@@ -754,6 +761,7 @@ export class ReplController {
         });
 
         const workerName = `${name}-${st.id}`;
+        this.activeWorkerNames.add(workerName);
         r.workerStart(workerName, st.id, profile.model);
 
         const streamer = new AgentStreamer();
@@ -768,6 +776,7 @@ export class ReplController {
         try {
           const result = await streamer.run(cmd, cancellation.signal);
           this.activeStreamers.delete(streamer);
+          this.activeWorkerNames.delete(workerName);
           collected.set(st.id, { text: result.text, cost: result.costUsd, inputTokens: result.inputTokens, outputTokens: result.outputTokens });
           completedCount++;
           r.workerDone(workerName);
@@ -779,6 +788,7 @@ export class ReplController {
           r.phaseUpdate("executing", `${completedCount}/${decomposition.subtasks.length} tasks`);
         } catch (e) {
           this.activeStreamers.delete(streamer);
+          this.activeWorkerNames.delete(workerName);
           r.workerDone(workerName);
           r.taskUpdate(st.id, "failed", Date.now() - workerStartTime);
           r.error(`Worker ${name} failed: ${(e as Error).message}`);
