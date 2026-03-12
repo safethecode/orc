@@ -713,6 +713,7 @@ export class ReplController {
 
         // Quality gate
         if (result.text) {
+          r.info("evaluating quality...");
           const critique = await runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input, toolUseCount }, result.text);
           r.qualityGate(critique.passes, critique.issues);
 
@@ -859,74 +860,79 @@ export class ReplController {
       return;
     }
 
-    r.planSummary(decomposition.subtasks, { phases: [{ subtaskIds: decomposition.subtasks.map(s => s.id), parallel: true }], estimatedDurationMin: 0 } as any);
+    r.planSummary(decomposition.subtasks, { phases: decomposition.executionPlan.phases.map(p => ({ subtaskIds: p.subtaskIds, parallel: p.parallelizable })), estimatedDurationMin: 0 } as any);
     r.taskList(decomposition.subtasks.map(st => ({
       id: st.id,
       label: st.prompt.slice(0, 60),
       role: st.agentRole,
     })), input.slice(0, 80));
 
-    // Execute subtasks in parallel
+    // Execute subtasks phase-by-phase: sequential across phases, parallel within each phase
     r.phaseUpdate("executing", `0/${decomposition.subtasks.length} tasks`);
     const collected = new Map<string, { text: string; cost: number; inputTokens: number; outputTokens: number }>();
     let completedCount = 0;
 
-    await Promise.all(
-      decomposition.subtasks.map(async (st) => {
-        const name = ROLE_TO_PROFILE[st.agentRole] ?? "coder";
-        const profile = this.orchestrator.getRegistry().get(name);
-        if (!profile) return;
-        const providerConfig = this.config.providers[profile.provider];
-        if (!providerConfig) return;
+    for (const phase of decomposition.executionPlan.phases) {
+      const phaseSubtasks = decomposition.subtasks.filter(st => phase.subtaskIds.includes(st.id));
+      if (phaseSubtasks.length === 0) continue;
 
-        const harness = buildHarness({ agentName: name, role: st.agentRole as any, provider: profile.provider as any, parentTaskId: taskId, isWorker: true });
-        // Build context from already-completed siblings
-        const siblingCtx = [...collected.values()]
-          .map((c) => c.text)
-          .filter(Boolean)
-          .join("\n---\n");
-        const prompt = (siblingCtx ? siblingCtx + "\n\n" : "") + st.prompt;
-        const cmd = buildCommand(providerConfig, profile, {
-          prompt,
-          model: profile.model,
-          systemPrompt: harness.systemPrompt,
-        });
+      await Promise.all(
+        phaseSubtasks.map(async (st) => {
+          const name = ROLE_TO_PROFILE[st.agentRole] ?? "coder";
+          const profile = this.orchestrator.getRegistry().get(name);
+          if (!profile) return;
+          const providerConfig = this.config.providers[profile.provider];
+          if (!providerConfig) return;
 
-        const workerName = `${name}-${st.id}`;
-        this.activeWorkerNames.add(workerName);
-        r.workerStart(workerName, st.id, profile.model);
+          const harness = buildHarness({ agentName: name, role: st.agentRole as any, provider: profile.provider as any, parentTaskId: taskId, isWorker: true });
+          // Build context from already-completed siblings (previous phases)
+          const siblingCtx = [...collected.values()]
+            .map((c) => c.text)
+            .filter(Boolean)
+            .join("\n---\n");
+          const prompt = (siblingCtx ? siblingCtx + "\n\n" : "") + st.prompt;
+          const cmd = buildCommand(providerConfig, profile, {
+            prompt,
+            model: profile.model,
+            systemPrompt: harness.systemPrompt,
+          });
 
-        const streamer = new AgentStreamer();
-        this.activeStreamers.add(streamer);
-        streamer.on("tool_use", (tool: ToolUseEvent) => {
-          const detail = (tool.input?.file_path as string) ?? (tool.input?.command as string) ?? undefined;
-          r.workerToolUse(workerName, tool.name, detail);
-        });
+          const workerName = `${name}-${st.id}`;
+          this.activeWorkerNames.add(workerName);
+          r.workerStart(workerName, st.id, profile.model);
 
-        r.taskUpdate(st.id, "running");
-        const workerStartTime = Date.now();
-        try {
-          const result = await streamer.run(cmd, cancellation.signal);
-          this.activeStreamers.delete(streamer);
-          this.activeWorkerNames.delete(workerName);
-          collected.set(st.id, { text: result.text, cost: result.costUsd, inputTokens: result.inputTokens, outputTokens: result.outputTokens });
-          completedCount++;
-          r.workerDone(workerName);
-          r.taskUpdate(st.id, "passed", Date.now() - workerStartTime);
-          if (result.inputTokens > 0) {
-            r.taskTokens(st.id, result.inputTokens, result.outputTokens);
-            r.cost(result.costUsd, result.inputTokens, result.outputTokens);
+          const streamer = new AgentStreamer();
+          this.activeStreamers.add(streamer);
+          streamer.on("tool_use", (tool: ToolUseEvent) => {
+            const detail = (tool.input?.file_path as string) ?? (tool.input?.command as string) ?? undefined;
+            r.workerToolUse(workerName, tool.name, detail);
+          });
+
+          r.taskUpdate(st.id, "running");
+          const workerStartTime = Date.now();
+          try {
+            const result = await streamer.run(cmd, cancellation.signal);
+            this.activeStreamers.delete(streamer);
+            this.activeWorkerNames.delete(workerName);
+            collected.set(st.id, { text: result.text, cost: result.costUsd, inputTokens: result.inputTokens, outputTokens: result.outputTokens });
+            completedCount++;
+            r.workerDone(workerName);
+            r.taskUpdate(st.id, "passed", Date.now() - workerStartTime);
+            if (result.inputTokens > 0) {
+              r.taskTokens(st.id, result.inputTokens, result.outputTokens);
+              r.cost(result.costUsd, result.inputTokens, result.outputTokens);
+            }
+            r.phaseUpdate("executing", `${completedCount}/${decomposition.subtasks.length} tasks`);
+          } catch (e) {
+            this.activeStreamers.delete(streamer);
+            this.activeWorkerNames.delete(workerName);
+            r.workerDone(workerName);
+            r.taskUpdate(st.id, "failed", Date.now() - workerStartTime);
+            r.error(`Worker ${name} failed: ${(e as Error).message}`);
           }
-          r.phaseUpdate("executing", `${completedCount}/${decomposition.subtasks.length} tasks`);
-        } catch (e) {
-          this.activeStreamers.delete(streamer);
-          this.activeWorkerNames.delete(workerName);
-          r.workerDone(workerName);
-          r.taskUpdate(st.id, "failed", Date.now() - workerStartTime);
-          r.error(`Worker ${name} failed: ${(e as Error).message}`);
-        }
-      }),
-    );
+        }),
+      );
+    }
 
     // Summarize results
     const combined = [...collected.values()].map(c => c.text).filter(Boolean).join("\n\n---\n\n");
