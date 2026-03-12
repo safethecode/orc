@@ -1062,6 +1062,13 @@ async function handleNaturalInput(
     }
   }
 
+  // Inject actual source file contents into system prompt
+  const contentCollector = orchestrator.getCodebaseContent();
+  const codebaseContent = contentCollector.collect();
+  if (codebaseContent.files.length > 0) {
+    systemPrompt += "\n\n" + contentCollector.formatForPrompt(codebaseContent);
+  }
+
   // Inject frecency context: recently accessed files
   const frecency = orchestrator.getFrecency();
   const frequentFiles = frecency.getTopFiles(10);
