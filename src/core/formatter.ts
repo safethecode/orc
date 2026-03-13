@@ -147,6 +147,23 @@ export class AutoFormatter {
     return results;
   }
 
+  async lintCheck(filePaths: string[]): Promise<{ passed: boolean; output: string }> {
+    const linter = this.detectedNames.find(n => n === "biome" || n === "prettier");
+    if (!linter) return { passed: true, output: "" };
+    const cmd = linter === "biome"
+      ? ["npx", "@biomejs/biome", "check", ...filePaths]
+      : ["npx", "eslint", ...filePaths];
+    try {
+      const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
+      const stdout = await new Response(proc.stdout).text();
+      const stderr = await new Response(proc.stderr).text();
+      const exitCode = await proc.exited;
+      return { passed: exitCode === 0, output: (stdout + stderr).trim() };
+    } catch (err) {
+      return { passed: true, output: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   addFormatter(config: FormatterConfig): void {
     this.customFormatters.push(config);
     this.formatters.push(config);
