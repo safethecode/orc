@@ -173,7 +173,7 @@ function detectProjectFingerprint(projectDir: string): ProjectFingerprint {
   // Linting
   if (existsSync(join(projectDir, "eslint.config.js")) || existsSync(join(projectDir, ".eslintrc.json")) || existsSync(join(projectDir, ".eslintrc.js"))) {
     fp.linting = "eslint";
-  } else if (existsSync(join(projectDir, "biome.json"))) {
+  } else if (existsSync(join(projectDir, "biome.json")) || existsSync(join(projectDir, "biome.jsonc"))) {
     fp.linting = "biome";
   }
 
@@ -438,7 +438,63 @@ function buildWorkerCoordinationBlock(opts: DynamicHarnessOptions): string {
 
 // ── Quality Gate Block ───────────────────────────────────────────────
 
-function buildQualityGateBlock(fp: ProjectFingerprint): string {
+function readLintRules(projectDir: string, linter: string): string | null {
+  if (linter === "biome") {
+    for (const name of ["biome.json", "biome.jsonc"]) {
+      const configPath = join(projectDir, name);
+      if (!existsSync(configPath)) continue;
+      try {
+        const raw = readFileSync(configPath, "utf-8")
+          .replace(/\/\/.*$/gm, "")
+          .replace(/\/\*[\s\S]*?\*\//g, "");
+        const config = JSON.parse(raw);
+        const rules = config?.linter?.rules;
+        if (!rules) return null;
+        const ruleLines: string[] = [];
+        for (const [category, group] of Object.entries(rules)) {
+          if (category === "recommended" || category === "all") continue;
+          if (typeof group !== "object" || group === null) continue;
+          for (const [rule, value] of Object.entries(group as Record<string, unknown>)) {
+            const level = typeof value === "string" ? value : (value as any)?.level ?? "unknown";
+            if (level === "off") continue;
+            ruleLines.push(`  - ${category}/${rule}: ${level}`);
+          }
+        }
+        if (ruleLines.length === 0) return null;
+        return ruleLines.join("\n");
+      } catch { return null; }
+    }
+  }
+  if (linter === "eslint") {
+    for (const name of [".eslintrc.json", ".eslintrc.js", "eslint.config.js"]) {
+      const configPath = join(projectDir, name);
+      if (!existsSync(configPath) || !name.endsWith(".json")) continue;
+      try {
+        const raw = readFileSync(configPath, "utf-8");
+        const config = JSON.parse(raw);
+        const rules = config?.rules;
+        if (!rules) return null;
+        const ruleLines: string[] = [];
+        for (const [rule, value] of Object.entries(rules)) {
+          const level = Array.isArray(value) ? value[0] : value;
+          if (level === "off" || level === 0) continue;
+          ruleLines.push(`  - ${rule}: ${level === 2 || level === "error" ? "error" : "warn"}`);
+        }
+        if (ruleLines.length === 0) return null;
+        return ruleLines.join("\n");
+      } catch { return null; }
+    }
+  }
+  return null;
+}
+
+function buildLintCheckCommand(fp: ProjectFingerprint): string | null {
+  if (fp.linting === "biome") return "npx @biomejs/biome check src/";
+  if (fp.linting === "eslint") return "npx eslint src/";
+  return null;
+}
+
+function buildQualityGateBlock(fp: ProjectFingerprint, projectDir: string): string {
   const lines: string[] = [
     "## Quality Requirements",
     "ZERO TOLERANCE for placeholder code: no TODO, FIXME, HACK, or unimplemented stubs.",
@@ -454,7 +510,17 @@ function buildQualityGateBlock(fp: ProjectFingerprint): string {
   }
 
   if (fp.linting) {
-    lines.push(`Linting is configured (${fp.linting}). Ensure no lint errors.`);
+    const lintCmd = buildLintCheckCommand(fp);
+    lines.push(`Linter: ${fp.linting}. Run \`${lintCmd}\` after changes and fix ALL errors before finishing.`);
+    const ruleDetails = readLintRules(projectDir, fp.linting);
+    if (ruleDetails) {
+      lines.push(`Active lint rules:\n${ruleDetails}`);
+      lines.push("You MUST comply with all rules above. Common violations:");
+      if (fp.linting === "biome") {
+        lines.push("  - useExhaustiveDependencies: Hook deps must match exactly — no extra, no missing deps");
+        lines.push("  - noUnusedVariables: Remove unused imports and variables immediately");
+      }
+    }
   }
 
   lines.push("Do NOT add comments to unchanged code. Do NOT refactor unrelated code.");
@@ -502,7 +568,7 @@ function assembleDynamicHarness(options: DynamicHarnessOptions, taskType: TaskTy
   const coordinationBlock = buildWorkerCoordinationBlock(options);
 
   // Quality gate
-  const qualityBlock = buildQualityGateBlock(fp);
+  const qualityBlock = buildQualityGateBlock(fp, options.projectDir);
 
   // Assemble the full dynamic harness
   const dynamicSections = [
