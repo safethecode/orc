@@ -83,6 +83,7 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
           turn: turnCount,
           maxTurns,
           toolUsed: tool.name,
+          toolInput: tool.input,
         });
       });
 

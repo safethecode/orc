@@ -24,6 +24,27 @@ import { SessionForkManager } from "../core/session-fork.ts";
 import { shouldBrainstorm, brainstorm } from "../core/brainstorm.ts";
 import type { AgentRegistry } from "../agents/registry.ts";
 
+function formatToolDetail(tool: string, input?: Record<string, unknown>): string {
+  if (!input) return "";
+  switch (tool) {
+    case "Read":
+    case "Write":
+    case "Edit":
+    case "MultiEdit":
+      return input.file_path ? `(${String(input.file_path).split("/").pop()})` : "";
+    case "Bash":
+      return input.command ? `(${String(input.command).slice(0, 60)})` : "";
+    case "Glob":
+      return input.pattern ? `(${input.pattern})` : "";
+    case "Grep":
+      return input.pattern ? `(${input.pattern})` : "";
+    case "TodoWrite":
+      return input.todos ? ` ${Array.isArray(input.todos) ? input.todos.length : 0} items` : "";
+    default:
+      return "";
+  }
+}
+
 const DESIGN_PLAN_PROMPT = `
 
 [DESIGN PLAN-FIRST MODE — Phase 1]
@@ -897,7 +918,9 @@ export class ReplController {
       }],
       ["worker:turn", (e) => {
         if (e.toolUsed) {
-          r.dim(`  ${e.workerId} · ${e.toolUsed}`);
+          const input = e.toolInput as Record<string, unknown> | undefined;
+          const detail = formatToolDetail(e.toolUsed, input);
+          r.dim(`  \x1b[33m●\x1b[0m \x1b[1m${e.toolUsed}\x1b[0m\x1b[2m${detail}\x1b[0m`);
         }
       }],
       ["worker:complete", (e) => {
