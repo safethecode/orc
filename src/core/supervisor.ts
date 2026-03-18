@@ -69,6 +69,7 @@ export class Supervisor {
   private tracer: DistributedTracer | null = null;
   private conflictResolutions: Array<{ resolution: string; chosenApproach: string; corrections: string[] }> = [];
   private workerHandles = new Map<string, WorkerHandle>();
+  private qualityGatePassed = true;
 
   constructor(deps: SupervisorDeps, options?: SupervisorOptions) {
     this.deps = deps;
@@ -142,6 +143,8 @@ export class Supervisor {
     }) ?? null;
 
     try {
+      this.qualityGatePassed = true;
+
       // 0. Clear stale ownership from previous executions
       if (this.deps.ownership) {
         for (const entry of this.deps.store.getAllOwnership()) {
@@ -229,10 +232,10 @@ export class Supervisor {
         this.deps.conflictWatcher?.clearDiffs();
       }
 
-      // 6.5. QA Agent — only if workers produced real results
+      // 6.5. QA Agent — only if workers produced real results AND quality gate passed
       const allResults = collector.getAllResults();
       const successfulResults = allResults.filter(r => r.result && r.result.trim().length > 0);
-      if (decomposition.subtasks.length > 1 && successfulResults.length > 0) {
+      if (decomposition.subtasks.length > 1 && successfulResults.length > 0 && this.qualityGatePassed) {
         const resultSections = successfulResults.map(r =>
           `### ${r.agentName} (${r.role})\n${r.result}`
         ).join("\n\n---\n\n");
@@ -637,8 +640,11 @@ export class Supervisor {
               this.tracer.endSpan(qgCtx.spanId, critique.passes ? "ok" : "error");
             }
 
-            if (!critique.passes && feedbackConfig?.qaLoopOnFail) {
-              await this.feedbackLoop.runQALoop(subtask, critique);
+            if (!critique.passes) {
+              this.qualityGatePassed = false;
+              if (feedbackConfig?.qaLoopOnFail) {
+                await this.feedbackLoop.runQALoop(subtask, critique);
+              }
             }
           }
 

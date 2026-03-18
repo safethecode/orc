@@ -165,6 +165,8 @@ export class ReplController {
       if (s.isRunning) s.abort();
     }
     this.activeStreamers.clear();
+    // Cancel all supervisor workers
+    this.orchestrator.cancelAllWorkers("User aborted (ESC)").catch(() => {});
     // Clean up worker UI indicators
     for (const name of this.activeWorkerNames) {
       this.renderer.workerDone(name);
