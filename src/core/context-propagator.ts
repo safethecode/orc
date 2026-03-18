@@ -14,6 +14,7 @@ import { eventBus } from "./events.ts";
 
 export class ContextPropagator {
   private maxContextTokens: number;
+  private codebaseContext: string = "";
 
   constructor(
     private contextBuilder: ContextBuilder,
@@ -22,6 +23,10 @@ export class ContextPropagator {
     options?: { maxContextTokens?: number },
   ) {
     this.maxContextTokens = options?.maxContextTokens ?? 16000;
+  }
+
+  setCodebaseContext(context: string): void {
+    this.codebaseContext = context;
   }
 
   async buildWorkerPrompt(
@@ -174,16 +179,17 @@ export class ContextPropagator {
     resolutions: string = "",
   ): string {
     // Priority order: original > parent > completed > resolutions > sibling > knowledge > bus > protocol
-    const taskInstruction = `## YOUR TASK — Execute this immediately\n\n${original}\n\n**Do not ask clarifying questions. Start working on the task above immediately.**`;
+    const taskInstruction = `## YOUR TASK — Execute this immediately\n\n${original}\n\n**Do not ask clarifying questions. Do not explore the codebase extensively — the project structure is provided below. Start implementing immediately.**`;
     const sections = [
       { text: taskInstruction, priority: 0 },
-      { text: parent, priority: 1 },
-      { text: completed, priority: 2 },
-      { text: resolutions, priority: 3 },
-      { text: sibling, priority: 4 },
-      { text: knowledge, priority: 5 },
-      { text: bus, priority: 6 },
-      { text: protocol, priority: 7 },
+      { text: this.codebaseContext, priority: 1 },
+      { text: parent, priority: 3 },
+      { text: completed, priority: 4 },
+      { text: resolutions, priority: 5 },
+      { text: sibling, priority: 6 },
+      { text: knowledge, priority: 7 },
+      { text: bus, priority: 8 },
+      { text: protocol, priority: 9 },
     ].filter(s => s.text.length > 0);
 
     let result = "";

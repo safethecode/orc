@@ -4,7 +4,7 @@ import { eventBus } from "./events.ts";
 
 // Domain detection patterns — identifies what domains a prompt touches
 const DOMAIN_PATTERNS: Record<string, RegExp> = {
-  frontend: /\b(react|vue|angular|css|html|ui|component|page|layout|style|responsive|tailwind|dom)\b/i,
+  frontend: /\b(react|vue|angular|css|html|page|layout|responsive|dom)\b/i,
   backend: /\b(api|endpoint|server|route|controller|middleware|express|fastify|rest|graphql)\b/i,
   database: /\b(database|sql|migration|schema|query|model|orm|postgres|mysql|mongo|redis)\b/i,
   auth: /\b(auth|login|signup|session|jwt|oauth|token|permission|rbac|password)\b/i,
@@ -12,7 +12,7 @@ const DOMAIN_PATTERNS: Record<string, RegExp> = {
   devops: /\b(docker|ci|cd|deploy|kubernetes|k8s|pipeline|terraform|nginx|cloud)\b/i,
   docs: /\b(document|readme|api.?doc|jsdoc|swagger|openapi|changelog)\b/i,
   security: /\b(security|vulnerability|xss|csrf|injection|sanitize|encrypt|ssl|tls)\b/i,
-  design: /\b(design system|color palette|typography|font pair|spacing scale|ui kit|wireframe|mockup|prototype|dark mode|gradient|hero section|landing page|card design)\b/i,
+  design: /\b(design.?system|color palette|typography|font pair|spacing scale|ui.?kit|wireframe|mockup|prototype|dark mode|gradient|hero section|landing page|card design|shadcn|ui|component|style|tailwind|브랜딩|디자인|컴포넌트)\b/i,
   research: /\b(research|investigate|analyze|compare|benchmark|survey|explore|study|evaluate options)\b/i,
 };
 
