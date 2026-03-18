@@ -536,20 +536,21 @@ export class Supervisor {
         // 7. Bridge strategy completion → pool events
         this.deps.workerStrategy.waitForResult(handle, this.options.workerTimeoutMs).then(
           (strategyResult) => {
-            if (!strategyResult) return;
             const current = this.pool.get(worker.id);
-            if (current && current.status !== "completed" && current.status !== "failed") {
+            if (!current || current.status === "completed" || current.status === "failed" || current.status === "cancelled") return;
+            if (strategyResult) {
               this.pool.markCompleted(worker.id, strategyResult.result, {
                 tokenUsage: strategyResult.tokenUsage,
                 costUsd: strategyResult.costUsd,
               });
+            } else {
+              this.pool.markFailed(worker.id, "Worker process exited without result");
             }
           },
-          () => {
+          (err) => {
             const current = this.pool.get(worker.id);
-            if (current && current.status !== "completed" && current.status !== "failed") {
-              this.pool.markFailed(worker.id, "Worker process exited with error");
-            }
+            if (!current || current.status === "completed" || current.status === "failed" || current.status === "cancelled") return;
+            this.pool.markFailed(worker.id, err instanceof Error ? err.message : "Worker process error");
           },
         );
 

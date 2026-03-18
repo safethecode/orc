@@ -109,9 +109,7 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       setTimeout(() => resolve(null), timeoutMs),
     );
 
-    const result = await Promise.race([worker.promise, timeout]);
-    this.workers.delete(handle.agentName);
-    return result;
+    return Promise.race([worker.promise, timeout]);
   }
 
   async stop(handle: WorkerHandle): Promise<void> {
