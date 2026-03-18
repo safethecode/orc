@@ -533,16 +533,36 @@ export class Supervisor {
           }
         }
 
-        // 7. Start feedback monitoring
+        // 7. Bridge strategy completion → pool events
+        this.deps.workerStrategy.waitForResult(handle, this.options.workerTimeoutMs).then(
+          (strategyResult) => {
+            if (!strategyResult) return;
+            const current = this.pool.get(worker.id);
+            if (current && current.status !== "completed" && current.status !== "failed") {
+              this.pool.markCompleted(worker.id, strategyResult.result, {
+                tokenUsage: strategyResult.tokenUsage,
+                costUsd: strategyResult.costUsd,
+              });
+            }
+          },
+          () => {
+            const current = this.pool.get(worker.id);
+            if (current && current.status !== "completed" && current.status !== "failed") {
+              this.pool.markFailed(worker.id, "Worker process exited with error");
+            }
+          },
+        );
+
+        // 8. Start feedback monitoring
         this.feedbackLoop.registerWorkerHandle(agentName, handle);
         this.feedbackLoop.startMonitoring(worker.id, subtask);
 
-        // 8. Wait for result (event-driven with polling fallback)
+        // 9. Wait for result (event-driven with polling fallback)
         let outcome = await this.waitForWorkerCompletion(
           worker.id, agentName, this.options.workerTimeoutMs,
         );
 
-        // 9. Stop monitoring
+        // 10. Stop monitoring
         this.feedbackLoop.stopMonitoring(worker.id);
 
         if (outcome) {
