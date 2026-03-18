@@ -83,25 +83,31 @@ function buildMockDeps(): SupervisorDeps {
 
   return {
     config,
-    spawnWorker: mock(async (_subtask: SubTask, _maxTurns: number, _prompt: string) => {
-      // Register agent and create a completed task so the polling fallback can detect it
-      store.registerAgent("test-worker", "claude", "sonnet");
-      store.createTask({ id: _subtask.id, prompt: _subtask.prompt, tier: "sonnet" });
-      store.updateTask(_subtask.id, {
-        agentName: "test-worker",
-        status: "completed",
+    workerStrategy: {
+      spawn: mock(async (_subtask: SubTask, _maxTurns: number, _prompt: string) => {
+        store.registerAgent("test-worker", "claude", "sonnet");
+        store.createTask({ id: _subtask.id, prompt: _subtask.prompt, tier: "sonnet" });
+        store.updateTask(_subtask.id, {
+          agentName: "test-worker",
+          status: "completed",
+          result: "done",
+          tokenUsage: 100,
+          costUsd: 0.01,
+        });
+        return { agentName: "test-worker", sessionId: "test-session" };
+      }),
+      waitForResult: mock(async () => ({
         result: "done",
         tokenUsage: 100,
         costUsd: 0.01,
-      });
-      return { agentName: "test-worker", sessionId: "test-session" };
-    }),
-    waitForResult: mock(async (_agentName: string, _timeoutMs: number) => ({
-      result: "done",
-      tokenUsage: 100,
-      costUsd: 0.01,
-    })),
-    stopWorker: mock(async (_agentName: string) => {}),
+        inputTokens: 50,
+        outputTokens: 50,
+      })),
+      stop: mock(async () => {}),
+      isAlive: mock(async () => true),
+      captureOutput: mock(async () => ""),
+      sendInput: mock(async () => {}),
+    },
     sessionManager: {
       isAlive: mock(async () => true),
       sendInput: mock(async () => {}),
@@ -203,8 +209,8 @@ describe("Supervisor", () => {
     expect(result).toHaveProperty("totalTokens");
     expect(result).toHaveProperty("totalCost");
 
-    // spawnWorker should have been called
-    expect(deps.spawnWorker).toHaveBeenCalled();
+    // workerStrategy.spawn should have been called
+    expect(deps.workerStrategy.spawn).toHaveBeenCalled();
   });
 
   it("worker pool spawn + markCompleted + markFailed lifecycle", () => {
