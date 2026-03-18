@@ -123,7 +123,7 @@ async function runLLMEvaluation(
   const model = nextModel();
 
   const proc = Bun.spawn(
-    ["claude", "-p", prompt, "--model", model, "--output-format", "text", "--max-turns", "1"],
+    ["claude", "-p", prompt, "--model", model, "--output-format", "text", "--max-turns", "5"],
     { stdout: "pipe", stderr: "pipe", stdin: "ignore" },
   );
 

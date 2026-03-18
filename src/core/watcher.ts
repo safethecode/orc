@@ -173,7 +173,7 @@ export class ConflictWatcher {
 
     try {
       const proc = Bun.spawn(
-        ["claude", "-p", prompt, "--model", "sonnet", "--output-format", "text", "--max-turns", "1"],
+        ["claude", "-p", prompt, "--model", "sonnet", "--output-format", "text", "--max-turns", "5"],
         { stdout: "pipe", stderr: "pipe", stdin: "ignore" },
       );
 

@@ -45,7 +45,7 @@ function parseReviewJSON(raw: string): { passed: boolean; issues: string[]; summ
 
 async function runHaiku(prompt: string): Promise<string> {
   const proc = Bun.spawn(
-    ["claude", "-p", prompt, "--model", "haiku", "--output-format", "text", "--dangerously-skip-permissions", "--max-turns", "1"],
+    ["claude", "-p", prompt, "--model", "haiku", "--output-format", "text", "--dangerously-skip-permissions", "--max-turns", "5"],
     { stdout: "pipe", stderr: "pipe" },
   );
   const text = await new Response(proc.stdout).text();

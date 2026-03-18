@@ -74,7 +74,7 @@ function runHaiku(prompt: string, signal?: AbortSignal): Promise<string> {
     const proc = spawn("claude", [
       "-p", prompt,
       "--model", "haiku",
-      "--max-turns", "1",
+      "--max-turns", "5",
     ], { stdio: ["ignore", "pipe", "pipe"], signal });
 
     const chunks: Buffer[] = [];

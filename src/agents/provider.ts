@@ -51,7 +51,9 @@ export function buildCommand(
       ];
     }
 
-    cmd.push("--max-turns", String(options.maxTurns ?? 1000));
+    if (options.maxTurns != null) {
+      cmd.push("--max-turns", String(options.maxTurns));
+    }
 
     if (options.resumeSession) {
       cmd.push("--resume", options.resumeSession);
