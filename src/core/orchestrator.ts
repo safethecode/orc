@@ -18,7 +18,6 @@ import { AgentRegistry } from "../agents/registry.ts";
 import { SkillIndex } from "../agents/skill-index.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
-import { buildDynamicHarnessAsync } from "../agents/dynamic-harness.ts";
 import { Logger } from "../logging/logger.ts";
 import { Tracer } from "../logging/tracer.ts";
 import { HealthChecker } from "../logging/health.ts";
@@ -51,6 +50,8 @@ import { CrashRecovery } from "./crash-recovery.ts";
 import { CostEstimator } from "./cost-estimator.ts";
 import { CheckpointManager } from "./checkpoint.ts";
 import { Supervisor } from "./supervisor.ts";
+import { TmuxWorkerStrategy } from "./tmux-worker-strategy.ts";
+import { StreamerWorkerStrategy } from "./streamer-worker-strategy.ts";
 import { McpClientManager } from "../mcp/client-manager.ts";
 import { LspManager } from "../lsp/index.ts";
 import { GitSnapshotManager } from "./git-snapshot.ts";
@@ -362,64 +363,20 @@ export class Orchestrator {
     this.costEstimator = new CostEstimator(this.store);
     this.checkpointManager = new CheckpointManager(this.store, process.cwd());
 
-    // Initialize Supervisor with dependency injection (avoids circular import)
+    // Initialize Supervisor with TmuxWorkerStrategy (CLI/headless path)
+    const tmuxStrategy = new TmuxWorkerStrategy(
+      this.config,
+      this.sessionManager,
+      this.store,
+      this.registry,
+      (name) => this.spawnAgent(name),
+      (name) => this.stopAgent(name),
+    );
+
     this.supervisor = new Supervisor(
       {
         config: this.config,
-        spawnWorker: async (subtask: SubTask, maxTurns: number, enrichedPrompt: string) => {
-          const agentName = `worker-${subtask.id.slice(0, 8)}`;
-          const providerConfig = this.config.providers[subtask.provider];
-          if (!providerConfig) throw new Error(`Unknown provider: ${subtask.provider}`);
-
-          const harness = await buildDynamicHarnessAsync({
-            agentName,
-            role: subtask.agentRole,
-            provider: subtask.provider,
-            parentTaskId: subtask.parentTaskId,
-            isWorker: true,
-            projectDir: process.cwd(),
-            prompt: enrichedPrompt,
-            turnBudget: maxTurns,
-          });
-
-          const profile: import("../config/types.ts").AgentProfile = {
-            name: agentName,
-            provider: subtask.provider,
-            model: subtask.model,
-            role: subtask.agentRole,
-            maxBudgetUsd: this.config.budget.defaultMaxPerTask,
-            requires: [],
-            worktree: false,
-            systemPrompt: harness.systemPrompt,
-            maxTurns,
-          };
-
-          this.registry.register(profile);
-          const session = await this.spawnAgent(agentName);
-
-          await this.sessionManager.sendInput(agentName, enrichedPrompt);
-
-          return { agentName, sessionId: session.name };
-        },
-        waitForResult: async (agentName: string, timeoutMs: number) => {
-          const start = Date.now();
-          while (Date.now() - start < timeoutMs) {
-            const tasks = this.store.listTasks({ agentName, status: "completed" });
-            if (tasks.length > 0) {
-              const t = tasks[0];
-              return { result: t.result ?? "", tokenUsage: t.tokenUsage, costUsd: t.costUsd };
-            }
-            const failed = this.store.listTasks({ agentName, status: "failed" });
-            if (failed.length > 0) {
-              throw new Error(failed[0].result ?? "Task failed");
-            }
-            await new Promise(r => setTimeout(r, 2000));
-          }
-          return null;
-        },
-        stopWorker: async (agentName: string) => {
-          await this.stopAgent(agentName);
-        },
+        workerStrategy: tmuxStrategy,
         sessionManager: this.sessionManager,
         checkpointManager: this.checkpointManager,
         recoveryManager: this.recovery,
