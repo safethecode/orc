@@ -31,12 +31,11 @@ import { TodoContinuationEnforcer } from "./todo-continuation.ts";
 import { eventBus } from "./events.ts";
 import { reviewSpec, reviewQuality } from "./review-gate.ts";
 import type { DistributedTracer, TraceContext } from "./distributed-trace.ts";
+import type { WorkerExecutionStrategy, WorkerHandle } from "./worker-strategy.ts";
 
 export interface SupervisorDeps {
   config: OrchestratorConfig;
-  spawnWorker: (subtask: SubTask, maxTurns: number, enrichedPrompt: string) => Promise<{ agentName: string; sessionId: string }>;
-  waitForResult: (agentName: string, timeoutMs: number) => Promise<{ result: string; tokenUsage: number; costUsd: number } | null>;
-  stopWorker: (agentName: string) => Promise<void>;
+  workerStrategy: WorkerExecutionStrategy;
   sessionManager: SessionManager;
   checkpointManager: CheckpointManager;
   recoveryManager: RecoveryManager;
@@ -68,6 +67,7 @@ export class Supervisor {
   private todoContinuation: TodoContinuationEnforcer;
   private tracer: DistributedTracer | null = null;
   private conflictResolutions: Array<{ resolution: string; chosenApproach: string; corrections: string[] }> = [];
+  private workerHandles = new Map<string, WorkerHandle>();
 
   constructor(deps: SupervisorDeps, options?: SupervisorOptions) {
     this.deps = deps;
@@ -308,10 +308,12 @@ export class Supervisor {
     // Stop feedback monitoring
     this.feedbackLoop.stopMonitoring(worker.id);
 
-    // Kill the worker session (best-effort; session may already be dead)
-    try {
-      await this.deps.stopWorker(worker.agentName);
-    } catch { /* session may already be dead */ }
+    // Kill the worker (best-effort; may already be dead)
+    const handle = this.workerHandles.get(worker.agentName);
+    if (handle) {
+      try { await this.deps.workerStrategy.stop(handle); } catch { /* may already be dead */ }
+      this.workerHandles.delete(worker.agentName);
+    }
 
     // Mark cancelled in pool
     this.pool.cancel(worker.id, reason);
@@ -330,10 +332,12 @@ export class Supervisor {
     // Stop feedback monitoring
     this.feedbackLoop.stopMonitoring(worker.id);
 
-    // Kill the worker session (best-effort)
-    try {
-      await this.deps.stopWorker(worker.agentName);
-    } catch { /* session may already be dead */ }
+    // Kill the worker (best-effort)
+    const handle = this.workerHandles.get(worker.agentName);
+    if (handle) {
+      try { await this.deps.workerStrategy.stop(handle); } catch { /* may already be dead */ }
+      this.workerHandles.delete(worker.agentName);
+    }
 
     // Mark cancelled in pool
     const result = this.pool.cancel(workerId, reason);
@@ -350,9 +354,11 @@ export class Supervisor {
 
     for (const worker of active) {
       this.feedbackLoop.stopMonitoring(worker.id);
-      try {
-        await this.deps.stopWorker(worker.agentName);
-      } catch { /* session may already be dead */ }
+      const handle = this.workerHandles.get(worker.agentName);
+      if (handle) {
+        try { await this.deps.workerStrategy.stop(handle); } catch { /* may already be dead */ }
+        this.workerHandles.delete(worker.agentName);
+      }
       const result = this.pool.cancel(worker.id, reason);
       if (result) cancelled++;
     }
@@ -466,7 +472,9 @@ export class Supervisor {
             })
           : null;
 
-        const { agentName } = await this.deps.spawnWorker(subtask, maxTurns, enrichedPrompt);
+        const handle = await this.deps.workerStrategy.spawn(subtask, maxTurns, enrichedPrompt);
+        const { agentName } = handle;
+        this.workerHandles.set(agentName, handle);
 
         if (spawnCtx && this.tracer) {
           this.tracer.endSpan(spawnCtx.spanId, "ok");
@@ -529,7 +537,8 @@ export class Supervisor {
             const detection = this.todoContinuation.detect(outcome.result);
             const continuationPrompt = this.todoContinuation.buildContinuationPrompt(detection);
             this.todoContinuation.recordContinuation();
-            await this.deps.sessionManager.sendInput(agentName, continuationPrompt);
+            const wHandle = this.workerHandles.get(agentName);
+            if (wHandle) await this.deps.workerStrategy.sendInput(wHandle, continuationPrompt);
 
             // Wait again for updated result
             const continued = await this.waitForWorkerCompletion(
@@ -611,7 +620,8 @@ export class Supervisor {
           // 11.5. Send structured injection to still-running sibling workers
           const siblingUpdate = this.formatSiblingInjection(subtask, outcome.result, collector);
           for (const [runningName] of this.workerBus.getRunningWorkers(subtask.parentTaskId, agentName)) {
-            this.deps.sessionManager.sendInput(runningName, siblingUpdate).catch(() => {});
+            const sibHandle = this.workerHandles.get(runningName);
+            if (sibHandle) this.deps.workerStrategy.sendInput(sibHandle, siblingUpdate).catch(() => {});
           }
 
           // 12. Collect result
@@ -630,7 +640,8 @@ export class Supervisor {
 
           // 13. Cleanup worker registration
           this.workerBus.unregisterWorker(agentName);
-          await this.deps.stopWorker(agentName).catch(() => {});
+          if (handle) await this.deps.workerStrategy.stop(handle).catch(() => {});
+          this.workerHandles.delete(agentName);
 
           // End worker span successfully
           if (workerSpanCtx && this.tracer) {
@@ -648,7 +659,8 @@ export class Supervisor {
         this.pool.markFailed(worker.id, "No result received");
         lastError = "No result received";
         this.workerBus.unregisterWorker(agentName);
-        await this.deps.stopWorker(agentName).catch(() => {});
+        if (handle) await this.deps.workerStrategy.stop(handle).catch(() => {});
+        this.workerHandles.delete(agentName);
 
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
