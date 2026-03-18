@@ -6,7 +6,7 @@ const DEFAULT_CAPABILITIES: ProviderCapability[] = [
   {
     name: "claude",
     models: ["haiku", "sonnet", "opus"],
-    strengths: ["architecture", "code-generation", "debugging", "review", "testing", "refactoring", "security"],
+    strengths: ["architecture", "code-generation", "implementation", "file-editing", "debugging", "review", "testing", "refactoring", "security"],
     weaknesses: [],
     maxContextTokens: 200000,
     supportsStreaming: true,
@@ -116,7 +116,14 @@ export class ProviderSelector {
       };
     }
 
-    const scored = candidates.map(cap => this.scoreProvider(cap, subtask, options));
+    const providerOrder = [...this.availableProviders];
+    const scored = candidates.map(cap => {
+      const result = this.scoreProvider(cap, subtask, options);
+      // Preference bonus: earlier in preferredProviders list gets up to +5
+      const idx = providerOrder.indexOf(cap.name);
+      if (idx >= 0) result.score += Math.max(0, 5 - idx);
+      return result;
+    });
     scored.sort((a, b) => b.score - a.score);
 
     const best = scored[0];

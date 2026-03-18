@@ -15,7 +15,7 @@ providers:
     flags: ["-p", "--output-format", "stream-json"]
     capabilities:
       models: ["haiku", "sonnet", "opus"]
-      strengths: ["architecture", "code-generation", "debugging", "review", "testing", "refactoring", "security"]
+      strengths: ["architecture", "code-generation", "implementation", "file-editing", "debugging", "review", "testing", "refactoring", "security"]
       weaknesses: []
       maxContextTokens: 200000
       supportsStreaming: true
