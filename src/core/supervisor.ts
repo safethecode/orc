@@ -677,9 +677,7 @@ export class Supervisor {
           }
 
           // 13. Cleanup worker registration
-          this.workerBus.unregisterWorker(agentName);
-          if (handle) await this.deps.workerStrategy.stop(handle).catch(() => {});
-          this.workerHandles.delete(agentName);
+          this.cleanupWorker(agentName, handle, subtask);
 
           // End worker span successfully
           if (workerSpanCtx && this.tracer) {
@@ -696,9 +694,7 @@ export class Supervisor {
         // No result → timeout
         this.pool.markFailed(worker.id, "No result received");
         lastError = "No result received";
-        this.workerBus.unregisterWorker(agentName);
-        if (handle) await this.deps.workerStrategy.stop(handle).catch(() => {});
-        this.workerHandles.delete(agentName);
+        this.cleanupWorker(agentName, handle, subtask);
 
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
@@ -709,10 +705,9 @@ export class Supervisor {
         if (existingWorker) {
           this.pool.markFailed(existingWorker.id, errMsg);
           this.feedbackLoop.stopMonitoring(existingWorker.id);
-
-          // Use feedback loop's failure handling
           this.feedbackLoop.handleFailure(existingWorker.id, subtask, err instanceof Error ? err : new Error(errMsg));
         }
+        this.cleanupWorker(agentName, handle, subtask);
       }
 
       // Check if we should retry
@@ -966,6 +961,17 @@ export class Supervisor {
 
     // Standard by default
     return this.multiTurnConfig.standardMaxTurns;
+  }
+
+  private cleanupWorker(agentName: string, handle: WorkerHandle | null, subtask: SubTask): void {
+    this.workerBus.unregisterWorker(agentName);
+    if (this.deps.ownership) {
+      this.deps.ownership.release(agentName, subtask.parentTaskId);
+    }
+    if (handle) {
+      this.deps.workerStrategy.stop(handle).catch(() => {});
+      this.workerHandles.delete(agentName);
+    }
   }
 
   private inferDomain(subtask: SubTask): string {
