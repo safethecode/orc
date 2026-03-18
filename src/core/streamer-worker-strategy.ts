@@ -29,33 +29,35 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
     const providerConfig = this.config.providers[subtask.provider];
     if (!providerConfig) throw new Error(`Unknown provider: ${subtask.provider}`);
 
-    const harness = buildHarness({
+    // Use user-defined profile if available, otherwise fall back to generic harness
+    const userProfile = this.registry.get(subtask.agentRole);
+    const systemPrompt = userProfile?.systemPrompt || buildHarness({
       agentName,
       role: subtask.agentRole as any,
       provider: subtask.provider as any,
       parentTaskId: subtask.parentTaskId,
       isWorker: true,
-    });
+    }).systemPrompt;
 
     const profile = {
       name: agentName,
-      provider: subtask.provider,
-      model: subtask.model,
+      provider: userProfile?.provider ?? subtask.provider,
+      model: userProfile?.model ?? subtask.model,
       role: subtask.agentRole,
-      maxBudgetUsd: this.config.budget.defaultMaxPerTask,
-      requires: [] as string[],
+      maxBudgetUsd: userProfile?.maxBudgetUsd ?? this.config.budget.defaultMaxPerTask,
+      requires: userProfile?.requires ?? [] as string[],
       worktree: false,
-      systemPrompt: harness.systemPrompt,
+      systemPrompt,
       maxTurns,
     };
 
     this.registry.register(profile);
-    this.store.registerAgent(agentName, subtask.provider, subtask.model);
+    this.store.registerAgent(agentName, profile.provider, profile.model);
 
     const cmd = buildCommand(providerConfig, profile, {
       prompt: enrichedPrompt,
-      model: subtask.model,
-      systemPrompt: harness.systemPrompt,
+      model: profile.model,
+      systemPrompt,
       maxTurns,
     });
 
