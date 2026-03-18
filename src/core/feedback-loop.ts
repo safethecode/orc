@@ -22,6 +22,7 @@ import { buildCritiquePrompt, parseCritiqueResponse } from "./critique.ts";
 import { eventBus } from "./events.ts";
 import { StuckDetector } from "./stuck-detector.ts";
 import { EscalationManager } from "./escalation-manager.ts";
+import type { WorkerExecutionStrategy, WorkerHandle } from "./worker-strategy.ts";
 
 const DEFAULT_CONFIG: Required<FeedbackLoopConfig> = {
   enabled: true,
@@ -39,6 +40,8 @@ export class FeedbackLoop {
   private processedMarkers: Map<string, Set<string>> = new Map();
   private stuckDetector: StuckDetector;
   private escalationManager: EscalationManager;
+  private workerStrategy?: WorkerExecutionStrategy;
+  private workerHandleMap = new Map<string, WorkerHandle>();
 
   constructor(
     config: Partial<FeedbackLoopConfig> | undefined,
@@ -55,6 +58,14 @@ export class FeedbackLoop {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.stuckDetector = stuckDetector ?? new StuckDetector();
     this.escalationManager = escalationManager ?? new EscalationManager();
+  }
+
+  setWorkerStrategy(strategy: WorkerExecutionStrategy): void {
+    this.workerStrategy = strategy;
+  }
+
+  registerWorkerHandle(agentName: string, handle: WorkerHandle): void {
+    this.workerHandleMap.set(agentName, handle);
   }
 
   getStuckDetector(): StuckDetector {
@@ -94,16 +105,21 @@ export class FeedbackLoop {
     }
 
     // Check if session is still alive — detect completion via session death
-    const sessionAlive = await this.sessionManager.isAlive(worker.agentName).catch(() => false);
+    const handle = this.workerHandleMap.get(worker.agentName);
+    const sessionAlive = handle && this.workerStrategy
+      ? await this.workerStrategy.isAlive(handle).catch(() => false)
+      : await this.sessionManager.isAlive(worker.agentName).catch(() => false);
     if (!sessionAlive) {
       await this.detectWorkerCompletion(workerId, worker, subtask);
       return;
     }
 
-    // Capture tmux output
+    // Capture output from worker
     let capturedOutput: string;
     try {
-      capturedOutput = await this.sessionManager.captureOutput(worker.agentName, 200);
+      capturedOutput = handle && this.workerStrategy
+        ? await this.workerStrategy.captureOutput(handle, 200)
+        : await this.sessionManager.captureOutput(worker.agentName, 200);
     } catch {
       return; // Session may be gone
     }
@@ -293,7 +309,12 @@ export class FeedbackLoop {
     }
 
     try {
-      await this.sessionManager.sendInput(worker.agentName, message);
+      const handle = this.workerHandleMap.get(worker.agentName);
+      if (handle && this.workerStrategy) {
+        await this.workerStrategy.sendInput(handle, message);
+      } else {
+        await this.sessionManager.sendInput(worker.agentName, message);
+      }
       this.pool.addCorrection(workerId, message);
 
       eventBus.publish({
