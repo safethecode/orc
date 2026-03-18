@@ -1062,7 +1062,10 @@ export class Orchestrator {
     prompt: string,
   ): Promise<import("../config/types.ts").AggregatedResult> {
     const taskId = `repl-${Date.now().toString(36)}`;
-    const streamerStrategy = new StreamerWorkerStrategy(this.config, this.registry);
+    this.store.createTask({ id: taskId, prompt, tier: "sonnet" });
+    this.store.updateTask(taskId, { status: "running", startedAt: new Date().toISOString() });
+
+    const streamerStrategy = new StreamerWorkerStrategy(this.config, this.registry, this.store);
 
     const supervisor = new Supervisor(
       {

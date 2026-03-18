@@ -1,5 +1,6 @@
 import type { SubTask, OrchestratorConfig } from "../config/types.ts";
 import type { AgentRegistry } from "../agents/registry.ts";
+import type { Store } from "../db/store.ts";
 import type { WorkerExecutionStrategy, WorkerHandle, WorkerResult } from "./worker-strategy.ts";
 import { AgentStreamer, type ToolUseEvent } from "../repl/streamer.ts";
 import { buildCommand } from "../agents/provider.ts";
@@ -19,6 +20,7 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
   constructor(
     private config: OrchestratorConfig,
     private registry: AgentRegistry,
+    private store: Store,
   ) {}
 
   async spawn(subtask: SubTask, maxTurns: number, enrichedPrompt: string): Promise<WorkerHandle> {
@@ -47,6 +49,7 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
     };
 
     this.registry.register(profile);
+    this.store.registerAgent(agentName, subtask.provider, subtask.model);
 
     const cmd = buildCommand(providerConfig, profile, {
       prompt: enrichedPrompt,
