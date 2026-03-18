@@ -11,7 +11,6 @@ import { TIER_BUDGETS } from "../memory/token-optimizer.ts";
 import { CancellationToken } from "../utils/cancellation.ts";
 import { RolloutRecorder } from "../session/rollout.ts";
 import { eventBus } from "../core/events.ts";
-import { decomposeWithSam } from "../core/decomposer.ts";
 import { scoutSkills, type ScoutResult } from "./skill-scout.ts";
 import { scoutMcp, type McpScoutResult } from "../mcp/mcp-scout.ts";
 import { ScoutCache } from "./scout-cache.ts";
@@ -24,13 +23,6 @@ import { HashlineEditor } from "../core/hashline.ts";
 import { SessionForkManager } from "../core/session-fork.ts";
 import { shouldBrainstorm, brainstorm } from "../core/brainstorm.ts";
 import type { AgentRegistry } from "../agents/registry.ts";
-
-/** Map decomposer agentRole → profile name */
-const ROLE_TO_PROFILE: Record<string, string> = {
-  coder: "coder", architect: "architect", design: "design",
-  writer: "writer", reviewer: "reviewer", researcher: "researcher",
-  tester: "coder", "spec-writer": "writer", qa: "reviewer",
-};
 
 const DESIGN_PLAN_PROMPT = `
 
@@ -829,117 +821,125 @@ export class ReplController {
     }
   }
 
-  /** Multi-agent decomposition and parallel execution */
+  /**
+   * Multi-agent execution via Supervisor pipeline.
+   * Delegates to Orchestrator.executeWithSupervisor() which uses the full
+   * pipeline: decompose → context propagation → feedback loop → quality gate
+   * → QA agent → conflict resolution → result aggregation.
+   */
   private async handleMultiAgent(
     input: string,
     cancellation: CancellationToken,
   ): Promise<void> {
     const r = this.renderer;
     r.phaseUpdate("decomposing");
-    const taskId = `repl-${Date.now().toString(36)}`;
-    const decomposition = await decomposeWithSam(input, taskId);
-    if (cancellation.cancelled) return;
 
-    if (decomposition.subtasks.length <= 1) {
-      const st = decomposition.subtasks[0];
-      const name = ROLE_TO_PROFILE[st.agentRole] ?? "coder";
-      const profile = this.orchestrator.getRegistry().get(name);
-      if (!profile) { r.error(`No profile for "${name}".`); return; }
-      const providerConfig = this.config.providers[profile.provider];
-      if (!providerConfig) { r.error(`No provider config for "${profile.provider}".`); return; }
+    // Subscribe to eventBus for real-time rendering of Supervisor events
+    const unsubscribe = this.subscribeSupervisorEvents();
 
-      r.agentHeader(name, profile.model as ModelTier, "single subtask");
-      r.startSpinner(name, profile.model as ModelTier);
+    try {
+      const result = await this.orchestrator.executeWithSupervisor(input);
 
-      this.conversation.setTokenBudget(TIER_BUDGETS[(profile.model as ModelTier) ?? "sonnet"] ?? TIER_BUDGETS.sonnet);
-      const prompt = this.conversation.buildPrompt(input);
-      const harness = buildHarness({ agentName: name, role: st.agentRole as any, provider: profile.provider as any, parentTaskId: taskId, isWorker: false });
-      const cmd = buildCommand(providerConfig, profile, { prompt, model: profile.model, systemPrompt: harness.systemPrompt, maxTurns: profile.maxTurns });
+      if (cancellation.cancelled) return;
 
-      await this.executeWithRetry(cmd, name, { tier: "medium", model: profile.model as ModelTier, multiAgent: false, reason: "decomposed" }, profile, providerConfig, harness.systemPrompt, prompt, undefined, cancellation, input);
-      return;
+      // Add combined result to conversation
+      if (result.mergedOutput) {
+        this.conversation.add({
+          role: "assistant",
+          content: result.mergedOutput,
+          agentName: "multi-agent",
+          tier: "sonnet" as ModelTier,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Show cost summary
+      if (result.totalTokens > 0) {
+        r.cost(result.totalCost, result.totalTokens, 0, result.totalDurationMs);
+      }
+
+      // Show conflicts if any
+      if (result.conflicts.length > 0) {
+        r.conflictWarning(result.conflicts.map(c =>
+          typeof c === "string" ? c : `Conflict: ${c.description ?? c.id ?? "unknown"}`,
+        ));
+      }
+
+      // Quality gate summary
+      if (result.success) {
+        r.phaseUpdate("complete", `${result.subtaskResults.length} tasks done`);
+      } else {
+        r.phaseUpdate("complete", `${result.subtaskResults.length} tasks (some failed)`);
+      }
+    } catch (err) {
+      r.error(`Multi-agent execution failed: ${(err as Error).message}`);
+    } finally {
+      unsubscribe();
+    }
+  }
+
+  /** Bridge eventBus events from Supervisor to REPL renderer */
+  private subscribeSupervisorEvents(): () => void {
+    const r = this.renderer;
+    const handlers: Array<[string, (e: any) => void]> = [
+      ["supervisor:plan", (e) => {
+        r.phaseUpdate("planning", `${e.phases} phases`);
+      }],
+      ["supervisor:dispatch", (e) => {
+        r.taskUpdate(e.subtaskId, "running");
+      }],
+      ["worker:spawn", (e) => {
+        r.workerStart(e.workerId, e.workerId, e.model);
+      }],
+      ["worker:progress", (e) => {
+        r.workerUpdate(e.workerId, { progress: e.progress });
+      }],
+      ["worker:turn", (e) => {
+        r.phaseUpdate("executing", `${e.workerId}: turn ${e.turn}/${e.maxTurns}${e.toolUsed ? ` (${e.toolUsed})` : ""}`);
+      }],
+      ["worker:complete", (e) => {
+        r.workerDone(e.workerId);
+        r.taskUpdate(e.workerId, "passed", e.durationMs);
+      }],
+      ["worker:fail", (e) => {
+        r.workerDone(e.workerId);
+        r.taskUpdate(e.workerId, "failed");
+        r.error(`Worker failed: ${e.error}`);
+      }],
+      ["feedback:assessment", (e) => {
+        if (e.action !== "continue") {
+          r.dim(`[feedback] ${e.action}: ${e.reason}`);
+        }
+      }],
+      ["feedback:quality_gate", (e) => {
+        r.qualityGate(e.passed, e.issues);
+      }],
+      ["feedback:correction", (e) => {
+        r.dim(`[correction] ${e.workerId}: ${e.message.slice(0, 80)}`);
+      }],
+      ["conflict:detected", (e) => {
+        r.conflictWarning([`Conflict between ${e.agents.join(", ")}`]);
+      }],
+      ["conflict:resolved", (e) => {
+        r.dim(`[conflict resolved] ${e.id}`);
+      }],
+      ["provider:fallback", (e) => {
+        r.dim(`[fallback] ${e.subtaskId}: ${e.from} → ${e.to} (${e.reason})`);
+      }],
+      ["result:merged", (e) => {
+        r.phaseUpdate("merging", `${e.totalSubtasks} tasks, ${e.conflicts} conflicts`);
+      }],
+    ];
+
+    for (const [event, handler] of handlers) {
+      eventBus.on(event, handler);
     }
 
-    r.planSummary(decomposition.subtasks, { phases: decomposition.executionPlan.phases.map(p => ({ subtaskIds: p.subtaskIds, parallel: p.parallelizable })), estimatedDurationMin: 0 } as any);
-    r.taskList(decomposition.subtasks.map(st => ({
-      id: st.id,
-      label: st.prompt.slice(0, 60),
-      role: st.agentRole,
-    })), input.slice(0, 80));
-
-    // Execute subtasks phase-by-phase: sequential across phases, parallel within each phase
-    r.phaseUpdate("executing", `0/${decomposition.subtasks.length} tasks`);
-    const collected = new Map<string, { text: string; cost: number; inputTokens: number; outputTokens: number }>();
-    let completedCount = 0;
-
-    for (const phase of decomposition.executionPlan.phases) {
-      const phaseSubtasks = decomposition.subtasks.filter(st => phase.subtaskIds.includes(st.id));
-      if (phaseSubtasks.length === 0) continue;
-
-      await Promise.all(
-        phaseSubtasks.map(async (st) => {
-          const name = ROLE_TO_PROFILE[st.agentRole] ?? "coder";
-          const profile = this.orchestrator.getRegistry().get(name);
-          if (!profile) return;
-          const providerConfig = this.config.providers[profile.provider];
-          if (!providerConfig) return;
-
-          const harness = buildHarness({ agentName: name, role: st.agentRole as any, provider: profile.provider as any, parentTaskId: taskId, isWorker: true });
-          // Build context from already-completed siblings (previous phases)
-          const siblingCtx = [...collected.values()]
-            .map((c) => c.text)
-            .filter(Boolean)
-            .join("\n---\n");
-          const prompt = (siblingCtx ? siblingCtx + "\n\n" : "") + st.prompt;
-          const cmd = buildCommand(providerConfig, profile, {
-            prompt,
-            model: profile.model,
-            systemPrompt: harness.systemPrompt,
-          });
-
-          const workerName = `${name}-${st.id}`;
-          this.activeWorkerNames.add(workerName);
-          r.workerStart(workerName, st.id, profile.model);
-
-          const streamer = new AgentStreamer();
-          this.activeStreamers.add(streamer);
-          streamer.on("tool_use", (tool: ToolUseEvent) => {
-            const detail = (tool.input?.file_path as string) ?? (tool.input?.command as string) ?? undefined;
-            r.workerToolUse(workerName, tool.name, detail);
-          });
-
-          r.taskUpdate(st.id, "running");
-          const workerStartTime = Date.now();
-          try {
-            const result = await streamer.run(cmd, cancellation.signal);
-            this.activeStreamers.delete(streamer);
-            this.activeWorkerNames.delete(workerName);
-            collected.set(st.id, { text: result.text, cost: result.costUsd, inputTokens: result.inputTokens, outputTokens: result.outputTokens });
-            completedCount++;
-            r.workerDone(workerName);
-            r.taskUpdate(st.id, "passed", Date.now() - workerStartTime);
-            if (result.inputTokens > 0) {
-              r.taskTokens(st.id, result.inputTokens, result.outputTokens);
-              r.cost(result.costUsd, result.inputTokens, result.outputTokens);
-            }
-            r.phaseUpdate("executing", `${completedCount}/${decomposition.subtasks.length} tasks`);
-          } catch (e) {
-            this.activeStreamers.delete(streamer);
-            this.activeWorkerNames.delete(workerName);
-            r.workerDone(workerName);
-            r.taskUpdate(st.id, "failed", Date.now() - workerStartTime);
-            r.error(`Worker ${name} failed: ${(e as Error).message}`);
-          }
-        }),
-      );
-    }
-
-    // Summarize results
-    const combined = [...collected.values()].map(c => c.text).filter(Boolean).join("\n\n---\n\n");
-    if (combined) {
-      const turn = { role: "assistant" as const, content: combined, agentName: "multi-agent", tier: "sonnet" as ModelTier, timestamp: new Date().toISOString() };
-      this.conversation.add(turn);
-    }
+    return () => {
+      for (const [event, handler] of handlers) {
+        eventBus.removeListener(event, handler);
+      }
+    };
   }
 
   /** Build system prompt with all context injections */
