@@ -188,7 +188,7 @@ export class ContextPropagator {
     language: string = "",
   ): string {
     // Priority order: original > lang > codebase > parent > completed > resolutions > sibling > knowledge > bus > protocol
-    const taskInstruction = `## YOUR TASK — Execute this immediately\n\n${original}\n\n**CRITICAL RULES:**\n- **DO NOT run \`find\`, \`ls\`, \`ls -la\`, or explore directories.** The project structure is already provided below.\n- **DO NOT read files unless you are about to edit them.** Only Read a file right before you Edit it.\n- **Start writing code IMMEDIATELY.** Skip analysis — go straight to creating/editing files.\n- **Never ask clarifying questions.** Make reasonable assumptions and implement.`;
+    const taskInstruction = `## YOUR TASK — Execute this immediately\n\n${original}\n\n**CRITICAL RULES:**\n- **DO NOT run \`find\`, \`ls\`, \`ls -la\`, or explore directories.** The project structure is already provided below.\n- **DO NOT read files unless you are about to edit them.** Only Read a file right before you Edit it.\n- **Start writing code IMMEDIATELY.** Skip analysis — go straight to creating/editing files.\n- **Never ask clarifying questions.** Make reasonable assumptions and implement.\n- **DO NOT modify shared config files** (package.json, tsconfig.json, .env, next.config.*). Only modify files in your assigned domain. If you need a dependency, note it in your output and a setup step will handle it.`;
     const sections = [
       { text: taskInstruction, priority: 0 },
       { text: language, priority: 1 },

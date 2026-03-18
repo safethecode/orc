@@ -1,5 +1,6 @@
 import type { Orchestrator } from "../core/orchestrator.ts";
-import type { OrchestratorConfig, ModelTier, SubTask, ProviderName } from "../config/types.ts";
+import type { OrchestratorConfig, ModelTier, SubTask, ProviderName, DecompositionResult } from "../config/types.ts";
+import { decomposeWithSam } from "../core/decomposer.ts";
 import type { RendererPort } from "./renderer-types.ts";
 import { routeTask, classifyWithSam, type RouteResult } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
@@ -857,12 +858,53 @@ export class ReplController {
     const r = this.renderer;
     r.phaseUpdate("decomposing");
 
-    // Subscribe to eventBus for real-time rendering of Supervisor events
+    // 1. Decompose with Sam (Haiku) and show plan
+    const lang = this.conversation.getLanguage();
+    const profileContext = this.orchestrator.buildProfileContext();
+    const decomposition = await decomposeWithSam(input, "preview", lang ?? undefined, profileContext);
+
+    if (cancellation.cancelled) return;
+
+    // Show decomposition plan
+    r.stopSpinner();
+    r.separator();
+    r.info("\x1b[1mSam\x1b[0m\x1b[2m: 다음과 같이 나누겠습니다:\x1b[0m");
+    for (const st of decomposition.subtasks) {
+      const depInfo = st.dependencies.length > 0 ? ` \x1b[2m(depends on ${st.dependencies.length})\x1b[0m` : "";
+      r.info(`  \x1b[36m${st.agentRole}\x1b[0m — ${st.prompt.slice(0, 100)}${st.prompt.length > 100 ? "…" : ""}${depInfo}`);
+    }
+    r.info(`\x1b[2m${decomposition.subtasks.length} subtasks, ${decomposition.executionPlan.phases.length} phases, strategy: ${decomposition.executionPlan.strategy}\x1b[0m`);
+    r.separator();
+
+    // Wait for user approval
+    const readline = await import("node:readline");
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const approved = await new Promise<boolean>((resolve) => {
+      process.stdout.write("\x1b[2m  Enter: 진행 / ESC: 취소\x1b[0m");
+      const onKeypress = (_: string, key: { name: string }) => {
+        if (key?.name === "return") { cleanup(); resolve(true); }
+        else if (key?.name === "escape") { cleanup(); resolve(false); }
+      };
+      const cleanup = () => {
+        process.stdin.removeListener("keypress", onKeypress);
+        rl.close();
+        process.stdout.write("\r\x1b[K");
+      };
+      process.stdin.on("keypress", onKeypress);
+    });
+
+    if (!approved || cancellation.cancelled) {
+      r.info("\x1b[2mcancelled\x1b[0m");
+      return;
+    }
+
+    r.startSpinner("orc", "supervisor" as any);
+
+    // 2. Execute with supervisor
     const unsubscribe = this.subscribeSupervisorEvents();
 
     try {
-      const lang = this.conversation.getLanguage();
-      const result = await this.orchestrator.executeWithSupervisor(input, { lang });
+      const result = await this.orchestrator.executeWithSupervisor(input, { lang: lang ?? undefined });
 
       if (cancellation.cancelled) return;
 
