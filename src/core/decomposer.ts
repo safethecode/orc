@@ -328,7 +328,10 @@ export async function decomposeWithSam(
       { stdout: "pipe", stderr: "pipe", stdin: "ignore" },
     );
 
-    const output = await new Response(proc.stdout).text();
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => { try { proc.kill(); } catch {} reject(new Error("timeout")); }, 15000),
+    );
+    const output = await Promise.race([new Response(proc.stdout).text(), timeout]);
     const exitCode = await proc.exited;
     if (exitCode !== 0) throw new Error("non-zero exit");
 

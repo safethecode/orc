@@ -859,7 +859,8 @@ export class ReplController {
     const unsubscribe = this.subscribeSupervisorEvents();
 
     try {
-      const result = await this.orchestrator.executeWithSupervisor(input);
+      const lang = this.conversation.getLanguage();
+      const result = await this.orchestrator.executeWithSupervisor(input, { lang });
 
       if (cancellation.cancelled) return;
 

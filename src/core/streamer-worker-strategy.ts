@@ -4,7 +4,8 @@ import type { Store } from "../db/store.ts";
 import type { WorkerExecutionStrategy, WorkerHandle, WorkerResult } from "./worker-strategy.ts";
 import { AgentStreamer, type ToolUseEvent } from "../repl/streamer.ts";
 import { buildCommand } from "../agents/provider.ts";
-import { buildHarness } from "../agents/harness.ts";
+import { buildDynamicHarnessAsync } from "../agents/dynamic-harness.ts";
+import { ContextInjector } from "./context-injector.ts";
 import { eventBus } from "./events.ts";
 
 interface ActiveWorker {
@@ -29,15 +30,33 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
     const providerConfig = this.config.providers[subtask.provider];
     if (!providerConfig) throw new Error(`Unknown provider: ${subtask.provider}`);
 
-    // Use user-defined profile if available, otherwise fall back to generic harness
+    // Use user-defined profile if available, otherwise fall back to dynamic harness
     const userProfile = this.registry.get(subtask.agentRole);
-    const systemPrompt = userProfile?.systemPrompt || buildHarness({
-      agentName,
-      role: subtask.agentRole as any,
-      provider: subtask.provider as any,
-      parentTaskId: subtask.parentTaskId,
-      isWorker: true,
-    }).systemPrompt;
+    const projectDir = process.cwd();
+    let systemPrompt: string;
+    if (userProfile?.systemPrompt) {
+      systemPrompt = userProfile.systemPrompt;
+    } else {
+      const harnessResult = await buildDynamicHarnessAsync({
+        agentName,
+        role: subtask.agentRole as any,
+        provider: subtask.provider as any,
+        parentTaskId: subtask.parentTaskId,
+        isWorker: true,
+        projectDir,
+        prompt: enrichedPrompt,
+        turnBudget: maxTurns,
+      });
+      systemPrompt = harnessResult.systemPrompt;
+    }
+
+    // Inject CLAUDE.md / AGENTS.md / CONVENTIONS.md with highest priority
+    const contextInjector = new ContextInjector(projectDir);
+    const contextFiles = contextInjector.collect();
+    const contextBlock = contextInjector.formatForPrompt(contextFiles);
+    if (contextBlock) {
+      systemPrompt = contextBlock + "\n\n" + systemPrompt;
+    }
 
     const profile = {
       name: agentName,

@@ -15,6 +15,7 @@ import { eventBus } from "./events.ts";
 export class ContextPropagator {
   private maxContextTokens: number;
   private codebaseContext: string = "";
+  private languageHint: string | null = null;
 
   constructor(
     private contextBuilder: ContextBuilder,
@@ -27,6 +28,10 @@ export class ContextPropagator {
 
   setCodebaseContext(context: string): void {
     this.codebaseContext = context;
+  }
+
+  setLanguage(lang: string): void {
+    this.languageHint = lang;
   }
 
   async buildWorkerPrompt(
@@ -44,7 +49,10 @@ export class ContextPropagator {
     const protocol = this.buildBusProtocolInstructions();
     const resolutions = this.buildConflictResolutionContext(conflictResolutions);
 
-    const assembled = this.assemblePrompt(original, parent, sibling, completed, knowledge, bus, protocol, resolutions);
+    const langBlock = this.languageHint && this.languageHint !== "en"
+      ? `[LANGUAGE] The user writes in ${this.languageHint}. Always respond in the same language.`
+      : "";
+    const assembled = this.assemblePrompt(original, parent, sibling, completed, knowledge, bus, protocol, resolutions, langBlock);
 
     const estimatedTokens = this.estimateTokens(assembled);
     eventBus.publish({
@@ -177,12 +185,14 @@ export class ContextPropagator {
     bus: string,
     protocol: string = "",
     resolutions: string = "",
+    language: string = "",
   ): string {
-    // Priority order: original > parent > completed > resolutions > sibling > knowledge > bus > protocol
+    // Priority order: original > lang > codebase > parent > completed > resolutions > sibling > knowledge > bus > protocol
     const taskInstruction = `## YOUR TASK — Execute this immediately\n\n${original}\n\n**Do not ask clarifying questions. Do not explore the codebase extensively — the project structure is provided below. Start implementing immediately.**`;
     const sections = [
       { text: taskInstruction, priority: 0 },
-      { text: this.codebaseContext, priority: 1 },
+      { text: language, priority: 1 },
+      { text: this.codebaseContext, priority: 2 },
       { text: parent, priority: 3 },
       { text: completed, priority: 4 },
       { text: resolutions, priority: 5 },

@@ -52,6 +52,7 @@ import { CheckpointManager } from "./checkpoint.ts";
 import { Supervisor } from "./supervisor.ts";
 import { TmuxWorkerStrategy } from "./tmux-worker-strategy.ts";
 import { StreamerWorkerStrategy } from "./streamer-worker-strategy.ts";
+import { FileRefResolver } from "../repl/file-ref.ts";
 import { McpClientManager } from "../mcp/client-manager.ts";
 import { LspManager } from "../lsp/index.ts";
 import { GitSnapshotManager } from "./git-snapshot.ts";
@@ -1057,12 +1058,21 @@ export class Orchestrator {
    * workers (subprocess-based, suitable for REPL with real-time streaming).
    * This activates the full pipeline: decompose → context propagation →
    * feedback loop → quality gate → QA → conflict resolution.
+   *
+   * @param prompt - The user prompt (may contain @file references)
+   * @param options - Optional language hint and other context from the REPL
    */
   async executeWithSupervisor(
     prompt: string,
+    options?: { lang?: string },
   ): Promise<import("../config/types.ts").AggregatedResult> {
+    // 0. Resolve @file references before any further processing
+    const fileRefResolver = new FileRefResolver(process.cwd());
+    const { resolvedInput } = await fileRefResolver.resolve(prompt);
+    const resolvedPrompt = resolvedInput;
+
     const taskId = `repl-${Date.now().toString(36)}`;
-    this.store.createTask({ id: taskId, prompt, tier: "sonnet" });
+    this.store.createTask({ id: taskId, prompt: resolvedPrompt, tier: "sonnet" });
     this.store.updateTask(taskId, { status: "running", startedAt: new Date().toISOString() });
 
     const streamerStrategy = new StreamerWorkerStrategy(this.config, this.registry, this.store);
@@ -1090,7 +1100,20 @@ export class Orchestrator {
     );
 
     supervisor.setTracer(this.distributedTracer);
-    return supervisor.execute(taskId, prompt);
+
+    // Inject codebase scan into context propagator via supervisor
+    const scanResult = this.codebaseScanner.getScanResult();
+    if (scanResult) {
+      const codebaseContext = this.codebaseScanner.formatForPrompt(scanResult);
+      supervisor.setCodebaseContext(codebaseContext);
+    }
+
+    // Propagate user language to workers
+    if (options?.lang) {
+      supervisor.setLanguage(options.lang);
+    }
+
+    return supervisor.execute(taskId, resolvedPrompt);
   }
 
   /**

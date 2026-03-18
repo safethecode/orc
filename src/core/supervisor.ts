@@ -398,6 +398,14 @@ export class Supervisor {
     this.tracer = tracer;
   }
 
+  setCodebaseContext(context: string): void {
+    this.contextPropagator.setCodebaseContext(context);
+  }
+
+  setLanguage(lang: string): void {
+    this.contextPropagator.setLanguage(lang);
+  }
+
   setPreferredProviders(providers: ProviderName[]): void {
     this.options.preferredProviders = providers;
     const capabilities = this.buildCapabilities(this.deps.config);
