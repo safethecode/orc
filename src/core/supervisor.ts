@@ -141,6 +141,13 @@ export class Supervisor {
     }) ?? null;
 
     try {
+      // 0. Clear stale ownership from previous executions
+      if (this.deps.ownership) {
+        for (const entry of this.deps.store.getAllOwnership()) {
+          this.deps.ownership.release(entry.agentName);
+        }
+      }
+
       // 1. Decompose task
       const decomposeCtx = rootCtx
         ? this.tracer!.startSpan(rootCtx, "decomposer.decompose", "decomposer", { taskId })
