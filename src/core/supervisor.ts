@@ -128,6 +128,9 @@ export class Supervisor {
       this.workerBus,
       claudeProvider,
     );
+
+    // Wire worker strategy into feedback loop for strategy-aware monitoring
+    this.feedbackLoop.setWorkerStrategy(deps.workerStrategy);
   }
 
   async execute(taskId: string, prompt: string): Promise<AggregatedResult> {
@@ -521,6 +524,7 @@ export class Supervisor {
         }
 
         // 7. Start feedback monitoring
+        this.feedbackLoop.registerWorkerHandle(agentName, handle);
         this.feedbackLoop.startMonitoring(worker.id, subtask);
 
         // 8. Wait for result (event-driven with polling fallback)
