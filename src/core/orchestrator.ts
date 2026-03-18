@@ -997,6 +997,12 @@ export class Orchestrator {
     return this.codemap;
   }
 
+  buildProfileContext(): string {
+    const profiles = this.registry.list();
+    if (profiles.length === 0) return "";
+    return profiles.map(p => `"${p.name}" (${p.role ?? p.name})`).join(", ");
+  }
+
   getCodebaseScanner(): CodebaseScanner {
     return this.codebaseScanner;
   }
