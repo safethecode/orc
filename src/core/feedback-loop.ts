@@ -354,7 +354,7 @@ export class FeedbackLoop {
     const prompt = buildCritiquePrompt({ prompt: subtask.prompt, result });
     const model = this.providerConfig?.defaultModel ?? "haiku";
     const proc = Bun.spawn(
-      ["claude", "-p", prompt, "--model", model, "--output-format", "text", "--max-turns", "5"],
+      ["claude", "-p", prompt, "--model", model, "--output-format", "text"],
       { stdout: "pipe", stderr: "pipe" },
     );
     const stdout = await new Response(proc.stdout).text();

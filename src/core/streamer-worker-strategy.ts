@@ -84,6 +84,15 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
 
     streamer.on("text_complete", (text: string) => {
       worker.textBuffer += text;
+      // Surface first meaningful chunk so REPL shows what worker is saying
+      const trimmed = text.trim();
+      if (trimmed && trimmed.length > 5) {
+        eventBus.publish({
+          type: "worker:text",
+          agentName,
+          text: trimmed.length > 200 ? trimmed.slice(0, 200) + "…" : trimmed,
+        });
+      }
     });
 
     streamer.on("error", (errText: string) => {

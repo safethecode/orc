@@ -896,11 +896,18 @@ export class ReplController {
         r.workerUpdate(e.workerId, { progress: e.progress });
       }],
       ["worker:turn", (e) => {
-        r.phaseUpdate("executing", `${e.workerId}: turn ${e.turn}/${e.maxTurns}${e.toolUsed ? ` (${e.toolUsed})` : ""}`);
+        if (e.toolUsed) {
+          r.dim(`  ${e.workerId} · ${e.toolUsed}`);
+        }
       }],
       ["worker:complete", (e) => {
+        const sec = e.durationMs ? `${(e.durationMs / 1000).toFixed(1)}s` : "";
+        r.info(`\x1b[32m✓\x1b[0m ${e.workerId} \x1b[2mcompleted${sec ? ` (${sec})` : ""}\x1b[0m`);
         r.workerDone(e.workerId);
         r.taskUpdate(e.workerId, "passed", e.durationMs);
+      }],
+      ["worker:text", (e) => {
+        r.dim(`  ${e.agentName} · ${e.text}`);
       }],
       ["worker:stderr", (e) => {
         r.error(`[${e.agentName}] ${e.error}`);
