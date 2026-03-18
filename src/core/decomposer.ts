@@ -303,11 +303,13 @@ export async function decomposeWithSam(
   prompt: string,
   parentTaskId: string,
   lang?: string,
+  profileContext?: string,
 ): Promise<DecompositionResult> {
   const langNote = lang ? ` (user language: ${lang})` : "";
   const classifyPrompt = [
     `You are a task decomposer. Break this task into subtasks for a multi-agent system.`,
-    `Available agent roles: "coder" (implements code), "tester" (writes/runs tests), "architect" (designs systems), "reviewer" (reviews code/security), "design" (UI/UX design specs, color systems, typography, layout), "researcher" (research and analysis), "spec-writer" (documentation), "qa" (quality assurance verification).`,
+    `Available agent profiles (use these exact role names):`,
+    profileContext ?? `"coder" (implements code), "tester" (writes/runs tests), "architect" (designs systems), "reviewer" (reviews code/security), "design" (UI/UX design, components, styling), "researcher" (research and analysis), "spec-writer" (documentation), "qa" (quality assurance verification).`,
     `Reply with ONLY a JSON object:`,
     `{"subtasks":[{"role":"coder","prompt":"what to do","dependsOn":[]}]}`,
     `Rules:`,

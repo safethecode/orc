@@ -386,12 +386,13 @@ export class Orchestrator {
         store: this.store,
         conflictWatcher: this.conflictWatcher,
         ownership: this.ownership,
+        profileContext: this.buildProfileContext(),
       },
       {
         workerTimeoutMs: this.config.supervisor?.workerTimeout ?? 300_000,
         maxRetries: this.config.supervisor?.maxRetries ?? 2,
         costAware: this.config.supervisor?.costAware ?? true,
-        preferredProviders: this.config.supervisor?.preferredProviders ?? ["claude", "codex", "gemini", "kiro"],
+        preferredProviders: this.config.supervisor?.preferredProviders ?? ["claude"],
       },
     );
 
@@ -1084,7 +1085,7 @@ export class Orchestrator {
         workerTimeoutMs: this.config.supervisor?.workerTimeout ?? 300_000,
         maxRetries: this.config.supervisor?.maxRetries ?? 2,
         costAware: this.config.supervisor?.costAware ?? true,
-        preferredProviders: this.config.supervisor?.preferredProviders ?? ["claude", "codex", "gemini", "kiro"],
+        preferredProviders: this.config.supervisor?.preferredProviders ?? ["claude"],
       },
     );
 

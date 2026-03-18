@@ -83,7 +83,7 @@ supervisor:
   workerTimeout: 1800000
   maxRetries: 2
   costAware: true
-  preferredProviders: ["claude", "codex", "gemini", "kiro"]
+  preferredProviders: ["claude"]
   multiTurn:
     defaultMaxTurns: 25
     simpleMaxTurns: 5

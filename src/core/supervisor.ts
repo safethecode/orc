@@ -20,7 +20,7 @@ import type { ContextBuilder } from "../memory/context-builder.ts";
 import type { Inbox } from "../messaging/inbox.ts";
 import type { ContextCompressor } from "../messaging/context-compressor.ts";
 import type { Store } from "../db/store.ts";
-import { decompose, detectDomains } from "./decomposer.ts";
+import { decompose, decomposeWithSam, detectDomains } from "./decomposer.ts";
 import { ProviderSelector } from "./provider-selector.ts";
 import { WorkerPool } from "./worker-pool.ts";
 import { ResultCollector } from "./result-collector.ts";
@@ -45,6 +45,7 @@ export interface SupervisorDeps {
   store: Store;
   conflictWatcher?: ConflictWatcher;
   ownership?: OwnershipManager;
+  profileContext?: string;
 }
 
 export interface SupervisorOptions {
@@ -77,7 +78,7 @@ export class Supervisor {
       maxRetries: options?.maxRetries ?? 2,
       costAware: options?.costAware ?? true,
       preferCheap: options?.preferCheap ?? false,
-      preferredProviders: options?.preferredProviders ?? ["claude", "codex", "gemini", "kiro"],
+      preferredProviders: options?.preferredProviders ?? ["claude"],
     };
 
     // Build capability list from config
@@ -153,7 +154,7 @@ export class Supervisor {
         ? this.tracer!.startSpan(rootCtx, "decomposer.decompose", "decomposer", { taskId })
         : null;
 
-      const decomposition = decompose(prompt, taskId);
+      const decomposition = await decomposeWithSam(prompt, taskId, undefined, this.deps.profileContext);
 
       if (decomposeCtx) {
         // Add domain detection as child span
