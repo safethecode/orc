@@ -30,7 +30,7 @@ export const COMMANDS = [
   "/variants", "/fastwork", "/ultrathink", "/github",
   "/queue", "/cancel", "/dlq", "/enforce", "/doomloop",
   "/diff", "/compact", "/trust", "/consolidate",
-  "/checkpoint", "/spec", "/ideate", "/benchmark", "/optimize", "/scan", "/help", "/quit",
+  "/checkpoint", "/spec", "/ideate", "/benchmark", "/optimize", "/scan", "/providers", "/help", "/quit",
 ];
 
 export const LANGUAGES = [
@@ -2310,6 +2310,47 @@ export async function handleCommand(
       return "continue";
     }
 
+    case "providers": {
+      const config = ctx.orchestrator.getConfig();
+      const supervisor = ctx.orchestrator.getSupervisor();
+      const current = supervisor.getPreferredProviders();
+      const all = Object.keys(config.providers);
+
+      if (args.length === 0) {
+        r.info("\x1b[1mpreferred providers\x1b[0m");
+        for (const p of all) {
+          const active = current.includes(p as any);
+          const icon = active ? "\x1b[32m●\x1b[0m" : "\x1b[90m○\x1b[0m";
+          r.info(`  ${icon} ${p}`);
+        }
+        r.info(`\x1b[2muse /providers set <name,...> to change\x1b[0m`);
+        return "continue";
+      }
+
+      if (args[0] === "set" && args[1]) {
+        const names = args[1] === "default"
+          ? [...all]
+          : args[1].split(",").map(s => s.trim()).filter(Boolean);
+        const invalid = names.filter(n => !all.includes(n));
+        if (invalid.length > 0) {
+          r.error(`unknown provider: ${invalid.join(", ")} (available: ${all.join(", ")})`);
+          return "continue";
+        }
+        if (!config.supervisor) {
+          (config as any).supervisor = { preferredProviders: names };
+        } else {
+          config.supervisor.preferredProviders = names as any;
+        }
+        supervisor.setPreferredProviders(names as any);
+        r.info(`\x1b[32m✓\x1b[0m providers → ${names.join(", ")}`);
+        return "continue";
+      }
+
+      r.info("usage: /providers            list providers");
+      r.info("       /providers set <p,...> set preferred (e.g. /providers set claude)");
+      return "continue";
+    }
+
     case "help": {
 
       r.info("\x1b[1m/status\x1b[0m\x1b[2m              agent statuses");
@@ -2435,6 +2476,8 @@ export async function handleCommand(
       r.info("\x1b[1m/benchmark report\x1b[0m\x1b[2m    generate/show last report");
       r.info("\x1b[1m/benchmark tasks\x1b[0m\x1b[2m     list available benchmark tasks");
       r.info("\x1b[1m/benchmark cost\x1b[0m\x1b[2m      estimate cost for full run");
+      r.info("\x1b[1m/providers\x1b[0m\x1b[2m           show preferred providers");
+      r.info("\x1b[1m/providers set\x1b[0m \x1b[2m<p,...> set preferred (e.g. /providers set claude)");
       r.info("\x1b[1m/scan\x1b[0m\x1b[2m                show codebase analysis");
       r.info("\x1b[1m/scan --force\x1b[0m\x1b[2m        re-scan codebase");
       r.info("\x1b[1m/clear\x1b[0m\x1b[2m               clear conversation");
