@@ -940,16 +940,8 @@ export class ReplController {
         r.taskUpdate(e.workerId, "failed");
         r.error(`Worker failed: ${e.error}`);
       }],
-      ["feedback:assessment", (e) => {
-        if (e.action !== "continue") {
-          r.dim(`[feedback] ${e.action}: ${e.reason}`);
-        }
-      }],
       ["feedback:quality_gate", (e) => {
         r.qualityGate(e.passed, e.issues);
-      }],
-      ["feedback:correction", (e) => {
-        r.dim(`[correction] ${e.workerId}: ${e.message.slice(0, 80)}`);
       }],
       ["conflict:detected", (e) => {
         r.conflictWarning([`Conflict between ${e.agents.join(", ")}`]);
