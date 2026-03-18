@@ -886,7 +886,7 @@ export class Supervisor {
       const onComplete = (e: { workerId: string; tokenUsage: number; costUsd: number }) => {
         if (e.workerId !== workerId) return;
         const worker = this.pool.get(workerId);
-        if (worker?.result) {
+        if (worker?.result != null) {
           settle({ result: worker.result, tokenUsage: e.tokenUsage, costUsd: e.costUsd });
         }
       };
@@ -910,7 +910,7 @@ export class Supervisor {
         if (settled) return;
         // Pool may have been updated by FeedbackLoop detecting session death
         const worker = this.pool.get(workerId);
-        if (worker?.status === "completed" && worker.result) {
+        if (worker?.status === "completed" && worker.result != null) {
           settle({ result: worker.result, tokenUsage: worker.tokenUsage, costUsd: worker.costUsd });
           return;
         }

@@ -93,13 +93,10 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
     // Start execution and store the promise
     worker.promise = streamer.run(cmd, abort.signal).then(
       (result) => {
-        // Process exited but produced no output — treat as failure
-        if (!result.text && !result.inputTokens) {
-          worker.lastError = worker.lastError ?? "Worker produced no output";
-          return null;
-        }
+        // Use textBuffer as fallback when stream-json text blocks are empty
+        const text = result.text || worker.textBuffer || "";
         return {
-          result: result.text,
+          result: text,
           tokenUsage: result.inputTokens + result.outputTokens,
           costUsd: result.costUsd,
           inputTokens: result.inputTokens,
