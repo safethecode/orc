@@ -12,6 +12,7 @@ interface ActiveWorker {
   abort: AbortController;
   textBuffer: string;
   promise: Promise<WorkerResult | null>;
+  lastError: string | null;
 }
 
 export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
@@ -65,6 +66,7 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       abort,
       textBuffer: "",
       promise: null as any,
+      lastError: null,
     };
 
     // Track tool use events for feedback
@@ -84,16 +86,30 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       worker.textBuffer += text;
     });
 
+    streamer.on("error", (errText: string) => {
+      worker.lastError = errText;
+    });
+
     // Start execution and store the promise
     worker.promise = streamer.run(cmd, abort.signal).then(
-      (result) => ({
-        result: result.text,
-        tokenUsage: result.inputTokens + result.outputTokens,
-        costUsd: result.costUsd,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-      }),
-      () => null,
+      (result) => {
+        // Process exited but produced no output — treat as failure
+        if (!result.text && !result.inputTokens) {
+          worker.lastError = worker.lastError ?? "Worker produced no output";
+          return null;
+        }
+        return {
+          result: result.text,
+          tokenUsage: result.inputTokens + result.outputTokens,
+          costUsd: result.costUsd,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+        };
+      },
+      (err) => {
+        worker.lastError = err instanceof Error ? err.message : String(err);
+        return null;
+      },
     );
 
     this.workers.set(agentName, worker);
@@ -127,6 +143,10 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
   async captureOutput(handle: WorkerHandle): Promise<string> {
     const worker = this.workers.get(handle.agentName);
     return worker?.textBuffer ?? "";
+  }
+
+  getLastError(handle: WorkerHandle): string | null {
+    return this.workers.get(handle.agentName)?.lastError ?? null;
   }
 
   async sendInput(_handle: WorkerHandle, _message: string): Promise<void> {

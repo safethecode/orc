@@ -544,7 +544,10 @@ export class Supervisor {
                 costUsd: strategyResult.costUsd,
               });
             } else {
-              this.pool.markFailed(worker.id, "Worker process exited without result");
+              const reason = ("getLastError" in this.deps.workerStrategy)
+                ? (this.deps.workerStrategy as any).getLastError(handle) ?? "Worker exited without result"
+                : "Worker exited without result";
+              this.pool.markFailed(worker.id, reason);
             }
           },
           (err) => {
