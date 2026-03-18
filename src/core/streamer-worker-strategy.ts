@@ -58,7 +58,6 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       prompt: enrichedPrompt,
       model: profile.model,
       systemPrompt,
-      maxTurns,
     });
 
     const isClaude = subtask.provider === "claude";

@@ -80,7 +80,7 @@ mcp:
 
 supervisor:
   enabled: true
-  workerTimeout: 600000
+  workerTimeout: 1800000
   maxRetries: 2
   costAware: true
   preferredProviders: ["claude", "codex", "gemini", "kiro"]

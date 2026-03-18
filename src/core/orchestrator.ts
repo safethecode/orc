@@ -655,7 +655,6 @@ export class Orchestrator {
       prompt: systemPrompt,
       model: profile.model,
       systemPrompt,
-      maxTurns: profile.maxTurns,
       workdir: process.cwd(),
     });
 
