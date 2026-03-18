@@ -32,6 +32,8 @@ export class OwnershipManager {
       for (const existing of allOwnership) {
         if (existing.agentName === declaration.agentName) continue;
         if (existing.permission !== "owns") continue;
+        // Siblings working on the same parent task don't conflict
+        if (existing.taskId === declaration.taskId) continue;
 
         if (patternsOverlap(requestedPattern, existing.pattern)) {
           conflicts.push({
