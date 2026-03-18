@@ -1053,6 +1053,44 @@ export class Orchestrator {
   }
 
   /**
+   * Execute a multi-agent task using the Supervisor pipeline with AgentStreamer
+   * workers (subprocess-based, suitable for REPL with real-time streaming).
+   * This activates the full pipeline: decompose → context propagation →
+   * feedback loop → quality gate → QA → conflict resolution.
+   */
+  async executeWithSupervisor(
+    prompt: string,
+  ): Promise<import("../config/types.ts").AggregatedResult> {
+    const taskId = `repl-${Date.now().toString(36)}`;
+    const streamerStrategy = new StreamerWorkerStrategy(this.config, this.registry);
+
+    const supervisor = new Supervisor(
+      {
+        config: this.config,
+        workerStrategy: streamerStrategy,
+        sessionManager: this.sessionManager,
+        checkpointManager: this.checkpointManager,
+        recoveryManager: this.recovery,
+        contextBuilder: this.contextBuilder,
+        inbox: this.inbox,
+        compressor: this.compressor,
+        store: this.store,
+        conflictWatcher: this.conflictWatcher,
+        ownership: this.ownership,
+      },
+      {
+        workerTimeoutMs: this.config.supervisor?.workerTimeout ?? 300_000,
+        maxRetries: this.config.supervisor?.maxRetries ?? 2,
+        costAware: this.config.supervisor?.costAware ?? true,
+        preferredProviders: this.config.supervisor?.preferredProviders ?? ["claude", "codex", "gemini", "kiro"],
+      },
+    );
+
+    supervisor.setTracer(this.distributedTracer);
+    return supervisor.execute(taskId, prompt);
+  }
+
+  /**
    * Cancel a running worker by its worker ID (supports partial ID matching).
    * Stops monitoring, kills the session, and marks as cancelled.
    */
