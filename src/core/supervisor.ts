@@ -228,10 +228,11 @@ export class Supervisor {
         this.deps.conflictWatcher?.clearDiffs();
       }
 
-      // 6.5. QA Agent — final verification phase
-      if (decomposition.subtasks.length > 1) {
-        const allResults = collector.getAllResults();
-        const resultSections = allResults.map(r =>
+      // 6.5. QA Agent — only if workers produced real results
+      const allResults = collector.getAllResults();
+      const successfulResults = allResults.filter(r => r.result && r.result.trim().length > 0);
+      if (decomposition.subtasks.length > 1 && successfulResults.length > 0) {
+        const resultSections = successfulResults.map(r =>
           `### ${r.agentName} (${r.role})\n${r.result}`
         ).join("\n\n---\n\n");
 

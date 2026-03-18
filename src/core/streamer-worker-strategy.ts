@@ -59,6 +59,7 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       maxTurns,
     });
 
+    const isClaude = subtask.provider === "claude";
     const streamer = new AgentStreamer();
     const abort = new AbortController();
     const worker: ActiveWorker = {
@@ -69,59 +70,84 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       lastError: null,
     };
 
-    // Track tool use events for feedback
-    let turnCount = 0;
-    streamer.on("tool_use", (tool: ToolUseEvent) => {
-      turnCount++;
-      eventBus.publish({
-        type: "worker:turn",
-        workerId: agentName,
-        turn: turnCount,
-        maxTurns,
-        toolUsed: tool.name,
-      });
-    });
-
-    streamer.on("text_complete", (text: string) => {
-      worker.textBuffer += text;
-      // Surface first meaningful chunk so REPL shows what worker is saying
-      const trimmed = text.trim();
-      if (trimmed && trimmed.length > 5) {
+    if (isClaude) {
+      // Claude: use AgentStreamer with stream-json parsing
+      let turnCount = 0;
+      streamer.on("tool_use", (tool: ToolUseEvent) => {
+        turnCount++;
         eventBus.publish({
-          type: "worker:text",
-          agentName,
-          text: trimmed.length > 200 ? trimmed.slice(0, 200) + "…" : trimmed,
+          type: "worker:turn",
+          workerId: agentName,
+          turn: turnCount,
+          maxTurns,
+          toolUsed: tool.name,
         });
-      }
-    });
-
-    streamer.on("error", (errText: string) => {
-      worker.lastError = errText;
-      eventBus.publish({
-        type: "worker:stderr",
-        agentName,
-        error: errText.slice(0, 300),
       });
-    });
 
-    // Start execution and store the promise
-    worker.promise = streamer.run(cmd, abort.signal).then(
-      (result) => {
-        // Use textBuffer as fallback when stream-json text blocks are empty
-        const text = result.text || worker.textBuffer || "";
-        return {
-          result: text,
+      streamer.on("text_complete", (text: string) => {
+        worker.textBuffer += text;
+        const trimmed = text.trim();
+        if (trimmed && trimmed.length > 5) {
+          eventBus.publish({ type: "worker:text", agentName, text: trimmed.length > 200 ? trimmed.slice(0, 200) + "…" : trimmed });
+        }
+      });
+
+      streamer.on("error", (errText: string) => {
+        worker.lastError = errText;
+        eventBus.publish({ type: "worker:stderr", agentName, error: errText.slice(0, 300) });
+      });
+
+      worker.promise = streamer.run(cmd, abort.signal).then(
+        (result) => ({
+          result: result.text || worker.textBuffer || "",
           tokenUsage: result.inputTokens + result.outputTokens,
           costUsd: result.costUsd,
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
-        };
-      },
-      (err) => {
-        worker.lastError = err instanceof Error ? err.message : String(err);
-        return null;
-      },
-    );
+        }),
+        (err) => { worker.lastError = err instanceof Error ? err.message : String(err); return null; },
+      );
+    } else {
+      // Non-claude (codex, gemini, kiro): plain process, capture stdout/stderr
+      const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+      worker.promise = (async () => {
+        try {
+          const [stdout, stderr] = await Promise.all([
+            new Response(proc.stdout as ReadableStream).text(),
+            new Response(proc.stderr as ReadableStream).text(),
+          ]);
+          const exitCode = await proc.exited;
+
+          // Stream progress to REPL
+          const lines = stdout.split("\n").filter(l => l.trim());
+          for (const line of lines.slice(-10)) {
+            const trimmed = line.trim();
+            if (trimmed.length > 5) {
+              worker.textBuffer += trimmed + "\n";
+              eventBus.publish({ type: "worker:text", agentName, text: trimmed.length > 200 ? trimmed.slice(0, 200) + "…" : trimmed });
+            }
+          }
+
+          if (exitCode !== 0 && stderr) {
+            worker.lastError = stderr.slice(0, 500);
+            eventBus.publish({ type: "worker:stderr", agentName, error: stderr.slice(0, 300) });
+          }
+
+          const result = stdout.trim() || worker.textBuffer;
+          if (!result) {
+            worker.lastError = stderr.trim() || `Process exited with code ${exitCode}`;
+            return null;
+          }
+          return { result, tokenUsage: 0, costUsd: 0, inputTokens: 0, outputTokens: 0 };
+        } catch (err) {
+          worker.lastError = err instanceof Error ? err.message : String(err);
+          return null;
+        }
+      })();
+
+      // Support abort
+      abort.signal.addEventListener("abort", () => { try { proc.kill(); } catch {} }, { once: true });
+    }
 
     this.workers.set(agentName, worker);
 
