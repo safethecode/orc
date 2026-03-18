@@ -886,6 +886,7 @@ export class ReplController {
         r.phaseUpdate("planning", `${e.phases} phases`);
       }],
       ["supervisor:dispatch", (e) => {
+        r.dim(`[${e.role}] ${e.provider}/${e.model} — ${e.prompt}`);
         r.taskUpdate(e.subtaskId, "running");
       }],
       ["worker:spawn", (e) => {
@@ -900,6 +901,9 @@ export class ReplController {
       ["worker:complete", (e) => {
         r.workerDone(e.workerId);
         r.taskUpdate(e.workerId, "passed", e.durationMs);
+      }],
+      ["worker:stderr", (e) => {
+        r.error(`[${e.agentName}] ${e.error}`);
       }],
       ["worker:fail", (e) => {
         r.workerDone(e.workerId);

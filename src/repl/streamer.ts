@@ -157,7 +157,9 @@ export class AgentStreamer extends EventEmitter {
     const exitCode = await this.proc.exited;
     this.proc = null;
 
-    if (exitCode !== 0 && !result.text && stderrText) {
+    if (exitCode !== 0 && stderrText) {
+      this.emit("error", stderrText.trim());
+    } else if (!result.text && stderrText) {
       this.emit("error", stderrText.trim());
     }
 

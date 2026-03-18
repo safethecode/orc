@@ -461,6 +461,8 @@ export class Supervisor {
       subtaskId: subtask.id,
       provider: subtask.provider,
       model: subtask.model,
+      role: subtask.agentRole,
+      prompt: subtask.prompt.slice(0, 120),
     });
 
     // 1. Calculate max turns based on complexity

@@ -88,6 +88,11 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
 
     streamer.on("error", (errText: string) => {
       worker.lastError = errText;
+      eventBus.publish({
+        type: "worker:stderr",
+        agentName,
+        error: errText.slice(0, 300),
+      });
     });
 
     // Start execution and store the promise
