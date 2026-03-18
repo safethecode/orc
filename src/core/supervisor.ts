@@ -722,23 +722,32 @@ export class Supervisor {
 
       // Check if we should retry
       if (attempt < maxAttempts - 1) {
-        // Try with a different provider on retry
-        const excluded: ProviderName[] = [subtask.provider];
+        // Try a different provider, but only from available providers
+        const currentProvider = subtask.provider;
         const fallback = this.providerSelector.select(subtask, {
-          excluded,
+          excluded: [currentProvider],
           preferCheap: this.options.preferCheap,
         });
 
-        if (fallback.score > 0) {
+        // Only switch if fallback is a different available provider with a real score
+        if (fallback.score > 0 && fallback.provider !== currentProvider) {
           subtask.provider = fallback.provider;
           subtask.model = fallback.model;
-
           eventBus.publish({
             type: "provider:fallback",
             subtaskId: subtask.id,
-            from: excluded[0],
+            from: currentProvider,
             to: fallback.provider,
             reason: `Retry attempt ${attempt + 1}: ${lastError}`,
+          });
+        } else {
+          // No alternative — retry same provider
+          eventBus.publish({
+            type: "provider:fallback",
+            subtaskId: subtask.id,
+            from: currentProvider,
+            to: currentProvider,
+            reason: `Retry attempt ${attempt + 1} (same provider): ${lastError}`,
           });
         }
       }

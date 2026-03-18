@@ -139,9 +139,10 @@ export class ProviderSelector {
     const primary = this.select(subtask, options);
     if (primary.score > 0) return primary;
 
-    // Fallback chain: claude → codex → gemini → kiro
+    // Fallback chain: only from available providers
     const fallbackOrder: ProviderName[] = ["claude", "codex", "gemini", "kiro"];
     for (const provider of fallbackOrder) {
+      if (!this.availableProviders.has(provider)) continue;
       const cap = this.capabilities.find(c => c.name === provider);
       if (!cap) continue;
 
