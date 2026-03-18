@@ -135,7 +135,7 @@ describe("buildHarness", () => {
 
   // ── Layer 4: Provider Hints ────────────────────────────────────────
 
-  it("claude provider has no hints section", () => {
+  it("claude provider includes provider guidelines", () => {
     const { systemPrompt } = buildHarness({
       agentName: "w",
       role: "coder",
@@ -143,10 +143,11 @@ describe("buildHarness", () => {
       parentTaskId: "t",
       isWorker: true,
     });
-    expect(systemPrompt).not.toContain("## Provider");
+    expect(systemPrompt).toContain("## Provider Guidelines");
+    expect(systemPrompt).toContain("edit");
   });
 
-  it("codex provider includes tool call hint", () => {
+  it("codex provider includes apply_patch hint", () => {
     const { systemPrompt } = buildHarness({
       agentName: "w",
       role: "coder",
@@ -154,8 +155,8 @@ describe("buildHarness", () => {
       parentTaskId: "t",
       isWorker: true,
     });
-    expect(systemPrompt).toContain("## Provider");
-    expect(systemPrompt).toContain("tool calls for file edits");
+    expect(systemPrompt).toContain("## Provider Guidelines");
+    expect(systemPrompt).toContain("apply_patch");
   });
 
   it("gemini provider includes conciseness hint", () => {
@@ -224,7 +225,7 @@ describe("buildHarness", () => {
     expect(systemPrompt).toContain("## Provider");
   });
 
-  it("non-worker claude has only identity + constraints (2 layers)", () => {
+  it("non-worker claude has identity + constraints + provider guidelines (no protocol)", () => {
     const { systemPrompt } = buildHarness({
       agentName: "repl",
       role: "researcher",
@@ -235,7 +236,7 @@ describe("buildHarness", () => {
     expect(systemPrompt).toContain("Research Analyst");
     expect(systemPrompt).toContain("## Constraints");
     expect(systemPrompt).not.toContain("## Output Protocol");
-    expect(systemPrompt).not.toContain("## Provider");
+    expect(systemPrompt).toContain("## Provider Guidelines");
   });
 
   // ── Cross-matrix: every role × every provider compiles ─────────────
