@@ -389,6 +389,16 @@ export class Supervisor {
     this.tracer = tracer;
   }
 
+  setPreferredProviders(providers: ProviderName[]): void {
+    this.options.preferredProviders = providers;
+    const capabilities = this.buildCapabilities(this.deps.config);
+    this.providerSelector = new ProviderSelector(capabilities, providers);
+  }
+
+  getPreferredProviders(): ProviderName[] {
+    return this.options.preferredProviders;
+  }
+
   private assignProviders(subtasks: SubTask[]): void {
     for (const subtask of subtasks) {
       const selection = this.providerSelector.selectWithFallback(subtask, {
