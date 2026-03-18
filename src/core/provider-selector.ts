@@ -116,14 +116,7 @@ export class ProviderSelector {
       };
     }
 
-    const providerOrder = [...this.availableProviders];
-    const scored = candidates.map(cap => {
-      const result = this.scoreProvider(cap, subtask, options);
-      // Preference bonus: earlier in preferredProviders list gets up to +5
-      const idx = providerOrder.indexOf(cap.name);
-      if (idx >= 0) result.score += Math.max(0, 5 - idx);
-      return result;
-    });
+    const scored = candidates.map(cap => this.scoreProvider(cap, subtask, options));
     scored.sort((a, b) => b.score - a.score);
 
     const best = scored[0];
