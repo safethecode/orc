@@ -1107,10 +1107,19 @@ export class Orchestrator {
 
     supervisor.setTracer(this.distributedTracer);
 
-    // Inject codebase scan into context propagator via supervisor
+    // Inject codebase scan + file tree into context propagator
     const scanResult = this.codebaseScanner.getScanResult();
     if (scanResult) {
-      const codebaseContext = this.codebaseScanner.formatForPrompt(scanResult);
+      let codebaseContext = this.codebaseScanner.formatForPrompt(scanResult);
+      // Add file tree so workers don't need to run find/ls
+      try {
+        const { stdout } = Bun.spawnSync(["find", ".", "-type", "f", "-not", "-path", "*/node_modules/*", "-not", "-path", "*/.git/*", "-not", "-path", "*/dist/*", "-maxdepth", "5"], { cwd: process.cwd() });
+        const tree = new TextDecoder().decode(stdout).trim();
+        if (tree) {
+          const lines = tree.split("\n").slice(0, 300);
+          codebaseContext += `\n\n### File Tree (DO NOT run find/ls — use this)\n${lines.join("\n")}${lines.length >= 300 ? "\n... (truncated)" : ""}`;
+        }
+      } catch {}
       supervisor.setCodebaseContext(codebaseContext);
     }
 

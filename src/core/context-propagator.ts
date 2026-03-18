@@ -23,7 +23,7 @@ export class ContextPropagator {
     private compressor: ContextCompressor,
     options?: { maxContextTokens?: number },
   ) {
-    this.maxContextTokens = options?.maxContextTokens ?? 16000;
+    this.maxContextTokens = options?.maxContextTokens ?? 32000;
   }
 
   setCodebaseContext(context: string): void {
@@ -188,7 +188,7 @@ export class ContextPropagator {
     language: string = "",
   ): string {
     // Priority order: original > lang > codebase > parent > completed > resolutions > sibling > knowledge > bus > protocol
-    const taskInstruction = `## YOUR TASK — Execute this immediately\n\n${original}\n\n**Do not ask clarifying questions. Do not explore the codebase extensively — the project structure is provided below. Start implementing immediately.**`;
+    const taskInstruction = `## YOUR TASK — Execute this immediately\n\n${original}\n\n**CRITICAL RULES:**\n- **DO NOT run \`find\`, \`ls\`, \`ls -la\`, or explore directories.** The project structure is already provided below.\n- **DO NOT read files unless you are about to edit them.** Only Read a file right before you Edit it.\n- **Start writing code IMMEDIATELY.** Skip analysis — go straight to creating/editing files.\n- **Never ask clarifying questions.** Make reasonable assumptions and implement.`;
     const sections = [
       { text: taskInstruction, priority: 0 },
       { text: language, priority: 1 },
