@@ -59,6 +59,9 @@ export function buildCommand(
       cmd.push("--resume", options.resumeSession);
     } else if (options.sessionId) {
       cmd.push("--session-id", options.sessionId);
+    } else {
+      // Fresh session — no resume, no persistence
+      cmd.push("--no-session-persistence");
     }
 
     if (options.systemPrompt) {
