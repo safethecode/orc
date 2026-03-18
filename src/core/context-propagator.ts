@@ -174,8 +174,9 @@ export class ContextPropagator {
     resolutions: string = "",
   ): string {
     // Priority order: original > parent > completed > resolutions > sibling > knowledge > bus > protocol
+    const taskInstruction = `## YOUR TASK — Execute this immediately\n\n${original}\n\n**Do not ask clarifying questions. Start working on the task above immediately.**`;
     const sections = [
-      { text: original, priority: 0 },
+      { text: taskInstruction, priority: 0 },
       { text: parent, priority: 1 },
       { text: completed, priority: 2 },
       { text: resolutions, priority: 3 },

@@ -80,7 +80,7 @@ mcp:
 
 supervisor:
   enabled: true
-  workerTimeout: 300000
+  workerTimeout: 600000
   maxRetries: 2
   costAware: true
   preferredProviders: ["claude", "codex", "gemini", "kiro"]
@@ -91,7 +91,7 @@ supervisor:
     complexMaxTurns: 50
     checkpointIntervalTurns: 5
     progressPollIntervalMs: 3000
-    idleTimeoutMs: 120000
+    idleTimeoutMs: 300000
   feedback:
     enabled: true
     checkIntervalMs: 30000
