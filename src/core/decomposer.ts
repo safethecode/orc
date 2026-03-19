@@ -43,6 +43,9 @@ const DEPENDENCY_RULES: Array<{ before: string; after: string }> = [
   { before: "backend", after: "testing" },
   { before: "testing", after: "docs" },
   { before: "design", after: "frontend" },
+  { before: "architect", after: "coder" },
+  { before: "architect", after: "design" },
+  { before: "design", after: "coder" },
   { before: "research", after: "implementation" },
   { before: "research", after: "frontend" },
   { before: "research", after: "backend" },
@@ -378,6 +381,31 @@ export async function decomposeWithSam(
         .filter(idx => idx >= 0 && idx < subtasks.length && idx !== i)
         .map(idx => subtasks[idx].id));
     }
+
+    // Enforce role-based ordering: architect → design → coder
+    const roleOrder: Array<{ before: AgentRole; after: AgentRole }> = [
+      { before: "architect", after: "coder" },
+      { before: "architect", after: "design" },
+      { before: "design", after: "coder" },
+    ];
+    for (const rule of roleOrder) {
+      const beforeIndices = subtasks
+        .map((st, i) => st.agentRole === rule.before ? i : -1)
+        .filter(i => i >= 0);
+      const afterIndices = subtasks
+        .map((st, i) => st.agentRole === rule.after ? i : -1)
+        .filter(i => i >= 0);
+      for (const afterIdx of afterIndices) {
+        const afterDeps = deps.get(subtasks[afterIdx].id)!;
+        for (const beforeIdx of beforeIndices) {
+          const beforeId = subtasks[beforeIdx].id;
+          if (!afterDeps.includes(beforeId)) {
+            afterDeps.push(beforeId);
+          }
+        }
+      }
+    }
+
     for (const st of subtasks) {
       st.dependencies = deps.get(st.id) ?? [];
     }
