@@ -655,6 +655,8 @@ export interface WorkerState {
   result: string | null;
   error: string | null;
   tokenUsage: number;
+  inputTokens: number;
+  outputTokens: number;
   costUsd: number;
   currentTurn: number;
   maxTurns: number;
@@ -673,10 +675,18 @@ export interface CollectedResult {
   result: string;
   files: string[];
   tokenUsage: number;
+  inputTokens: number;
+  outputTokens: number;
   costUsd: number;
   durationMs: number;
   role: AgentRole;
   domain: string;
+}
+
+export interface FileManifestEntry {
+  file: string;
+  worker: string;
+  action: "created" | "modified";
 }
 
 export interface AggregatedResult {
@@ -684,9 +694,12 @@ export interface AggregatedResult {
   subtaskResults: CollectedResult[];
   mergedOutput: string;
   totalTokens: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
   totalCost: number;
   totalDurationMs: number;
   conflicts: string[];
+  files: FileManifestEntry[];
   success: boolean;
 }
 

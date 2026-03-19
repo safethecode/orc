@@ -27,6 +27,8 @@ export class WorkerPool {
       result: null,
       error: null,
       tokenUsage: 0,
+      inputTokens: 0,
+      outputTokens: 0,
       costUsd: 0,
       currentTurn: 0,
       maxTurns: maxTurns ?? 1,
@@ -77,7 +79,7 @@ export class WorkerPool {
   markCompleted(
     workerId: string,
     result: string,
-    usage: { tokenUsage: number; costUsd: number },
+    usage: { tokenUsage: number; costUsd: number; inputTokens?: number; outputTokens?: number },
   ): void {
     const worker = this.workers.get(workerId);
     if (!worker) return;
@@ -86,6 +88,8 @@ export class WorkerPool {
     worker.progress = 100;
     worker.result = result;
     worker.tokenUsage = usage.tokenUsage;
+    worker.inputTokens = usage.inputTokens ?? 0;
+    worker.outputTokens = usage.outputTokens ?? 0;
     worker.costUsd = usage.costUsd;
     worker.lastActivityAt = new Date().toISOString();
 
