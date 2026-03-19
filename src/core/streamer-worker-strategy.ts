@@ -50,13 +50,23 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       systemPrompt = harnessResult.systemPrompt;
     }
 
-    // Inject CLAUDE.md / AGENTS.md / CONVENTIONS.md with highest priority
+    // Inject CLAUDE.md / AGENTS.md / CONVENTIONS.md
     const contextInjector = new ContextInjector(projectDir);
     const contextFiles = contextInjector.collect();
     const contextBlock = contextInjector.formatForPrompt(contextFiles);
     if (contextBlock) {
       systemPrompt = contextBlock + "\n\n" + systemPrompt;
     }
+
+    // Worker override: skip exploration phase (codebase context provided in prompt)
+    const workerOverride = [
+      "[WORKER MODE — HIGHEST PRIORITY]",
+      "You are a multi-agent worker. The project structure and file tree are ALREADY provided in the user message.",
+      "SKIP all exploration: do NOT run find, ls, ls -la, or tree commands.",
+      "SKIP reading files for analysis. Only Read a file immediately before you Edit it.",
+      "Go STRAIGHT to creating and editing files. Start implementation within your first 3 tool calls.",
+    ].join("\n");
+    systemPrompt = workerOverride + "\n\n" + systemPrompt;
 
     const profile = {
       name: agentName,
