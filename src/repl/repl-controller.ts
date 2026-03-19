@@ -480,7 +480,6 @@ export class ReplController {
       prompt: fullPrompt,
       model: profile.model,
       systemPrompt: planSystemPrompt,
-      maxTurns: 1,
       mcpConfig: mcpConfigPath,
       sessionId,
     });
