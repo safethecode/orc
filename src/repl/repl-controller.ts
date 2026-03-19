@@ -865,7 +865,7 @@ export class ReplController {
 
     if (cancellation.cancelled) return;
 
-    // Show decomposition plan
+    // Show decomposition plan then proceed (ESC cancels during execution)
     r.stopSpinner();
     r.separator();
     r.info("\x1b[1mSam\x1b[0m\x1b[2m: 다음과 같이 나누겠습니다:\x1b[0m");
@@ -875,29 +875,6 @@ export class ReplController {
     }
     r.info(`\x1b[2m${decomposition.subtasks.length} subtasks, ${decomposition.executionPlan.phases.length} phases, strategy: ${decomposition.executionPlan.strategy}\x1b[0m`);
     r.separator();
-
-    // Wait for user approval
-    const readline = await import("node:readline");
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const approved = await new Promise<boolean>((resolve) => {
-      process.stdout.write("\x1b[2m  Enter: 진행 / ESC: 취소\x1b[0m");
-      const onKeypress = (_: string, key: { name: string }) => {
-        if (key?.name === "return") { cleanup(); resolve(true); }
-        else if (key?.name === "escape") { cleanup(); resolve(false); }
-      };
-      const cleanup = () => {
-        process.stdin.removeListener("keypress", onKeypress);
-        rl.close();
-        process.stdout.write("\r\x1b[K");
-      };
-      process.stdin.on("keypress", onKeypress);
-    });
-
-    if (!approved || cancellation.cancelled) {
-      r.info("\x1b[2mcancelled\x1b[0m");
-      return;
-    }
-
     r.startSpinner("orc", "supervisor" as any);
 
     // 2. Execute with supervisor
