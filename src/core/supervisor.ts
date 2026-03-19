@@ -32,6 +32,7 @@ import { eventBus } from "./events.ts";
 import { reviewSpec, reviewQuality } from "./review-gate.ts";
 import type { DistributedTracer, TraceContext } from "./distributed-trace.ts";
 import type { WorkerExecutionStrategy, WorkerHandle } from "./worker-strategy.ts";
+import { GitWorktreeManager, type WorktreeInfo } from "./git-worktree.ts";
 
 export interface SupervisorDeps {
   config: OrchestratorConfig;
@@ -46,6 +47,7 @@ export interface SupervisorDeps {
   conflictWatcher?: ConflictWatcher;
   ownership?: OwnershipManager;
   profileContext?: string;
+  worktreeManager?: GitWorktreeManager;
 }
 
 export interface SupervisorOptions {
@@ -69,6 +71,8 @@ export class Supervisor {
   private tracer: DistributedTracer | null = null;
   private conflictResolutions: Array<{ resolution: string; chosenApproach: string; corrections: string[] }> = [];
   private workerHandles = new Map<string, WorkerHandle>();
+  private worktreeManager: GitWorktreeManager | null;
+  private worktreeInfos = new Map<string, WorktreeInfo>();
   private qualityGatePassed = true;
 
   constructor(deps: SupervisorDeps, options?: SupervisorOptions) {
@@ -90,6 +94,8 @@ export class Supervisor {
       timeoutMs: this.options.workerTimeoutMs,
       maxRetries: this.options.maxRetries,
     });
+
+    this.worktreeManager = deps.worktreeManager ?? null;
 
     // Multi-turn config with defaults
     const mt = deps.config.supervisor?.multiTurn;
@@ -290,6 +296,10 @@ export class Supervisor {
       this.workerBus.clearTask(taskId);
       this.pool.clear();
 
+      // 8.5. Cleanup all worktrees created during this execution
+      await this.worktreeManager?.cleanupAll().catch(() => {});
+      this.worktreeInfos.clear();
+
       if (rootCtx) {
         this.tracer!.addTags(rootCtx.spanId, {
           success: result.success,
@@ -301,6 +311,10 @@ export class Supervisor {
 
       return result;
     } catch (err) {
+      // Cleanup worktrees even on error
+      await this.worktreeManager?.cleanupAll().catch(() => {});
+      this.worktreeInfos.clear();
+
       if (rootCtx) {
         this.tracer!.endSpan(
           rootCtx.spanId,
@@ -502,6 +516,24 @@ export class Supervisor {
     const maxAttempts = this.options.maxRetries + 1;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      // 3.5. Create a git worktree for branch isolation (graceful fallback on failure)
+      const worktreeId = attempt === 0
+        ? `worker/${subtask.agentRole}-${subtask.id.slice(0, 8)}`
+        : `worker/${subtask.agentRole}-${subtask.id.slice(0, 8)}-r${attempt}`;
+      const branchName = worktreeId;
+      let worktreeDir: string | undefined;
+      if (this.worktreeManager) {
+        try {
+          const wtInfo = await this.worktreeManager.create(worktreeId, branchName);
+          worktreeDir = wtInfo.path;
+          this.worktreeInfos.set(worktreeId, wtInfo);
+          eventBus.publish({ type: "worktree:create", branch: wtInfo.branch, path: wtInfo.path, agentId: worktreeId });
+        } catch {
+          // Worktree creation failed — continue without isolation
+          worktreeDir = undefined;
+        }
+      }
+
       try {
         // 4. Spawn worker via deps callback
         const spawnCtx = (workerSpanCtx && this.tracer)
@@ -511,7 +543,7 @@ export class Supervisor {
             })
           : null;
 
-        const handle = await this.deps.workerStrategy.spawn(subtask, maxTurns, enrichedPrompt);
+        const handle = await this.deps.workerStrategy.spawn(subtask, maxTurns, enrichedPrompt, { workdir: worktreeDir });
         const { agentName } = handle;
         this.workerHandles.set(agentName, handle);
 
@@ -633,7 +665,21 @@ export class Supervisor {
             collector.collect(updatedWorker, subtask.agentRole, domain);
           }
 
-          // 10. Quality gate (if enabled)
+          // 10. Build/test verification (concrete, not LLM-based)
+          const buildIssues = await this.runBuildVerification(subtask);
+          if (buildIssues.length > 0) {
+            eventBus.publish({ type: "feedback:quality_gate", passed: false, issues: buildIssues });
+            const fixSubtask: SubTask = {
+              ...subtask,
+              id: `${subtask.id}-buildfix`,
+              prompt: `${subtask.prompt}\n\n## BUILD/TEST FAILED — Fix immediately\n${buildIssues.map(i => `- ${i}`).join("\n")}`,
+              dependencies: [subtask.id],
+            };
+            await this.executeSubtask(fixSubtask, collector, decomposition, parentCtx);
+            return;
+          }
+
+          // 10.5. LLM Quality gate (supplementary, especially for design)
           const feedbackConfig = this.deps.config.supervisor?.feedback;
           if (feedbackConfig?.qualityGateOnComplete) {
             const qgCtx = (workerSpanCtx && this.tracer)
@@ -681,7 +727,45 @@ export class Supervisor {
             }
           }
 
-          // 10.5. Two-stage review gate
+          // 10.6. Worktree branch review + merge
+          if (worktreeDir && this.worktreeManager) {
+            const wtInfo = this.worktreeInfos.get(worktreeId);
+            if (wtInfo) {
+              // Review the diff between main and worker branch
+              const diffResult = await this.reviewWorktreeDiff(wtInfo);
+              if (diffResult.acceptable) {
+                const mergeResult = await this.worktreeManager.merge(worktreeId);
+                if (mergeResult.success) {
+                  eventBus.publish({ type: "merge:progress", stage: "complete", status: `merged ${wtInfo.branch}` });
+                } else {
+                  // Merge failed — create fix subtask in same worktree
+                  const conflictList = mergeResult.conflicts.join(", ");
+                  eventBus.publish({ type: "merge:progress", stage: "conflict", status: conflictList });
+                  const fixSubtask: SubTask = {
+                    ...subtask,
+                    id: `${subtask.id}-mergefix`,
+                    prompt: `${subtask.prompt}\n\n## MERGE CONFLICT — Resolve immediately\nConflicts: ${conflictList}\nResolve all conflicts, then commit.`,
+                    dependencies: [subtask.id],
+                  };
+                  await this.executeSubtask(fixSubtask, collector, decomposition, parentCtx);
+                  return;
+                }
+              } else {
+                // Review failed — create fix subtask in same worktree
+                eventBus.publish({ type: "feedback:quality_gate", passed: false, issues: [diffResult.reason ?? "Diff review failed"] });
+                const fixSubtask: SubTask = {
+                  ...subtask,
+                  id: `${subtask.id}-difffix`,
+                  prompt: `${subtask.prompt}\n\n## DIFF REVIEW FAILED — Fix these issues\n${diffResult.reason ?? "Review did not pass"}`,
+                  dependencies: [subtask.id],
+                };
+                await this.executeSubtask(fixSubtask, collector, decomposition, parentCtx);
+                return;
+              }
+            }
+          }
+
+          // 10.7. Two-stage review gate
           const reviewGateConfig = this.deps.config.supervisor?.reviewGate;
           if (reviewGateConfig?.enabled && subtask.agentRole !== "qa") {
             try {
@@ -1030,6 +1114,54 @@ export class Supervisor {
     return this.multiTurnConfig.standardMaxTurns;
   }
 
+  private async runBuildVerification(_subtask: SubTask): Promise<string[]> {
+    const issues: string[] = [];
+    const cwd = process.cwd();
+
+    // Try typecheck
+    for (const cmd of ["pnpm typecheck", "bun run typecheck", "npx tsc --noEmit"]) {
+      const [bin, ...args] = cmd.split(" ");
+      try {
+        const proc = Bun.spawnSync([bin, ...args], { cwd, stderr: "pipe", stdout: "pipe" });
+        if (proc.exitCode !== 0) {
+          const stderr = new TextDecoder().decode(proc.stderr).trim();
+          if (stderr) issues.push(`Typecheck failed: ${stderr.split("\n").slice(0, 5).join("; ")}`);
+        }
+        break; // first successful command wins
+      } catch { continue; }
+    }
+
+    // Try lint
+    for (const cmd of ["pnpm lint", "bun run lint", "npx biome check"]) {
+      const [bin, ...args] = cmd.split(" ");
+      try {
+        const proc = Bun.spawnSync([bin, ...args], { cwd, stderr: "pipe", stdout: "pipe" });
+        if (proc.exitCode !== 0) {
+          const stderr = new TextDecoder().decode(proc.stderr).trim();
+          const stdout = new TextDecoder().decode(proc.stdout).trim();
+          const output = stderr || stdout;
+          if (output) issues.push(`Lint failed: ${output.split("\n").slice(0, 5).join("; ")}`);
+        }
+        break;
+      } catch { continue; }
+    }
+
+    // Try build
+    for (const cmd of ["pnpm build", "bun run build"]) {
+      const [bin, ...args] = cmd.split(" ");
+      try {
+        const proc = Bun.spawnSync([bin, ...args], { cwd, stderr: "pipe", stdout: "pipe", timeout: 60_000_000_000 /* 60s in ns */ });
+        if (proc.exitCode !== 0) {
+          const stderr = new TextDecoder().decode(proc.stderr).trim();
+          if (stderr) issues.push(`Build failed: ${stderr.split("\n").slice(0, 5).join("; ")}`);
+        }
+        break;
+      } catch { continue; }
+    }
+
+    return issues;
+  }
+
   private cleanupWorker(agentName: string, handle: WorkerHandle | null, subtask: SubTask): void {
     this.workerBus.unregisterWorker(agentName);
     if (this.deps.ownership) {
@@ -1038,6 +1170,40 @@ export class Supervisor {
     if (handle) {
       this.deps.workerStrategy.stop(handle).catch(() => {});
       this.workerHandles.delete(agentName);
+    }
+  }
+
+  /**
+   * Review the diff produced by a worker branch against main.
+   * Returns whether the diff is acceptable for merging.
+   */
+  private async reviewWorktreeDiff(wtInfo: WorktreeInfo): Promise<{ acceptable: boolean; reason?: string }> {
+    try {
+      const proc = Bun.spawn(["git", "diff", `main...${wtInfo.branch}`, "--stat"], {
+        cwd: wtInfo.path,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const stdout = await new Response(proc.stdout).text();
+      const exitCode = await proc.exited;
+      if (exitCode !== 0) {
+        return { acceptable: true }; // Can't diff — allow merge (non-blocking)
+      }
+      // If no changes at all, nothing to merge — still acceptable
+      if (!stdout.trim()) {
+        return { acceptable: true, reason: "No changes detected" };
+      }
+      // Basic sanity: reject if the diff is suspiciously large (>500 files changed)
+      const lines = stdout.trim().split("\n");
+      const summaryLine = lines[lines.length - 1] ?? "";
+      const fileCountMatch = summaryLine.match(/(\d+)\s+files?\s+changed/);
+      if (fileCountMatch && Number.parseInt(fileCountMatch[1], 10) > 500) {
+        return { acceptable: false, reason: `Diff touches ${fileCountMatch[1]} files — exceeds 500-file safety limit` };
+      }
+      return { acceptable: true };
+    } catch {
+      // Review failure is non-blocking
+      return { acceptable: true };
     }
   }
 
