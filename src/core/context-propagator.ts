@@ -53,11 +53,12 @@ export class ContextPropagator {
     const bus = this.buildBusMessageContext(subtask);
     const protocol = this.buildBusProtocolInstructions();
     const resolutions = this.buildConflictResolutionContext(conflictResolutions);
+    const preloaded = await this.preReadRelevantFiles(subtask.prompt);
 
     const langBlock = this.languageHint && this.languageHint !== "en"
       ? `[LANGUAGE] The user writes in ${this.languageHint}. Always respond in the same language.`
       : "";
-    const assembled = this.assemblePrompt(original, parent, sibling, completed, knowledge, bus, protocol, resolutions, langBlock);
+    const assembled = this.assemblePrompt(original, parent, sibling, completed, knowledge, bus, protocol, resolutions, langBlock, preloaded);
 
     const estimatedTokens = this.estimateTokens(assembled);
     eventBus.publish({
@@ -191,8 +192,9 @@ export class ContextPropagator {
     protocol: string = "",
     resolutions: string = "",
     language: string = "",
+    preloaded: string = "",
   ): string {
-    // Priority order: original > lang > codebase > parent > completed > resolutions > sibling > knowledge > bus > protocol
+    // Priority order: original > lang > codebase > preloaded > parent > completed > resolutions > sibling > knowledge > bus > protocol
     const fullContext = this.fullUserPrompt && this.fullUserPrompt !== original
       ? `## FULL USER REQUEST (follow ALL requirements below)\n\n${this.fullUserPrompt}\n\n## YOUR SPECIFIC ASSIGNMENT\n\n${original}`
       : original;
@@ -201,13 +203,14 @@ export class ContextPropagator {
       { text: taskInstruction, priority: 0 },
       { text: language, priority: 1 },
       { text: this.codebaseContext, priority: 2 },
-      { text: parent, priority: 3 },
-      { text: completed, priority: 4 },
-      { text: resolutions, priority: 5 },
-      { text: sibling, priority: 6 },
-      { text: knowledge, priority: 7 },
-      { text: bus, priority: 8 },
-      { text: protocol, priority: 9 },
+      { text: preloaded, priority: 3 },
+      { text: parent, priority: 4 },
+      { text: completed, priority: 5 },
+      { text: resolutions, priority: 6 },
+      { text: sibling, priority: 7 },
+      { text: knowledge, priority: 8 },
+      { text: bus, priority: 9 },
+      { text: protocol, priority: 10 },
     ].filter(s => s.text.length > 0);
 
     let result = "";
@@ -262,6 +265,102 @@ export class ContextPropagator {
       apisCreated: [],
       schemasCreated: [],
     };
+  }
+
+  /** Common words to skip when extracting keywords from a prompt. */
+  private static STOP_WORDS = new Set([
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "shall",
+    "should", "may", "might", "must", "can", "could", "to", "of", "in",
+    "for", "on", "with", "at", "by", "from", "as", "into", "through",
+    "and", "but", "or", "nor", "not", "so", "yet", "both", "either",
+    "this", "that", "these", "those", "it", "its", "i", "me", "my",
+    "we", "our", "you", "your", "he", "she", "they", "them", "their",
+    "what", "which", "who", "whom", "how", "when", "where", "why",
+    "all", "each", "every", "any", "few", "more", "most", "some",
+    "such", "no", "only", "same", "than", "too", "very", "just",
+    "about", "above", "after", "before", "between", "under", "again",
+    "then", "once", "here", "there", "also", "new", "make", "use",
+    "add", "create", "update", "fix", "implement", "write", "build",
+    "need", "please", "file", "files", "code", "function", "class",
+  ]);
+
+  /**
+   * Pre-read files likely relevant to the subtask prompt.
+   * Extracts keywords, matches against the file tree in codebaseContext,
+   * reads the top matches, and formats their contents.
+   */
+  async preReadRelevantFiles(prompt: string): Promise<string> {
+    if (!this.codebaseContext) return "";
+
+    // Extract significant keywords from the prompt
+    const keywords = prompt
+      .toLowerCase()
+      .replace(/[^a-z0-9\s\-_./]/g, " ")
+      .split(/\s+/)
+      .filter(w => w.length >= 3 && !ContextPropagator.STOP_WORDS.has(w));
+    if (keywords.length === 0) return "";
+
+    // Parse file paths from codebaseContext (lines starting with ./ or containing file extensions)
+    const filePaths: string[] = [];
+    for (const line of this.codebaseContext.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("./") && !trimmed.includes(" ")) {
+        filePaths.push(trimmed);
+      }
+    }
+    if (filePaths.length === 0) return "";
+
+    // Score each file path by keyword matches
+    const scored: Array<{ path: string; score: number }> = [];
+    for (const fp of filePaths) {
+      const lower = fp.toLowerCase();
+      let score = 0;
+      for (const kw of keywords) {
+        if (lower.includes(kw)) score++;
+      }
+      if (score > 0) scored.push({ path: fp, score });
+    }
+
+    // Sort by score descending, take top 8
+    scored.sort((a, b) => b.score - a.score);
+    const topFiles = scored.slice(0, 8);
+    if (topFiles.length === 0) return "";
+
+    // Read file contents
+    const maxLinesPerFile = 500;
+    const sections: string[] = [];
+
+    for (const { path: filePath } of topFiles) {
+      // Resolve relative path (./foo) to absolute using cwd
+      const absPath = filePath.startsWith("./")
+        ? `${process.cwd()}/${filePath.slice(2)}`
+        : filePath;
+
+      try {
+        const content = await Bun.file(absPath).text();
+        const lines = content.split("\n");
+        const truncated = lines.length > maxLinesPerFile
+          ? lines.slice(0, maxLinesPerFile).join("\n") + "\n...(truncated)"
+          : content;
+
+        // Infer language from extension for code fence
+        const ext = absPath.split(".").pop() ?? "";
+        const langMap: Record<string, string> = {
+          ts: "ts", tsx: "tsx", js: "js", jsx: "jsx", py: "python",
+          rs: "rust", go: "go", json: "json", yaml: "yaml", yml: "yaml",
+          md: "md", css: "css", html: "html", sql: "sql", sh: "bash",
+        };
+        const lang = langMap[ext] ?? "";
+
+        sections.push(`### ${filePath}\n\`\`\`${lang}\n${truncated}\n\`\`\``);
+      } catch {
+        // File unreadable — skip silently
+      }
+    }
+
+    if (sections.length === 0) return "";
+    return `## Pre-loaded Files (no need to Read these)\n${sections.join("\n\n")}`;
   }
 
   private estimateTokens(text: string): number {
