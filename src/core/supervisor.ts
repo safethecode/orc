@@ -650,10 +650,34 @@ export class Supervisor {
             }
 
             if (!critique.passes) {
-              this.qualityGatePassed = false;
-              if (feedbackConfig?.qaLoopOnFail) {
-                await this.feedbackLoop.runQALoop(subtask, critique);
-              }
+              // Re-run the subtask with quality gate feedback
+              const issueList = critique.issues.join("; ");
+              eventBus.publish({
+                type: "feedback:quality_gate",
+                passed: false,
+                issues: critique.issues,
+              });
+
+              // Build a fix prompt with the quality gate feedback
+              const fixPrompt = [
+                `## QUALITY GATE FAILED — Fix these issues immediately`,
+                ``,
+                `The following problems were detected in your output:`,
+                ...critique.issues.map(i => `- ${i}`),
+                ``,
+                `Go back and fix ALL of these issues now. Read the files you created, then edit them to resolve every issue listed above.`,
+                `Do NOT start over. Fix the existing files in place.`,
+              ].join("\n");
+
+              // Re-execute same subtask with fix prompt appended
+              const fixSubtask: SubTask = {
+                ...subtask,
+                id: `${subtask.id}-fix`,
+                prompt: `${subtask.prompt}\n\n${fixPrompt}`,
+                dependencies: [subtask.id],
+              };
+              await this.executeSubtask(fixSubtask, collector, decomposition, parentCtx);
+              return; // Don't proceed to review gate with the original
             }
           }
 
