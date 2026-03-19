@@ -938,7 +938,7 @@ export class ReplController {
 
       // Show cost summary
       if (result.totalTokens > 0) {
-        r.cost(result.totalCost, result.totalTokens, 0, result.totalDurationMs);
+        r.cost(result.totalCost, result.totalInputTokens, result.totalOutputTokens, result.totalDurationMs);
       }
 
       // Show conflicts if any
