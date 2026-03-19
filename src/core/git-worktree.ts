@@ -14,6 +14,7 @@ export class GitWorktreeManager {
   private worktrees: Map<string, WorktreeInfo> = new Map();
   private baseDir: string;
   private worktreeDir: string;
+  private mergeLock: Promise<void> = Promise.resolve();
 
   constructor(baseDir?: string) {
     this.baseDir = baseDir ?? process.cwd();
@@ -113,6 +114,20 @@ export class GitWorktreeManager {
     agentId: string,
     targetBranch?: string,
   ): Promise<{ success: boolean; conflicts: string[] }> {
+    // Serialize merge operations to prevent race conditions when
+    // multiple workers merge in parallel (checkout + merge is not atomic)
+    const release = await this.acquireMergeLock();
+    try {
+      return await this.mergeUnsafe(agentId, targetBranch);
+    } finally {
+      release();
+    }
+  }
+
+  private async mergeUnsafe(
+    agentId: string,
+    targetBranch?: string,
+  ): Promise<{ success: boolean; conflicts: string[] }> {
     const info = this.worktrees.get(agentId);
     if (!info) {
       return { success: false, conflicts: [`No worktree found for agent ${agentId}`] };
@@ -176,6 +191,14 @@ export class GitWorktreeManager {
     });
 
     return { success: false, conflicts };
+  }
+
+  private async acquireMergeLock(): Promise<() => void> {
+    let release!: () => void;
+    const prev = this.mergeLock;
+    this.mergeLock = new Promise<void>((r) => { release = r; });
+    await prev;
+    return release;
   }
 
   async reset(agentId: string): Promise<void> {
