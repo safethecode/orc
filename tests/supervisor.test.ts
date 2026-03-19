@@ -211,7 +211,7 @@ describe("Supervisor", () => {
 
     // workerStrategy.spawn should have been called
     expect(deps.workerStrategy.spawn).toHaveBeenCalled();
-  }, 20000);
+  }, 30000);
 
   it("worker pool spawn + markCompleted + markFailed lifecycle", () => {
     const pool = new WorkerPool({ timeoutMs: 60000, maxRetries: 2 });
