@@ -600,6 +600,8 @@ export class Supervisor {
               this.pool.markCompleted(worker.id, strategyResult.result, {
                 tokenUsage: strategyResult.tokenUsage,
                 costUsd: strategyResult.costUsd,
+                inputTokens: strategyResult.inputTokens,
+                outputTokens: strategyResult.outputTokens,
               });
             } else {
               const reason = ("getLastError" in this.deps.workerStrategy)
@@ -656,6 +658,8 @@ export class Supervisor {
             this.pool.markCompleted(worker.id, outcome.result, {
               tokenUsage: outcome.tokenUsage,
               costUsd: outcome.costUsd,
+              inputTokens: outcome.inputTokens,
+              outputTokens: outcome.outputTokens,
             });
           }
 
@@ -974,7 +978,8 @@ export class Supervisor {
     if (!subtask) {
       return {
         taskId, subtaskResults: [], mergedOutput: "No subtasks generated",
-        totalTokens: 0, totalCost: 0, totalDurationMs: 0, conflicts: [], success: false,
+        totalTokens: 0, totalInputTokens: 0, totalOutputTokens: 0,
+        totalCost: 0, totalDurationMs: 0, conflicts: [], files: [], success: false,
       };
     }
 
@@ -1046,11 +1051,11 @@ export class Supervisor {
     workerId: string,
     agentName: string,
     timeoutMs: number,
-  ): Promise<{ result: string; tokenUsage: number; costUsd: number } | null> {
+  ): Promise<{ result: string; tokenUsage: number; costUsd: number; inputTokens: number; outputTokens: number } | null> {
     return new Promise((resolve) => {
       let settled = false;
 
-      const settle = (value: { result: string; tokenUsage: number; costUsd: number } | null) => {
+      const settle = (value: { result: string; tokenUsage: number; costUsd: number; inputTokens: number; outputTokens: number } | null) => {
         if (settled) return;
         settled = true;
         cleanup();
@@ -1062,7 +1067,7 @@ export class Supervisor {
         if (e.workerId !== workerId) return;
         const worker = this.pool.get(workerId);
         if (worker?.result != null) {
-          settle({ result: worker.result, tokenUsage: e.tokenUsage, costUsd: e.costUsd });
+          settle({ result: worker.result, tokenUsage: e.tokenUsage, costUsd: e.costUsd, inputTokens: worker.inputTokens, outputTokens: worker.outputTokens });
         }
       };
 
@@ -1086,7 +1091,7 @@ export class Supervisor {
         // Pool may have been updated by FeedbackLoop detecting session death
         const worker = this.pool.get(workerId);
         if (worker?.status === "completed" && worker.result != null) {
-          settle({ result: worker.result, tokenUsage: worker.tokenUsage, costUsd: worker.costUsd });
+          settle({ result: worker.result, tokenUsage: worker.tokenUsage, costUsd: worker.costUsd, inputTokens: worker.inputTokens, outputTokens: worker.outputTokens });
           return;
         }
         if (worker?.status === "failed" || worker?.status === "cancelled") {
@@ -1098,7 +1103,7 @@ export class Supervisor {
           const tasks = this.deps.store.listTasks({ agentName, status: "completed" });
           if (tasks.length > 0) {
             const t = tasks[0];
-            settle({ result: t.result ?? "", tokenUsage: t.tokenUsage, costUsd: t.costUsd });
+            settle({ result: t.result ?? "", tokenUsage: t.tokenUsage, costUsd: t.costUsd, inputTokens: 0, outputTokens: 0 });
             return;
           }
           const failed = this.deps.store.listTasks({ agentName, status: "failed" });
