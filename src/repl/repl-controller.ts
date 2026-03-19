@@ -500,6 +500,13 @@ export class ReplController {
     streamer.on("text_complete", () => {
       if (boxOpen) { r.endBox(); boxOpen = false; }
     });
+    streamer.on("tool_use", (tool: ToolUseEvent) => {
+      if (boxOpen) { r.endBox(); boxOpen = false; }
+      const detail = tool.input?.file_path
+        ? `(${String(tool.input.file_path).split("/").pop()})`
+        : tool.input?.command ? `(${String(tool.input.command).slice(0, 60)})` : "";
+      r.dim(`  \x1b[33m●\x1b[0m \x1b[1m${tool.name}\x1b[0m\x1b[2m${detail}\x1b[0m`);
+    });
 
     let planResult: StreamResult;
     try {
