@@ -324,7 +324,7 @@ export async function decomposeWithSam(
 
   try {
     const proc = Bun.spawn(
-      ["claude", "-p", classifyPrompt, "--model", "haiku", "--output-format", "text"],
+      ["claude", "-p", classifyPrompt, "--model", "sonnet", "--output-format", "text"],
       { stdout: "pipe", stderr: "pipe", stdin: "ignore" },
     );
 
