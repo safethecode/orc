@@ -1,6 +1,7 @@
 import type {
   CollectedResult,
   AggregatedResult,
+  FileManifestEntry,
   WorkerState,
   ProviderName,
   AgentRole,
@@ -30,6 +31,8 @@ export class ResultCollector {
       result: worker.result,
       files: this.extractFiles(worker.result),
       tokenUsage: worker.tokenUsage,
+      inputTokens: worker.inputTokens,
+      outputTokens: worker.outputTokens,
       costUsd: worker.costUsd,
       durationMs,
       role: role ?? "coder",
@@ -53,19 +56,25 @@ export class ResultCollector {
     const conflicts = this.detectConflicts(subtaskResults);
 
     const totalTokens = subtaskResults.reduce((sum, r) => sum + r.tokenUsage, 0);
+    const totalInputTokens = subtaskResults.reduce((sum, r) => sum + r.inputTokens, 0);
+    const totalOutputTokens = subtaskResults.reduce((sum, r) => sum + r.outputTokens, 0);
     const totalCost = subtaskResults.reduce((sum, r) => sum + r.costUsd, 0);
     const totalDurationMs = subtaskResults.reduce((max, r) => Math.max(max, r.durationMs), 0);
 
     const mergedOutput = this.mergeResults(subtaskResults);
+    const files = this.getFileManifest(subtaskResults);
 
     const aggregated: AggregatedResult = {
       taskId: this.taskId,
       subtaskResults,
       mergedOutput,
       totalTokens,
+      totalInputTokens,
+      totalOutputTokens,
       totalCost,
       totalDurationMs,
       conflicts,
+      files,
       success: subtaskResults.length > 0 && conflicts.length === 0,
     };
 
@@ -181,6 +190,36 @@ export class ResultCollector {
     }
 
     return files;
+  }
+
+  private getFileManifest(results: CollectedResult[]): FileManifestEntry[] {
+    const manifest: FileManifestEntry[] = [];
+    const seen = new Set<string>();
+
+    for (const r of results) {
+      for (const file of r.files) {
+        const key = `${file}:${r.agentName}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const action = this.inferFileAction(file, r.result);
+        manifest.push({ file, worker: r.agentName, action });
+      }
+    }
+
+    return manifest;
+  }
+
+  private inferFileAction(file: string, resultText: string): "created" | "modified" {
+    const createdPatterns = [
+      new RegExp(`created?\\s+[^\\n]*${file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
+      new RegExp(`wrote\\s+[^\\n]*${file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
+      new RegExp(`new file[^\\n]*${file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
+    ];
+    for (const pattern of createdPatterns) {
+      if (pattern.test(resultText)) return "created";
+    }
+    return "modified";
   }
 
   private detectConflicts(results: CollectedResult[]): string[] {
