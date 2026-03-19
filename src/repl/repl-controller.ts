@@ -603,11 +603,27 @@ export class ReplController {
       this.currentStreamer = streamer;
       let boxOpen = false;
       let toolUseCount = 0;
+      let toolGroupCount = 0;
+      let toolGroupShown = 0;
+      const MAX_TOOLS_VISIBLE = 3;
       let pendingApproval: { command: string; message: string } | null = null;
       let pendingQuestion: { question: string; options?: string[] } | null = null;
 
+      const flushToolGroup = () => {
+        if (toolGroupCount > toolGroupShown) {
+          r.dim(`  \x1b[2m+${toolGroupCount - toolGroupShown} more tool uses\x1b[0m`);
+        }
+      };
+
       streamer.on("text_delta", (delta: string) => {
-        if (!boxOpen) { r.stopSpinner(); r.startBox(route.model); boxOpen = true; }
+        if (!boxOpen) {
+          flushToolGroup();
+          toolGroupCount = 0;
+          toolGroupShown = 0;
+          r.stopSpinner();
+          r.startBox(route.model);
+          boxOpen = true;
+        }
         r.text(delta);
       });
 
@@ -622,10 +638,10 @@ export class ReplController {
 
       streamer.on("tool_use", (tool: ToolUseEvent) => {
         toolUseCount++;
+        toolGroupCount++;
         const inp = tool.input ?? {};
         const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
         r.stopSpinner();
-        // Close text box first so tool badge appears between text blocks
         if (boxOpen) { r.endBox(); boxOpen = false; }
 
         // Intercept AskUserQuestion — abort and relay to user
@@ -650,7 +666,10 @@ export class ReplController {
           }
         }
 
-        r.toolUse(tool.name, detail, false, inp);
+        if (toolGroupCount - toolGroupShown <= MAX_TOOLS_VISIBLE) {
+          r.toolUse(tool.name, detail, false, inp);
+          toolGroupShown = toolGroupCount;
+        }
         r.startSpinner(agentName, route.model);
         eventBus.publish({ type: "agent:tool", agent: agentName, tool: tool.name, detail });
 
