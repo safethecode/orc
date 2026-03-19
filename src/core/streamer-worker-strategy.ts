@@ -58,14 +58,22 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       systemPrompt = contextBlock + "\n\n" + systemPrompt;
     }
 
-    // Worker override: skip exploration phase (codebase context provided in prompt)
-    const workerOverride = [
-      "[WORKER MODE — HIGHEST PRIORITY]",
-      "You are a multi-agent worker. The project structure and file tree are ALREADY provided in the user message.",
-      "SKIP all exploration: do NOT run find, ls, ls -la, or tree commands.",
-      "SKIP reading files for analysis. Only Read a file immediately before you Edit it.",
-      "Go STRAIGHT to creating and editing files. Start implementation within your first 3 tool calls.",
-    ].join("\n");
+    // Worker override: role-aware — design agents keep their full workflow
+    const isDesignRole = subtask.agentRole === "design" || subtask.agentRole === "architect";
+    const workerOverride = isDesignRole
+      ? [
+          "[WORKER MODE]",
+          "You are a multi-agent worker. The project file tree is provided in the user message — use it instead of running find/ls.",
+          "Follow your profile instructions completely — reference-based design, screenshots, quality checks.",
+          "Your profile rules (below) take HIGHEST PRIORITY. Do not skip any step in your design process.",
+        ].join("\n")
+      : [
+          "[WORKER MODE — HIGHEST PRIORITY]",
+          "You are a multi-agent worker. The project structure and file tree are ALREADY provided in the user message.",
+          "SKIP all exploration: do NOT run find, ls, ls -la, or tree commands.",
+          "SKIP reading files for analysis. Only Read a file immediately before you Edit it.",
+          "Go STRAIGHT to creating and editing files. Start implementation within your first 3 tool calls.",
+        ].join("\n");
     systemPrompt = workerOverride + "\n\n" + systemPrompt;
 
     const profile = {
