@@ -975,11 +975,16 @@ export class ReplController {
       }
     };
 
+    let totalWorkers = 0;
+    let completedWorkers = 0;
+    let failedWorkers = 0;
+
     const handlers: Array<[string, (e: any) => void]> = [
       ["supervisor:plan", (e) => {
         r.phaseUpdate("planning", `${e.phases} phases`);
       }],
       ["supervisor:dispatch", (e) => {
+        totalWorkers++;
         r.dim(`[${e.role}] ${e.provider}/${e.model} — ${e.prompt}`);
         r.taskUpdate(e.subtaskId, "running");
       }],
@@ -1005,9 +1010,11 @@ export class ReplController {
         }
       }],
       ["worker:complete", (e) => {
+        completedWorkers++;
         flushHidden(e.workerId);
         const sec = e.durationMs ? `${(e.durationMs / 1000).toFixed(1)}s` : "";
         r.info(`\x1b[32m✓\x1b[0m ${e.workerId} \x1b[2mcompleted${sec ? ` (${sec})` : ""}\x1b[0m`);
+        r.dim(`  Progress: ${completedWorkers}/${totalWorkers} done${failedWorkers ? `, ${failedWorkers} failed` : ""}`);
         r.workerDone(e.workerId);
         r.taskUpdate(e.workerId, "passed", e.durationMs);
         workerTools.delete(e.workerId);
@@ -1034,10 +1041,12 @@ export class ReplController {
         r.error(`[${e.agentName}] ${e.error}`);
       }],
       ["worker:fail", (e) => {
+        failedWorkers++;
         flushHidden(e.workerId);
         r.workerDone(e.workerId);
         r.taskUpdate(e.workerId, "failed");
         r.error(`Worker failed: ${e.error}`);
+        r.dim(`  Progress: ${completedWorkers}/${totalWorkers} done, ${failedWorkers} failed`);
         workerTools.delete(e.workerId);
       }],
       ["feedback:quality_gate", (e) => {
