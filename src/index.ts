@@ -188,6 +188,22 @@ async function main() {
       break;
     }
 
+    case "serve": {
+      const port = parseInt(positional[1] ?? "3000", 10);
+      const server = Bun.serve({
+        port,
+        fetch(req) {
+          const url = new URL(req.url);
+          if (url.pathname === "/health") {
+            return Response.json({ status: "ok", uptime: process.uptime() });
+          }
+          return new Response("Not Found", { status: 404 });
+        },
+      });
+      console.log(`Server listening on port ${server.port}`);
+      break;
+    }
+
     case undefined: {
       const { startTuiRepl } = await import("./tui-repl/start.tsx");
       await startTuiRepl(orchestrator, config);
