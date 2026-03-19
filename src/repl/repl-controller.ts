@@ -964,6 +964,17 @@ export class ReplController {
   /** Bridge eventBus events from Supervisor to REPL renderer */
   private subscribeSupervisorEvents(): () => void {
     const r = this.renderer;
+    // Track tool calls per worker for collapsible display
+    const workerTools = new Map<string, { count: number; shown: number; lastSection: string }>();
+    const MAX_VISIBLE_TOOLS = 3;
+
+    const flushHidden = (workerId: string) => {
+      const tracker = workerTools.get(workerId);
+      if (tracker && tracker.count > tracker.shown) {
+        r.dim(`  \x1b[2m  +${tracker.count - tracker.shown} more tool uses\x1b[0m`);
+      }
+    };
+
     const handlers: Array<[string, (e: any) => void]> = [
       ["supervisor:plan", (e) => {
         r.phaseUpdate("planning", `${e.phases} phases`);
@@ -974,37 +985,60 @@ export class ReplController {
       }],
       ["worker:spawn", (e) => {
         r.workerStart(e.workerId, e.workerId, e.model);
+        workerTools.set(e.workerId, { count: 0, shown: 0, lastSection: "" });
       }],
       ["worker:progress", (e) => {
         r.workerUpdate(e.workerId, { progress: e.progress });
       }],
       ["worker:turn", (e) => {
         if (e.toolUsed) {
-          const input = e.toolInput as Record<string, unknown> | undefined;
-          const detail = formatToolDetail(e.toolUsed, input);
-          r.dim(`  \x1b[33m●\x1b[0m \x1b[1m${e.toolUsed}\x1b[0m\x1b[2m${detail}\x1b[0m`);
+          const wId = e.workerId as string;
+          const tracker = workerTools.get(wId) ?? { count: 0, shown: 0, lastSection: "" };
+          tracker.count++;
+          if (tracker.count - tracker.shown <= MAX_VISIBLE_TOOLS) {
+            const input = e.toolInput as Record<string, unknown> | undefined;
+            const detail = formatToolDetail(e.toolUsed, input);
+            r.dim(`    \x1b[33m●\x1b[0m \x1b[1m${e.toolUsed}\x1b[0m\x1b[2m${detail}\x1b[0m`);
+            tracker.shown = tracker.count;
+          }
+          workerTools.set(wId, tracker);
         }
       }],
       ["worker:complete", (e) => {
+        flushHidden(e.workerId);
         const sec = e.durationMs ? `${(e.durationMs / 1000).toFixed(1)}s` : "";
         r.info(`\x1b[32m✓\x1b[0m ${e.workerId} \x1b[2mcompleted${sec ? ` (${sec})` : ""}\x1b[0m`);
         r.workerDone(e.workerId);
         r.taskUpdate(e.workerId, "passed", e.durationMs);
+        workerTools.delete(e.workerId);
       }],
       ["worker:text", (e) => {
-        // Strip ANSI/control sequences and binary noise
         const clean = (e.text as string).replace(/\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07|[\x00-\x08\x0e-\x1f]/g, "").trim();
-        if (clean && clean.length > 3 && !/^\[[\d;]+[A-Z]/.test(clean)) {
-          r.dim(`  ${e.agentName} · ${clean.slice(0, 150)}`);
+        if (!clean || clean.length <= 3 || /^\[[\d;]+[A-Z]/.test(clean)) return;
+        const wId = e.agentName as string;
+        const tracker = workerTools.get(wId);
+        // Detect section headings (### or ## or numbered steps)
+        if (/^#{2,3}\s|^\d+\.\s|^Step\s/i.test(clean)) {
+          if (tracker) {
+            flushHidden(wId);
+            tracker.count = 0;
+            tracker.shown = 0;
+            tracker.lastSection = clean;
+          }
+          r.dim(`  \x1b[36m${wId}\x1b[0m · ${clean.slice(0, 120)}`);
+        } else {
+          r.dim(`  ${wId} · ${clean.slice(0, 120)}`);
         }
       }],
       ["worker:stderr", (e) => {
         r.error(`[${e.agentName}] ${e.error}`);
       }],
       ["worker:fail", (e) => {
+        flushHidden(e.workerId);
         r.workerDone(e.workerId);
         r.taskUpdate(e.workerId, "failed");
         r.error(`Worker failed: ${e.error}`);
+        workerTools.delete(e.workerId);
       }],
       ["feedback:quality_gate", (e) => {
         r.qualityGate(e.passed, e.issues);
