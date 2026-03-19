@@ -48,20 +48,24 @@ function formatToolDetail(tool: string, input?: Record<string, unknown>): string
 
 const DESIGN_PLAN_PROMPT = `
 
-[DESIGN PLAN-FIRST MODE — Phase 1]
-You are in PLAN phase. Do NOT write any code or modify any files.
-Your task is to produce a detailed design specification:
+[DESIGN PLAN-FIRST MODE — Phase 1 — HIGHEST PRIORITY]
+You are in PLAN phase. Output your design specification as plain text.
 
-1. **Reference**: Name the specific products/patterns you will follow (e.g., "Linear's issue list + Vercel's dashboard nav")
-2. **Layout**: Describe the visual structure, grid system, and spacing
-3. **Colors**: List the exact color palette (hex values) and where each color is used
-4. **Typography**: Font family, sizes, and weights for each text level
-5. **Components**: List every component you will create with a brief description
-6. **Interactions**: Describe hover states, transitions, and animations
-7. **Responsive**: How the layout adapts across breakpoints
+ABSOLUTE RULES:
+- DO NOT call any tools (no Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, or ANY tool)
+- DO NOT write code or modify files
+- ONLY output text — your design plan
 
-Be specific and concrete. The user will review this plan before you implement it.
-DO NOT use any tools. DO NOT write any code. Text output only.`;
+Include in your plan:
+1. **Reference**: Specific products/patterns to follow (e.g., "Linear's issue list + Vercel's dashboard nav")
+2. **Layout**: Visual structure, grid system, spacing
+3. **Colors**: Exact hex palette and usage
+4. **Typography**: Font family, sizes, weights
+5. **Components**: Every component with brief description
+6. **Interactions**: Hover states, transitions, animations
+7. **Responsive**: Breakpoint adaptations
+
+The user will review this plan. Output it as readable text now.`;
 
 /**
  * Extract an @agent mention from input, case-insensitive.
