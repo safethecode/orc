@@ -885,16 +885,24 @@ export class ReplController {
 
       if (cancellation.cancelled) return;
 
-      // Add combined result to conversation
-      if (result.mergedOutput) {
-        this.conversation.add({
-          role: "assistant",
-          content: result.mergedOutput,
-          agentName: "multi-agent",
-          tier: "sonnet" as ModelTier,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      // Add detailed result to conversation so Sam has context for follow-ups
+      const subtaskSummary = result.subtaskResults.map(sr =>
+        `[${sr.role}] ${sr.agentName}: ${sr.result?.slice(0, 300) || "(no output)"}`,
+      ).join("\n\n");
+      const conversationContent = [
+        `## Multi-agent execution completed`,
+        `Tasks: ${result.subtaskResults.length}, Success: ${result.success}`,
+        `Cost: $${result.totalCost.toFixed(2)}, Tokens: ${result.totalTokens}`,
+        result.mergedOutput ? `\n## Merged Output\n${result.mergedOutput}` : "",
+        subtaskSummary ? `\n## Worker Results\n${subtaskSummary}` : "",
+      ].filter(Boolean).join("\n");
+      this.conversation.add({
+        role: "assistant",
+        content: conversationContent,
+        agentName: "multi-agent",
+        tier: "sonnet" as ModelTier,
+        timestamp: new Date().toISOString(),
+      });
 
       // Show cost summary
       if (result.totalTokens > 0) {
@@ -952,7 +960,11 @@ export class ReplController {
         r.taskUpdate(e.workerId, "passed", e.durationMs);
       }],
       ["worker:text", (e) => {
-        r.dim(`  ${e.agentName} · ${e.text}`);
+        // Strip ANSI/control sequences and binary noise
+        const clean = (e.text as string).replace(/\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07|[\x00-\x08\x0e-\x1f]/g, "").trim();
+        if (clean && clean.length > 3 && !/^\[[\d;]+[A-Z]/.test(clean)) {
+          r.dim(`  ${e.agentName} · ${clean.slice(0, 150)}`);
+        }
       }],
       ["worker:stderr", (e) => {
         r.error(`[${e.agentName}] ${e.error}`);
