@@ -852,7 +852,31 @@ export class Supervisor {
         this.cleanupWorker(agentName, handle, subtask);
       }
 
-      // Check if we should retry
+      // Classify error before deciding retry strategy
+      const isTransient = /529|503|429|overloaded|rate.limit|timeout/i.test(lastError ?? "");
+      const isAuth = /401|403|unauthorized|forbidden|invalid.key/i.test(lastError ?? "");
+
+      if (isAuth) {
+        // Don't retry — permanent error
+        break;
+      }
+
+      if (isTransient && attempt < maxAttempts - 1) {
+        // Wait before retry (exponential backoff)
+        const delay = Math.min(5000 * Math.pow(2, attempt), 30000);
+        await new Promise((r) => setTimeout(r, delay));
+        // Retry same provider (don't switch)
+        eventBus.publish({
+          type: "provider:fallback",
+          subtaskId: subtask.id,
+          from: subtask.provider,
+          to: subtask.provider,
+          reason: `Retry attempt ${attempt + 1} (transient: ${lastError})`,
+        });
+        continue; // Skip provider switch
+      }
+
+      // Check if we should retry with a different provider
       if (attempt < maxAttempts - 1) {
         // Try a different provider, but only from available providers
         const currentProvider = subtask.provider;
@@ -1172,6 +1196,16 @@ export class Supervisor {
     if (handle) {
       this.deps.workerStrategy.stop(handle).catch(() => {});
       this.workerHandles.delete(agentName);
+    }
+    // Clean up worktree for this worker to avoid disk leak
+    if (this.worktreeManager) {
+      const prefix = `worker/${subtask.agentRole}-${subtask.id.slice(0, 8)}`;
+      for (const [wtId, _info] of this.worktreeInfos) {
+        if (wtId === prefix || wtId.startsWith(`${prefix}-`)) {
+          this.worktreeManager.remove(wtId).catch(() => {});
+          this.worktreeInfos.delete(wtId);
+        }
+      }
     }
   }
 
