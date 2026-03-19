@@ -583,9 +583,14 @@ export class Supervisor {
           },
         );
 
-        // 8. Start feedback monitoring
-        this.feedbackLoop.registerWorkerHandle(agentName, handle);
-        this.feedbackLoop.startMonitoring(worker.id, subtask);
+        // 8. Start feedback monitoring (only for tmux workers, not streamer)
+        //    Streamer workers use the bridge for result detection; FeedbackLoop's
+        //    stuck detector causes false positives on textBuffer fingerprinting.
+        const isStreamer = "getLastError" in this.deps.workerStrategy;
+        if (!isStreamer) {
+          this.feedbackLoop.registerWorkerHandle(agentName, handle);
+          this.feedbackLoop.startMonitoring(worker.id, subtask);
+        }
 
         // 9. Wait for result (event-driven with polling fallback)
         let outcome = await this.waitForWorkerCompletion(
