@@ -1082,6 +1082,8 @@ export class Orchestrator {
     this.store.updateTask(taskId, { status: "running", startedAt: new Date().toISOString() });
 
     const streamerStrategy = new StreamerWorkerStrategy(this.config, this.registry, this.store);
+    const scanResult = this.codebaseScanner.getScanResult();
+    streamerStrategy.setScanResult(scanResult);
 
     const supervisor = new Supervisor(
       {
@@ -1108,7 +1110,6 @@ export class Orchestrator {
     supervisor.setTracer(this.distributedTracer);
 
     // Inject codebase scan + file tree into context propagator
-    const scanResult = this.codebaseScanner.getScanResult();
     if (scanResult) {
       let codebaseContext = this.codebaseScanner.formatForPrompt(scanResult);
       // Add file tree so workers don't need to run find/ls
