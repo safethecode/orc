@@ -665,8 +665,8 @@ export class Supervisor {
             collector.collect(updatedWorker, subtask.agentRole, domain);
           }
 
-          // 10. Build/test verification (concrete, not LLM-based)
-          const buildIssues = await this.runBuildVerification(subtask);
+          // 10. Build/test verification (only when worktree is active)
+          const buildIssues = worktreeDir ? await this.runBuildVerification(subtask, worktreeDir) : [];
           if (buildIssues.length > 0) {
             eventBus.publish({ type: "feedback:quality_gate", passed: false, issues: buildIssues });
             const fixSubtask: SubTask = {
@@ -1114,49 +1114,51 @@ export class Supervisor {
     return this.multiTurnConfig.standardMaxTurns;
   }
 
-  private async runBuildVerification(_subtask: SubTask): Promise<string[]> {
+  private async runBuildVerification(_subtask: SubTask, workdir?: string): Promise<string[]> {
     const issues: string[] = [];
-    const cwd = process.cwd();
+    const cwd = workdir ?? process.cwd();
 
-    // Try typecheck
-    for (const cmd of ["pnpm typecheck", "bun run typecheck", "npx tsc --noEmit"]) {
-      const [bin, ...args] = cmd.split(" ");
+    // Detect available scripts from package.json
+    let scripts: Record<string, string> = {};
+    try {
+      const pkg = await Bun.file(`${cwd}/package.json`).json();
+      scripts = pkg.scripts ?? {};
+    } catch { return issues; } // No package.json — skip verification
+
+    const TIMEOUT_NS = 30_000_000_000; // 30s in nanoseconds
+
+    // Typecheck (only if script exists)
+    if (scripts.typecheck || scripts["type-check"]) {
+      const scriptName = scripts.typecheck ? "typecheck" : "type-check";
       try {
-        const proc = Bun.spawnSync([bin, ...args], { cwd, stderr: "pipe", stdout: "pipe" });
+        const proc = Bun.spawnSync(["pnpm", scriptName], { cwd, stderr: "pipe", stdout: "pipe", timeout: TIMEOUT_NS });
         if (proc.exitCode !== 0) {
           const stderr = new TextDecoder().decode(proc.stderr).trim();
           if (stderr) issues.push(`Typecheck failed: ${stderr.split("\n").slice(0, 5).join("; ")}`);
         }
-        break; // first successful command wins
-      } catch { continue; }
+      } catch { /* timeout or missing — skip */ }
     }
 
-    // Try lint
-    for (const cmd of ["pnpm lint", "bun run lint", "npx biome check"]) {
-      const [bin, ...args] = cmd.split(" ");
+    // Lint (only if script exists)
+    if (scripts.lint) {
       try {
-        const proc = Bun.spawnSync([bin, ...args], { cwd, stderr: "pipe", stdout: "pipe" });
+        const proc = Bun.spawnSync(["pnpm", "lint"], { cwd, stderr: "pipe", stdout: "pipe", timeout: TIMEOUT_NS });
         if (proc.exitCode !== 0) {
-          const stderr = new TextDecoder().decode(proc.stderr).trim();
-          const stdout = new TextDecoder().decode(proc.stdout).trim();
-          const output = stderr || stdout;
+          const output = new TextDecoder().decode(proc.stderr).trim() || new TextDecoder().decode(proc.stdout).trim();
           if (output) issues.push(`Lint failed: ${output.split("\n").slice(0, 5).join("; ")}`);
         }
-        break;
-      } catch { continue; }
+      } catch { /* timeout or missing — skip */ }
     }
 
-    // Try build
-    for (const cmd of ["pnpm build", "bun run build"]) {
-      const [bin, ...args] = cmd.split(" ");
+    // Build (only if script exists)
+    if (scripts.build) {
       try {
-        const proc = Bun.spawnSync([bin, ...args], { cwd, stderr: "pipe", stdout: "pipe", timeout: 60_000_000_000 /* 60s in ns */ });
+        const proc = Bun.spawnSync(["pnpm", "build"], { cwd, stderr: "pipe", stdout: "pipe", timeout: TIMEOUT_NS });
         if (proc.exitCode !== 0) {
           const stderr = new TextDecoder().decode(proc.stderr).trim();
           if (stderr) issues.push(`Build failed: ${stderr.split("\n").slice(0, 5).join("; ")}`);
         }
-        break;
-      } catch { continue; }
+      } catch { /* timeout or missing — skip */ }
     }
 
     return issues;
