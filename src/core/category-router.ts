@@ -61,14 +61,14 @@ const DEEP_KEYWORDS = [
 // ── Default Categories ──────────────────────────────────────────────
 
 const DEFAULT_CATEGORIES: Record<string, CategoryConfig> = {
-  quick: { model: "haiku", tier: "haiku", description: "Single-file trivial fixes" },
+  quick: { model: "sonnet", tier: "sonnet", description: "Single-file trivial fixes" },
   general: { model: "sonnet", tier: "sonnet", description: "General development tasks" },
   deep: { model: "opus", tier: "opus", temperature: 0.3, description: "Deep reasoning and architecture" },
   visual: { model: "sonnet", tier: "sonnet", description: "Frontend, UI/UX, design" },
   writing: { model: "sonnet", tier: "sonnet", temperature: 0.7, description: "Documentation and prose" },
   review: { model: "sonnet", tier: "sonnet", temperature: 0.1, description: "Code review, analysis" },
   planning: { model: "opus", tier: "opus", description: "Architecture and planning" },
-  testing: { model: "haiku", tier: "haiku", description: "Test writing and QA" },
+  testing: { model: "sonnet", tier: "sonnet", description: "Test writing and QA" },
 };
 
 // ── Role-to-Category Mapping ────────────────────────────────────────

@@ -5,7 +5,7 @@ export const DEFAULT_PHASE_MODELS: Record<ExecutionPhase, PhaseModelConfig> = {
   planning: { model: "opus",   thinkingLevel: "high" },
   coding:   { model: "sonnet", thinkingLevel: "medium" },
   review:   { model: "sonnet", thinkingLevel: "high" },
-  qa:       { model: "haiku",  thinkingLevel: "low" },
+  qa:       { model: "sonnet", thinkingLevel: "low" },
   fix:      { model: "sonnet", thinkingLevel: "medium" },
 };
 

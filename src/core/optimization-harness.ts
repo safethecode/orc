@@ -249,7 +249,7 @@ Only flag CLEAR violations, not style issues.`;
   const streamer = new AgentStreamer();
   const cmd = buildCommand(providerConfig, profile, {
     prompt,
-    model: "haiku",
+    model: "sonnet",
     systemPrompt: "You are a domain compliance checker. Be precise. Only flag CLEAR violations based on the reference, not style issues.",
     maxTurns: 1,
   });

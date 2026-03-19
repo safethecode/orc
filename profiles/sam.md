@@ -1,7 +1,7 @@
 ---
 name: Sam
 provider: claude
-model: haiku
+model: sonnet
 role: "Advisor & Conversational Assistant"
 maxBudgetUsd: 0.05
 requires:

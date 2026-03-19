@@ -114,7 +114,7 @@ export class CostEstimator {
   private selectModel(complexity: ComplexityResult): ModelTier {
     if (complexity.level === "complex") return "sonnet";
     if (complexity.level === "standard") return "sonnet";
-    return "haiku";
+    return "sonnet";
   }
 
   private estimateAgentCount(complexity: ComplexityResult): number {

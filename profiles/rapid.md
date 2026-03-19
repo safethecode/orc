@@ -1,7 +1,7 @@
 ---
 name: rapid
 provider: claude
-model: haiku
+model: sonnet
 role: "Quick Task Runner"
 maxBudgetUsd: 0.10
 requires:

@@ -215,7 +215,7 @@ export function decompose(
       parentTaskId,
       dependencies: [],
       provider: "claude", // placeholder — provider-selector overrides
-      model: complexity.level === "simple" ? "haiku" : "sonnet", // placeholder — provider-selector overrides
+      model: "sonnet", // placeholder — provider-selector overrides
       agentRole: inferRole(domains),
       priority: 1,
       status: INITIAL_STATUS,

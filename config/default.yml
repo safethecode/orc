@@ -63,7 +63,7 @@ providers:
 routing:
   tiers:
     simple:
-      model: "haiku"
+      model: "sonnet"
       keywords: ["format", "rename", "typo", "lint", "style"]
     medium:
       model: "sonnet"

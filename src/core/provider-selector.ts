@@ -236,7 +236,7 @@ export class ProviderSelector {
     // For claude: map by role and estimated complexity
     if (cap.name === "claude") {
       if (subtask.agentRole === "architect" || subtask.estimatedTokens > 30000) return "opus";
-      if (subtask.agentRole === "tester" || subtask.estimatedTokens < 5000) return "haiku";
+      if (subtask.agentRole === "tester" || subtask.estimatedTokens < 5000) return "sonnet";
       return "sonnet";
     }
 

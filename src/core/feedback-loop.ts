@@ -352,7 +352,7 @@ export class FeedbackLoop {
 
   private async runLLMQualityGate(subtask: SubTask, result: string): Promise<CritiqueResult> {
     const prompt = buildCritiquePrompt({ prompt: subtask.prompt, result });
-    const model = this.providerConfig?.defaultModel ?? "haiku";
+    const model = this.providerConfig?.defaultModel ?? "sonnet";
     const proc = Bun.spawn(
       ["claude", "-p", prompt, "--model", model, "--output-format", "text"],
       { stdout: "pipe", stderr: "pipe" },

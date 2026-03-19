@@ -51,7 +51,7 @@ describe("loadConfig", () => {
     expect(config.routing.tiers.medium).toBeDefined();
     expect(config.routing.tiers.complex).toBeDefined();
 
-    expect(config.routing.tiers.simple.model).toBe("haiku");
+    expect(config.routing.tiers.simple.model).toBe("sonnet");
     expect(config.routing.tiers.medium.model).toBe("sonnet");
     expect(config.routing.tiers.complex.model).toBe("opus");
 

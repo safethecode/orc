@@ -2,7 +2,7 @@ import type { CritiqueResult } from "../config/types.ts";
 import { parseCritiqueResponse } from "../core/critique.ts";
 
 const QG_TIMEOUT_MS = 15_000;
-const QG_MODELS = ["haiku", "sonnet", "haiku", "sonnet"] as const;
+const QG_MODELS = ["sonnet", "sonnet", "sonnet", "sonnet"] as const;
 let qgRound = 0;
 
 function nextModel(): string {

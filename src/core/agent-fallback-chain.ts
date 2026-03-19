@@ -75,7 +75,7 @@ export class AgentFallbackChain {
     ]);
 
     this.register("scout", [
-      { provider: "claude", model: "haiku", priority: 0 },
+      { provider: "claude", model: "sonnet", priority: 0 },
       { provider: "gemini", model: "flash", priority: 1 },
       { provider: "codex", model: "gpt4o-mini", priority: 2 },
     ]);

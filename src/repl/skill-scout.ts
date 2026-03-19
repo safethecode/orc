@@ -73,7 +73,7 @@ function runHaiku(prompt: string, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn("claude", [
       "-p", prompt,
-      "--model", "haiku",
+      "--model", "sonnet",
       "--max-turns", "5",
     ], { stdio: ["ignore", "pipe", "pipe"], signal });
 
