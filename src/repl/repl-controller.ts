@@ -186,6 +186,13 @@ export class ReplController {
     const trimmed = input.trim();
     if (!trimmed) return;
 
+    // During multi-agent: allow commands, route other input to Sam for status/questions
+    let savedPin: string | null = null;
+    if (this.multiAgentRunning && !isCommand(trimmed)) {
+      savedPin = this.pinnedAgent;
+      this.pinnedAgent = "Sam";
+    }
+
     // Commands
     if (isCommand(trimmed)) {
       const result = await handleCommand(trimmed, {
@@ -231,10 +238,14 @@ export class ReplController {
     try {
       await this.handleNaturalInput(resolvedInput, cancellation, mentionedAgent);
     } finally {
-      this.renderer.phaseUpdate("done");
-      this.renderer.notifyIdle();
-      this.currentStreamer = null;
-      this.currentCancellation = null;
+      // Multi-agent runs in background — its own cleanup handles phaseUpdate/notifyIdle
+      if (!this.multiAgentRunning) {
+        this.renderer.phaseUpdate("done");
+        this.renderer.notifyIdle();
+        this.currentStreamer = null;
+        this.currentCancellation = null;
+      }
+      if (savedPin !== null) this.pinnedAgent = savedPin;
       this.orchestrator.getPrewarmer().prewarm().catch(() => {});
     }
   }
@@ -334,7 +345,8 @@ export class ReplController {
     if (route.multiAgent) {
       r.stopSpinner();
       r.startSpinner("orc", "supervisor" as any);
-      await this.handleMultiAgent(input, cancellation);
+      // Run multi-agent in background so REPL stays responsive
+      this.runMultiAgentBackground(input, cancellation);
       return;
     }
 
@@ -881,6 +893,25 @@ export class ReplController {
     } catch {
       return null;
     }
+  }
+
+  private multiAgentRunning = false;
+
+  private runMultiAgentBackground(input: string, cancellation: CancellationToken): void {
+    this.multiAgentRunning = true;
+    this.handleMultiAgent(input, cancellation)
+      .catch(err => this.renderer.error(`Multi-agent: ${(err as Error).message}`))
+      .finally(() => {
+        this.multiAgentRunning = false;
+        this.renderer.stopSpinner();
+        this.renderer.phaseUpdate("done");
+        this.renderer.notifyIdle();
+        this.currentCancellation = null;
+      });
+  }
+
+  isMultiAgentRunning(): boolean {
+    return this.multiAgentRunning;
   }
 
   private async handleMultiAgent(
