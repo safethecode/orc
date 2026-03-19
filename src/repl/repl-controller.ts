@@ -774,7 +774,28 @@ export class ReplController {
           }
         }
 
-        // Quality gate
+        // Build/test verification (before LLM quality gate)
+        if (toolUseCount > 0) {
+          const buildIssues = await this.runSingleAgentBuildCheck();
+          if (buildIssues.length > 0 && attempt < maxAttempts - 1) {
+            r.qualityGate(false, buildIssues);
+            r.info("auto-retry: build/test failed, sending fix prompt...");
+            const reinforced = `[BUILD FAILED] Fix these issues:\n${buildIssues.map(i => `- ${i}`).join("\n")}`;
+            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+              prompt: reinforced,
+              model: currentProfile.model,
+              systemPrompt,
+              maxTurns: currentProfile.maxTurns,
+              mcpConfig: mcpConfigPath,
+              resumeSession: sessionId,
+            });
+            lastError = "build/test failed";
+            continue;
+          }
+        }
+
+        // Quality gate (LLM-based)
+        flushToolGroup();
         if (result.text) {
           r.info("evaluating quality...");
           const critique = await runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input, toolUseCount }, result.text);
@@ -837,6 +858,22 @@ export class ReplController {
               continue;
             }
           }
+
+          // Auto-retry on any quality gate failure with specific issues
+          if (!critique.passes && critique.issues.length > 0 && attempt < maxAttempts - 1) {
+            r.info(`auto-retry: quality gate failed — ${critique.issues.slice(0, 2).join(", ")}`);
+            const reinforced = `[QUALITY GATE FAILED] Fix these issues in your previous output:\n${critique.issues.map((i: string) => `- ${i}`).join("\n")}\n\nRead the files you created/modified and fix ALL issues now.`;
+            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
+              prompt: reinforced,
+              model: currentProfile.model,
+              systemPrompt,
+              maxTurns: currentProfile.maxTurns,
+              mcpConfig: mcpConfigPath,
+              resumeSession: sessionId,
+            });
+            lastError = "quality gate failed";
+            continue;
+          }
         }
 
         if (result.inputTokens > 0 || result.outputTokens > 0) {
@@ -898,6 +935,40 @@ export class ReplController {
    * pipeline: decompose → context propagation → feedback loop → quality gate
    * → QA agent → conflict resolution → result aggregation.
    */
+  private async runSingleAgentBuildCheck(): Promise<string[]> {
+    const issues: string[] = [];
+    const cwd = process.cwd();
+    const TIMEOUT_NS = 30_000_000_000;
+    let scripts: Record<string, string> = {};
+    try {
+      const pkg = await Bun.file(`${cwd}/package.json`).json();
+      scripts = pkg.scripts ?? {};
+    } catch { return issues; }
+
+    if (scripts.typecheck || scripts["type-check"]) {
+      const name = scripts.typecheck ? "typecheck" : "type-check";
+      try {
+        const proc = Bun.spawnSync(["pnpm", name], { cwd, stderr: "pipe", stdout: "pipe", timeout: TIMEOUT_NS });
+        if (proc.exitCode !== 0) {
+          const err = new TextDecoder().decode(proc.stderr).trim();
+          if (err) issues.push(`Typecheck: ${err.split("\n").slice(0, 3).join("; ")}`);
+        }
+      } catch {}
+    }
+
+    if (scripts.lint) {
+      try {
+        const proc = Bun.spawnSync(["pnpm", "lint"], { cwd, stderr: "pipe", stdout: "pipe", timeout: TIMEOUT_NS });
+        if (proc.exitCode !== 0) {
+          const out = new TextDecoder().decode(proc.stderr).trim() || new TextDecoder().decode(proc.stdout).trim();
+          if (out) issues.push(`Lint: ${out.split("\n").slice(0, 3).join("; ")}`);
+        }
+      } catch {}
+    }
+
+    return issues;
+  }
+
   private getWorkerStateContext(): string | null {
     try {
       const pool = this.orchestrator.getSupervisor().getWorkerPool();
