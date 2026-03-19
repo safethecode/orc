@@ -1,7 +1,7 @@
 import type { SubTask, OrchestratorConfig } from "../config/types.ts";
 import type { AgentRegistry } from "../agents/registry.ts";
 import type { Store } from "../db/store.ts";
-import type { WorkerExecutionStrategy, WorkerHandle, WorkerResult } from "./worker-strategy.ts";
+import type { WorkerExecutionStrategy, WorkerHandle, WorkerResult, SpawnOptions } from "./worker-strategy.ts";
 import { AgentStreamer, type ToolUseEvent } from "../repl/streamer.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildDynamicHarnessAsync } from "../agents/dynamic-harness.ts";
@@ -25,14 +25,14 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
     private store: Store,
   ) {}
 
-  async spawn(subtask: SubTask, maxTurns: number, enrichedPrompt: string): Promise<WorkerHandle> {
+  async spawn(subtask: SubTask, maxTurns: number, enrichedPrompt: string, options?: SpawnOptions): Promise<WorkerHandle> {
     const agentName = `worker-${subtask.id.slice(0, 8)}`;
     const providerConfig = this.config.providers[subtask.provider];
     if (!providerConfig) throw new Error(`Unknown provider: ${subtask.provider}`);
 
     // Use user-defined profile if available, otherwise fall back to dynamic harness
     const userProfile = this.registry.get(subtask.agentRole);
-    const projectDir = process.cwd();
+    const projectDir = options?.workdir ?? process.cwd();
     let systemPrompt: string;
     if (userProfile?.systemPrompt) {
       systemPrompt = userProfile.systemPrompt;
@@ -98,6 +98,7 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       prompt: enrichedPrompt,
       model: profile.model,
       systemPrompt,
+      workdir: options?.workdir,
     });
 
     const isClaude = subtask.provider === "claude";
@@ -151,7 +152,7 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       );
     } else {
       // Non-claude (codex, gemini, kiro): plain process, capture stdout/stderr
-      const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+      const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe", stdin: "ignore", cwd: options?.workdir });
       worker.promise = (async () => {
         try {
           const [stdout, stderr] = await Promise.all([
