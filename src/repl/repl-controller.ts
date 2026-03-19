@@ -406,6 +406,12 @@ export class ReplController {
     // Build system prompt
     let systemPrompt = this.buildSystemPrompt(profile, input, route, skillBodies);
 
+    // Inject live worker state if supervisor has active/completed workers
+    const workerState = this.getWorkerStateContext();
+    if (workerState) {
+      systemPrompt += `\n\n${workerState}`;
+    }
+
     // MCP config
     const mcpServerNames = profile.mcpServers ?? (mcpMgr.getConnectedServers().length > 0 ? undefined : []);
     let mcpConfigPath: string | undefined;
@@ -851,6 +857,22 @@ export class ReplController {
    * pipeline: decompose → context propagation → feedback loop → quality gate
    * → QA agent → conflict resolution → result aggregation.
    */
+  private getWorkerStateContext(): string | null {
+    try {
+      const pool = this.orchestrator.getSupervisor().getWorkerPool();
+      const all = pool.getAll();
+      if (all.length === 0) return null;
+      const lines = all.map(w => {
+        const status = w.status === "running" ? "🟢 running" : w.status === "completed" ? "✅ done" : `❌ ${w.status}`;
+        const result = w.result ? ` — ${w.result.slice(0, 100)}` : "";
+        return `- ${w.agentName} (${w.provider}): ${status}${result}`;
+      });
+      return `## Current Multi-Agent Worker State\n${lines.join("\n")}`;
+    } catch {
+      return null;
+    }
+  }
+
   private async handleMultiAgent(
     input: string,
     cancellation: CancellationToken,
