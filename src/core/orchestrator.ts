@@ -1128,6 +1128,9 @@ export class Orchestrator {
       supervisor.setLanguage(options.lang);
     }
 
+    // Pass full user prompt so workers see ALL requirements, not just subtask summary
+    supervisor.setFullUserPrompt(resolvedPrompt);
+
     return supervisor.execute(taskId, resolvedPrompt);
   }
 

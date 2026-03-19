@@ -409,6 +409,10 @@ export class Supervisor {
     this.contextPropagator.setLanguage(lang);
   }
 
+  setFullUserPrompt(prompt: string): void {
+    this.contextPropagator.setFullUserPrompt(prompt);
+  }
+
   setPreferredProviders(providers: ProviderName[]): void {
     this.options.preferredProviders = providers;
     const capabilities = this.buildCapabilities(this.deps.config);
