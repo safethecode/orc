@@ -20,6 +20,14 @@ export interface WorkerHandle {
 }
 
 /**
+ * Options that can influence how a worker is spawned.
+ */
+export interface SpawnOptions {
+  /** Working directory override — used for git worktree isolation. */
+  workdir?: string;
+}
+
+/**
  * Abstracts the worker execution model so the Supervisor can run workers
  * via tmux sessions (CLI/headless) or AgentStreamer subprocesses (REPL).
  */
@@ -28,6 +36,7 @@ export interface WorkerExecutionStrategy {
     subtask: SubTask,
     maxTurns: number,
     enrichedPrompt: string,
+    options?: SpawnOptions,
   ): Promise<WorkerHandle>;
 
   waitForResult(
