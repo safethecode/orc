@@ -58,9 +58,26 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       systemPrompt = contextBlock + "\n\n" + systemPrompt;
     }
 
-    // Minimal worker context — don't override profile behavior
-    const workerNote = "[WORKER] You are running as an autonomous worker. You cannot receive user input — do NOT use AskUserQuestion. Make all decisions independently.";
-    systemPrompt = workerNote + "\n\n" + systemPrompt;
+    // Worker override: role-aware — design agents keep their full workflow
+    const isDesignRole = subtask.agentRole === "design" || subtask.agentRole === "architect";
+    const workerOverride = isDesignRole
+      ? [
+          "[WORKER MODE]",
+          "You are a multi-agent worker. The project file tree is provided in the user message — use it instead of running find/ls.",
+          "Follow your profile instructions completely — reference-based design, screenshots, quality checks.",
+          "Your profile rules (below) take HIGHEST PRIORITY. Do not skip any step in your design process.",
+          "IMPORTANT: Do NOT use AskUserQuestion or ask for user approval. You cannot receive user input.",
+          "Output your design plan as text, then implement it immediately. Auto-approve your own designs.",
+        ].join("\n")
+      : [
+          "[WORKER MODE — HIGHEST PRIORITY]",
+          "You are a multi-agent worker. The project structure and file tree are ALREADY provided in the user message.",
+          "SKIP all exploration: do NOT run find, ls, ls -la, or tree commands.",
+          "SKIP reading files for analysis. Only Read a file immediately before you Edit it.",
+          "Go STRAIGHT to creating and editing files. Start implementation within your first 3 tool calls.",
+          "Do NOT use AskUserQuestion — you cannot receive user input. Make decisions autonomously.",
+        ].join("\n");
+    systemPrompt = workerOverride + "\n\n" + systemPrompt;
 
     const profile = {
       name: agentName,
