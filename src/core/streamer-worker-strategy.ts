@@ -20,6 +20,8 @@ interface ActiveWorker {
 export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
   private workers = new Map<string, ActiveWorker>();
   private scanResult: CodebaseScanResult | null = null;
+  private skillBodies: string | null = null;
+  private mcpConfigPath: string | null = null;
 
   constructor(
     private config: OrchestratorConfig,
@@ -29,6 +31,14 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
 
   setScanResult(result: CodebaseScanResult | null): void {
     this.scanResult = result;
+  }
+
+  setSkillBodies(bodies: string): void {
+    this.skillBodies = bodies;
+  }
+
+  setMcpConfigPath(path: string): void {
+    this.mcpConfigPath = path;
   }
 
   async spawn(subtask: SubTask, maxTurns: number, enrichedPrompt: string, options?: SpawnOptions): Promise<WorkerHandle> {
@@ -73,6 +83,7 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
     }
 
     // Worker override: role-aware — design agents keep their full workflow
+    const NON_INTERACTIVE_GUARD = "Do NOT run interactive commands (vim, nano, less, more, ssh, mysql, psql, mongo, python REPL, irb, node REPL, etc.). Use non-interactive alternatives only.";
     const isDesignRole = subtask.agentRole === "design" || subtask.agentRole === "architect";
     const workerOverride = isDesignRole
       ? [
@@ -82,6 +93,7 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
           "Your profile rules (below) take HIGHEST PRIORITY. Do not skip any step in your design process.",
           "IMPORTANT: Do NOT use AskUserQuestion or ask for user approval. You cannot receive user input.",
           "Output your design plan as text, then implement it immediately. Auto-approve your own designs.",
+          NON_INTERACTIVE_GUARD,
         ].join("\n")
       : [
           "[WORKER MODE — HIGHEST PRIORITY]",
@@ -90,8 +102,14 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
           "SKIP reading files for analysis. Only Read a file immediately before you Edit it.",
           "Go STRAIGHT to creating and editing files. Start implementation within your first 3 tool calls.",
           "Do NOT use AskUserQuestion — you cannot receive user input. Make decisions autonomously.",
+          NON_INTERACTIVE_GUARD,
         ].join("\n");
     systemPrompt = workerOverride + "\n\n" + systemPrompt;
+
+    // Inject skill bodies from scouting
+    if (this.skillBodies) {
+      systemPrompt += "\n\n" + this.skillBodies;
+    }
 
     const profile = {
       name: agentName,
@@ -113,6 +131,7 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       model: profile.model,
       systemPrompt,
       workdir: options?.workdir,
+      mcpConfig: (subtask.provider === "claude" && this.mcpConfigPath) ? this.mcpConfigPath : undefined,
     });
 
     const isClaude = subtask.provider === "claude";
@@ -147,6 +166,10 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
         if (trimmed && trimmed.length > 5) {
           eventBus.publish({ type: "worker:text", agentName, text: trimmed.length > 200 ? trimmed.slice(0, 200) + "…" : trimmed });
         }
+      });
+
+      streamer.on("usage", (usage: { inputTokens: number; outputTokens: number; costUsd: number }) => {
+        eventBus.publish({ type: "worker:cost", agentName, costUsd: usage.costUsd, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens });
       });
 
       streamer.on("error", (errText: string) => {

@@ -40,6 +40,7 @@ export type OrcEvent =
   | { type: "worker:spawn"; workerId: string; provider: string; model: string; role: string }
   | { type: "worker:progress"; workerId: string; progress: number }
   | { type: "worker:complete"; workerId: string; tokenUsage: number; costUsd: number; durationMs: number }
+  | { type: "worker:cost"; agentName: string; costUsd: number; inputTokens: number; outputTokens: number }
   | { type: "worker:fail"; workerId: string; error: string }
   | { type: "worker:timeout"; workerId: string; elapsedMs: number }
   | { type: "result:collected"; taskId: string; subtaskId: string; success: boolean }
