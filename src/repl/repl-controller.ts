@@ -2,6 +2,7 @@ import type { Orchestrator } from "../core/orchestrator.ts";
 import type { OrchestratorConfig, ModelTier, SubTask, ProviderName, DecompositionResult } from "../config/types.ts";
 import { decomposeWithSam } from "../core/decomposer.ts";
 import type { RendererPort } from "./renderer-types.ts";
+import { getLayoutManager } from "./renderer.ts";
 import { routeTask, classifyWithSam, type RouteResult } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
@@ -1123,6 +1124,7 @@ export class ReplController {
   /** Bridge eventBus events from Supervisor to REPL renderer */
   private subscribeSupervisorEvents(): () => void {
     const r = this.renderer;
+    const lm = getLayoutManager();
     // Track tool calls per worker for collapsible display
     const workerTools = new Map<string, { count: number; shown: number; lastSection: string }>();
     const MAX_VISIBLE_TOOLS = 3;
@@ -1141,15 +1143,19 @@ export class ReplController {
     const handlers: Array<[string, (e: any) => void]> = [
       ["supervisor:plan", (e) => {
         r.phaseUpdate("planning", `${e.phases} phases`);
+        lm?.setSubtaskCount(e.phases);
       }],
       ["supervisor:dispatch", (e) => {
         totalWorkers++;
         r.dim(`[${e.role}] ${e.provider}/${e.model} — ${e.prompt}`);
         r.taskUpdate(e.subtaskId, "running");
+        lm?.setSubtaskCount(totalWorkers);
       }],
       ["worker:spawn", (e) => {
         r.workerStart(e.workerId, e.workerId, e.model);
         workerTools.set(e.workerId, { count: 0, shown: 0, lastSection: "" });
+        lm?.workerStarted(e.workerId, e.model ?? "sonnet");
+        lm?.updateAgentState("tool_use");
       }],
       ["worker:progress", (e) => {
         r.workerUpdate(e.workerId, { progress: e.progress });
@@ -1166,6 +1172,7 @@ export class ReplController {
             tracker.shown++;
           }
           workerTools.set(wId, tracker);
+          lm?.workerUpdate(wId, "tool_use", e.toolUsed);
         }
       }],
       ["worker:complete", (e) => {
@@ -1177,6 +1184,7 @@ export class ReplController {
         r.workerDone(e.workerId);
         r.taskUpdate(e.workerId, "passed", e.durationMs);
         workerTools.delete(e.workerId);
+        lm?.workerDone(e.workerId);
       }],
       ["worker:text", (e) => {
         const clean = (e.text as string).replace(/\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07|[\x00-\x08\x0e-\x1f]/g, "").trim();
@@ -1203,6 +1211,7 @@ export class ReplController {
         failedWorkers++;
         flushHidden(e.workerId);
         r.workerDone(e.workerId);
+        lm?.workerDone(e.workerId);
         r.taskUpdate(e.workerId, "failed");
         r.error(`Worker failed: ${e.error}`);
         r.dim(`  Progress: ${completedWorkers}/${totalWorkers} done, ${failedWorkers} failed`);
