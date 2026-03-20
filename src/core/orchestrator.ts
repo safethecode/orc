@@ -53,6 +53,8 @@ import { Supervisor } from "./supervisor.ts";
 import { TmuxWorkerStrategy } from "./tmux-worker-strategy.ts";
 import { StreamerWorkerStrategy } from "./streamer-worker-strategy.ts";
 import { FileRefResolver } from "../repl/file-ref.ts";
+import { scoutSkills } from "../repl/skill-scout.ts";
+import { scoutMcp } from "../mcp/mcp-scout.ts";
 import { McpClientManager } from "../mcp/client-manager.ts";
 import { LspManager } from "../lsp/index.ts";
 import { GitSnapshotManager } from "./git-snapshot.ts";
@@ -1084,6 +1086,32 @@ export class Orchestrator {
     const streamerStrategy = new StreamerWorkerStrategy(this.config, this.registry, this.store);
     const scanResult = this.codebaseScanner.getScanResult();
     streamerStrategy.setScanResult(scanResult);
+
+    // Skill scouting: resolve skills once for the overall prompt, inject into all workers
+    try {
+      const pseudoSubtask = { agentRole: "coder", prompt: resolvedPrompt } as SubTask;
+      const scoutResult = await scoutSkills(pseudoSubtask, this.skillIndex);
+      if (scoutResult.needed && scoutResult.skills.length > 0) {
+        const bodies = await this.skillIndex.resolve(scoutResult.skills);
+        if (bodies.length > 0) {
+          streamerStrategy.setSkillBodies(bodies.join("\n\n"));
+        }
+      }
+    } catch { /* skill scouting non-fatal */ }
+
+    // MCP scouting: connect servers and pass config path to workers
+    try {
+      const mcpResult = await scoutMcp(resolvedPrompt);
+      if (mcpResult.needed && mcpResult.servers.length > 0) {
+        const connected = await this.mcpManager.connectOnDemand(mcpResult.servers);
+        if (connected.length > 0 && this.mcpManager.getToolCount() > 0) {
+          const configPath = this.mcpManager.generateMcpConfigJson();
+          if (configPath) {
+            streamerStrategy.setMcpConfigPath(configPath);
+          }
+        }
+      }
+    } catch { /* MCP scouting non-fatal */ }
 
     const supervisor = new Supervisor(
       {
