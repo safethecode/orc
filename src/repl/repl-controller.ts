@@ -261,7 +261,7 @@ export class ReplController {
     let agentName!: string;
 
     r.phaseUpdate("routing");
-    r.startSpinner("routing", "haiku");
+    r.startSpinner("routing", "sonnet");
 
     if (this.pinnedAgent) {
       const pinnedProfile = this.orchestrator.getRegistry().get(this.pinnedAgent);
@@ -666,9 +666,9 @@ export class ReplController {
           }
         }
 
-        if (toolGroupCount - toolGroupShown <= MAX_TOOLS_VISIBLE) {
+        if (toolGroupShown < MAX_TOOLS_VISIBLE) {
           r.toolUse(tool.name, detail, false, inp);
-          toolGroupShown = toolGroupCount;
+          toolGroupShown++;
         }
         r.startSpinner(agentName, route.model);
         eventBus.publish({ type: "agent:tool", agent: agentName, tool: tool.name, detail });
@@ -1011,7 +1011,7 @@ export class ReplController {
     const r = this.renderer;
     r.phaseUpdate("decomposing");
 
-    // 1. Decompose with Sam (Haiku) and show plan
+    // 1. Decompose with Sam (Sonnet) and show plan
     const lang = this.conversation.getLanguage();
     const profileContext = this.orchestrator.buildProfileContext();
     const decomposition = await decomposeWithSam(input, "preview", lang ?? undefined, profileContext);
@@ -1121,11 +1121,11 @@ export class ReplController {
           const wId = e.workerId as string;
           const tracker = workerTools.get(wId) ?? { count: 0, shown: 0, lastSection: "" };
           tracker.count++;
-          if (tracker.count - tracker.shown <= MAX_VISIBLE_TOOLS) {
+          if (tracker.shown < MAX_VISIBLE_TOOLS) {
             const input = e.toolInput as Record<string, unknown> | undefined;
             const detail = formatToolDetail(e.toolUsed, input);
             r.dim(`    \x1b[33m●\x1b[0m \x1b[1m${e.toolUsed}\x1b[0m\x1b[2m${detail}\x1b[0m`);
-            tracker.shown = tracker.count;
+            tracker.shown++;
           }
           workerTools.set(wId, tracker);
         }
@@ -1247,7 +1247,7 @@ export class ReplController {
 
     if (this.planMode.isActive()) sp += "\n\n" + this.planMode.getSystemPromptAddition();
 
-    if (route.model === "haiku") sp += "\nKeep responses concise and under 200 words.";
+    if (route.model === "sonnet") sp += "\nKeep responses concise and under 200 words.";
 
     if ((profile.role ?? "").toLowerCase().includes("design")) {
       sp += `\n\n[DESIGN ENFORCER — AUTO-VERIFIED]
