@@ -10,7 +10,7 @@
 //
 // Quality boosters:
 // - Golden solution injection: reference code from past runs
-// - Domain verifier: Haiku pre-flight check catches violations before testing
+// - Domain verifier: Sonnet pre-flight check catches violations before testing
 // - Path diversity: each parallel path gets a different "personality"
 // - Success/failure pattern tracking: proven techniques & anti-patterns
 // - Phase transition injection: winning code from phase N → phase N+1
@@ -201,8 +201,8 @@ function findBestGolden(
   return best;
 }
 
-// ── Domain Verifier (Haiku Pre-Flight Check) ─────────────────────────
-// Fast Haiku agent checks code for domain rule violations before testing.
+// ── Domain Verifier (Sonnet Pre-Flight Check) ─────────────────────────
+// Fast Sonnet agent checks code for domain rule violations before testing.
 // Only runs in opus phases where each wasted iteration is costly.
 
 async function verifyDomainCompliance(

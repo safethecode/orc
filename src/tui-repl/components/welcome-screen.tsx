@@ -10,7 +10,7 @@ export function WelcomeScreen({ profiles, meta }: Props) {
   const names = profiles.split(", ").filter(Boolean);
   const version = meta?.version ?? "0.1.0";
   const cwd = meta?.cwd ?? process.cwd();
-  const defaultTier = meta?.defaultTier ?? "haiku";
+  const defaultTier = meta?.defaultTier ?? "sonnet";
   const mcpServers = meta?.mcpServers ?? [];
   const formatters = meta?.formatters ?? [];
 

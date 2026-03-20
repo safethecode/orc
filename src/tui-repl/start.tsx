@@ -49,7 +49,7 @@ export async function startTuiRepl(
   const rendererOpts = {
     version: "0.1.0",
     cwd: process.cwd(),
-    defaultTier: config.defaultTier ?? "haiku",
+    defaultTier: config.defaultTier ?? "sonnet",
   };
 
   // Approval callback: dispatches SHOW_APPROVAL, waits for user Y/N via Promise

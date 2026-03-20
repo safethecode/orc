@@ -35,7 +35,7 @@ export function ProjectBar() {
   }, []);
 
   const projectName = (process.cwd().split("/").pop() ?? "project");
-  const tier = state.status.tier ?? "haiku";
+  const tier = state.status.tier ?? "sonnet";
 
   return (
     <box flexShrink={0} border={["top"]} borderColor="#3d4262" flexDirection="row" paddingLeft={1}>

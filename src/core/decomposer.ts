@@ -288,7 +288,7 @@ export function decompose(
   return { subtasks, executionPlan: plan, estimatedTotalCost: 0 };
 }
 
-// ── LLM-based decomposition via Sam (haiku) ───────────────────────
+// ── LLM-based decomposition via Sam (sonnet) ───────────────────────
 
 interface SamDecomposition {
   subtasks: Array<{
@@ -299,7 +299,7 @@ interface SamDecomposition {
 }
 
 /**
- * Use Sam (haiku) to decompose a task into subtasks with roles and dependencies.
+ * Use Sam (sonnet) to decompose a task into subtasks with roles and dependencies.
  * Falls back to regex-based decompose() on failure.
  */
 export async function decomposeWithSam(

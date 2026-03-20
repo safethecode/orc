@@ -119,7 +119,7 @@ async function main() {
       const agentName = positional[1] === "--agent" ? positional[2] : undefined;
       const actualPrompt = agentName ? positional.slice(3).join(" ") : prompt;
 
-      // Use Sam (haiku) to classify, then route
+      // Use Sam (sonnet) to classify, then route
       const { routeTask, classifyWithSam } = await import("./core/router.ts");
       const route = routeTask(actualPrompt, config.routing);
       let targetAgent: string;

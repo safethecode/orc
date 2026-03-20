@@ -54,10 +54,10 @@ function isConversational(prompt: string): boolean {
   return false;
 }
 
-const CLASSIFY_TIMEOUT_MS = 15_000; // 15s — CLI spawn + haiku API needs headroom
+const CLASSIFY_TIMEOUT_MS = 15_000; // 15s — CLI spawn + sonnet API needs headroom
 
 /**
- * Use Sam (haiku) to classify a prompt via LLM with timeout.
+ * Use Sam (sonnet) to classify a prompt via LLM with timeout.
  */
 export async function classifyWithSam(prompt: string, previousAgent?: string): Promise<Classification> {
   const contextLine = previousAgent && previousAgent !== "Sam"

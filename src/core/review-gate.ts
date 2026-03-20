@@ -4,7 +4,7 @@
  * Stage 1 — Spec Compliance: "Did the output satisfy the original requirements?"
  * Stage 2 — Code Quality:    "Is the code quality acceptable?"
  *
- * Each stage runs a single Haiku call (fast + cheap ~$0.001).
+ * Each stage runs a single Sonnet call.
  */
 
 export interface ReviewResult {
@@ -43,7 +43,7 @@ function parseReviewJSON(raw: string): { passed: boolean; issues: string[]; summ
   return { passed: false, issues: ["Could not parse review output"], summary: raw.slice(0, 200) };
 }
 
-async function runHaiku(prompt: string): Promise<string> {
+async function runSonnet(prompt: string): Promise<string> {
   const proc = Bun.spawn(
     ["claude", "-p", prompt, "--model", "sonnet", "--output-format", "text", "--dangerously-skip-permissions"],
     { stdout: "pipe", stderr: "pipe" },
@@ -67,7 +67,7 @@ ${result.slice(0, 4000)}
 Respond with ONLY a JSON object (no markdown fences):
 {"passed": true/false, "issues": ["list of unmet requirements"], "summary": "one-sentence verdict"}`;
 
-  const raw = await runHaiku(prompt);
+  const raw = await runSonnet(prompt);
   const parsed = parseReviewJSON(raw);
   return { stage: "spec", ...parsed };
 }
@@ -85,7 +85,7 @@ ${result.slice(0, 4000)}
 Respond with ONLY a JSON object (no markdown fences):
 {"passed": true/false, "issues": ["list of quality issues"], "summary": "one-sentence verdict"}`;
 
-  const raw = await runHaiku(prompt);
+  const raw = await runSonnet(prompt);
   const parsed = parseReviewJSON(raw);
   return { stage: "quality", ...parsed };
 }

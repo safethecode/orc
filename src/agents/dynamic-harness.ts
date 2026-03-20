@@ -255,7 +255,7 @@ function formatCodebaseContext(fp: ProjectFingerprint, opts: DynamicHarnessOptio
 const classificationCache = new Map<string, TaskType>();
 
 /**
- * AI-powered task classification using Haiku (~$0.001 per call).
+ * AI-powered task classification using Sonnet.
  * Falls back to keyword matching if AI SDK is unavailable or call fails.
  */
 async function classifyTaskTypeAI(prompt: string): Promise<TaskType> {
@@ -272,7 +272,7 @@ async function classifyTaskTypeAI(prompt: string): Promise<TaskType> {
     const anthropic = createAnthropic();
     const result = await Promise.race([
       generateText({
-        model: anthropic("claude-haiku-4-5-20251001"),
+        model: anthropic("claude-sonnet-4-6-20250929"),
         prompt: `Classify this coding task into exactly one category. Reply with ONLY the category name, nothing else.
 
 Categories:
@@ -540,9 +540,8 @@ export function buildDynamicHarness(options: DynamicHarnessOptions): HarnessResu
 }
 
 /**
- * Build dynamic harness (async version — uses Haiku AI for task classification).
+ * Build dynamic harness (async version — uses Sonnet AI for task classification).
  * Falls back to keyword classification if AI SDK is unavailable.
- * Cost: ~$0.001 per call via Haiku.
  */
 export async function buildDynamicHarnessAsync(options: DynamicHarnessOptions): Promise<HarnessResult> {
   const taskType = await resolveTaskTypeAsync(options.role, options.prompt);
@@ -604,7 +603,7 @@ export function getTaskType(prompt: string): TaskType {
 }
 
 /**
- * Classify a prompt into a task type using AI (Haiku).
+ * Classify a prompt into a task type using AI (Sonnet).
  * Async version with fallback to keywords.
  */
 export async function getTaskTypeAI(prompt: string): Promise<TaskType> {

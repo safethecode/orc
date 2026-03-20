@@ -44,7 +44,7 @@ Rules:
 - If no skill is relevant, return {"needed": false, "skills": []}`;
 
   try {
-    const text = await runHaiku(prompt, signal);
+    const text = await runSonnet(prompt, signal);
     const parsed = parseJson(text);
 
     if (!parsed || !parsed.needed) {
@@ -69,7 +69,7 @@ Rules:
   }
 }
 
-function runHaiku(prompt: string, signal?: AbortSignal): Promise<string> {
+function runSonnet(prompt: string, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn("claude", [
       "-p", prompt,

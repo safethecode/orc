@@ -42,7 +42,7 @@ Rules:
 - "filesystem" is rarely needed since the agent already has file access`;
 
   try {
-    const text = await runHaiku(prompt, signal);
+    const text = await runSonnet(prompt, signal);
     const parsed = parseJson(text);
 
     if (!parsed || !parsed.needed) {
@@ -72,7 +72,7 @@ Rules:
   }
 }
 
-function runHaiku(prompt: string, signal?: AbortSignal): Promise<string> {
+function runSonnet(prompt: string, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn("claude", [
       "-p", prompt,
