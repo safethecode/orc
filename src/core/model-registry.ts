@@ -3,7 +3,7 @@
 // Inspired by models.dev — auto-refreshable with hardcoded defaults.
 
 export interface ModelInfo {
-  id: string;                    // e.g. "anthropic/claude-sonnet-4-5"
+  id: string;                    // e.g. "anthropic/claude-sonnet-4-6"
   name: string;
   provider: string;
   family: string;
@@ -58,8 +58,8 @@ export class ModelRegistry {
         status: "active",
       },
       {
-        id: "anthropic/claude-sonnet-4-5",
-        name: "Claude Sonnet 4.5",
+        id: "anthropic/claude-sonnet-4-6",
+        name: "Claude Sonnet 4.6",
         provider: "anthropic",
         family: "claude",
         capabilities: { toolUse: true, reasoning: true, vision: true, streaming: true },
@@ -156,7 +156,7 @@ export class ModelRegistry {
 
   /**
    * Get model info by ID. Supports fuzzy matching — a bare substring
-   * like "sonnet" will match "anthropic/claude-sonnet-4-5".
+   * like "sonnet" will match "anthropic/claude-sonnet-4-6".
    */
   get(id: string): ModelInfo | undefined {
     // Exact match first
@@ -247,7 +247,7 @@ export class ModelRegistry {
 
   /**
    * Format a single model info line for CLI display.
-   * Example: "anthropic/claude-sonnet-4-5  $3.00/$15.00  200K ctx  [tool,reason,vision,stream]"
+   * Example: "anthropic/claude-sonnet-4-6  $3.00/$15.00  200K ctx  [tool,reason,vision,stream]"
    */
   formatModelLine(model: ModelInfo): string {
     const caps: string[] = [];

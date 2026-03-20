@@ -28,14 +28,14 @@ interface ProviderModel {
 
 // Provider → SDK model ID mappings
 const PROVIDER_DEFAULTS: Record<string, ProviderModel> = {
-  claude: { provider: "claude", model: "sonnet", sdkModel: "claude-sonnet-4-5-20250929" },
+  claude: { provider: "claude", model: "sonnet", sdkModel: "claude-sonnet-4-6-20250929" },
   codex: { provider: "codex", model: "codex", sdkModel: "gpt-4o" },
   gemini: { provider: "gemini", model: "gemini-2.5-pro", sdkModel: "gemini-2.5-pro-latest" },
 };
 
 // Cost per 1M tokens (input/output)
 const COST_TABLE: Record<string, { input: number; output: number }> = {
-  "claude-sonnet-4-5-20250929": { input: 3.0, output: 15.0 },
+  "claude-sonnet-4-6-20250929": { input: 3.0, output: 15.0 },
   "claude-haiku-4-5-20251001": { input: 0.8, output: 4.0 },
   "claude-opus-4-6": { input: 15.0, output: 75.0 },
   "gpt-4o": { input: 2.5, output: 10.0 },
@@ -272,7 +272,7 @@ export class BenchmarkRunner {
   }
 
   /**
-   * Auto-evaluate using Haiku as judge via AI SDK.
+   * Auto-evaluate using Sonnet as judge via AI SDK.
    */
   async autoEvaluate(
     task: BenchmarkTask,
@@ -282,7 +282,7 @@ export class BenchmarkRunner {
 
     const judgeResult = await Promise.race([
       generateText({
-        model: anthropic("claude-haiku-4-5-20251001"),
+        model: anthropic("claude-sonnet-4-6-20250929"),
         prompt: judgePrompt,
         maxOutputTokens: 512,
         temperature: 0,
@@ -296,7 +296,7 @@ export class BenchmarkRunner {
 
     // Track judge cost
     const judgeCost = calculateCost(
-      "claude-haiku-4-5-20251001",
+      "claude-sonnet-4-6-20250929",
       judgeResult.usage.inputTokens ?? 0,
       judgeResult.usage.outputTokens ?? 0,
     );
