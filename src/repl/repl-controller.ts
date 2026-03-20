@@ -186,9 +186,9 @@ export class ReplController {
     const trimmed = input.trim();
     if (!trimmed) return;
 
-    // During multi-agent: allow commands, route other input to Sam for status/questions
+    // During background execution: route natural input to Sam for status/questions
     let savedPin: string | null = null;
-    if (this.multiAgentRunning && !isCommand(trimmed)) {
+    if ((this.multiAgentRunning || this.singleAgentRunning) && !isCommand(trimmed)) {
       savedPin = this.pinnedAgent;
       this.pinnedAgent = "Sam";
     }
@@ -238,8 +238,8 @@ export class ReplController {
     try {
       await this.handleNaturalInput(resolvedInput, cancellation, mentionedAgent);
     } finally {
-      // Multi-agent runs in background — its own cleanup handles phaseUpdate/notifyIdle
-      if (!this.multiAgentRunning) {
+      // Background agents (multi or single) handle their own cleanup
+      if (!this.multiAgentRunning && !this.singleAgentRunning) {
         this.renderer.phaseUpdate("done");
         this.renderer.notifyIdle();
         this.currentStreamer = null;
@@ -466,13 +466,23 @@ export class ReplController {
       sessionId,
     });
 
-    // Design agents: plan-first preview flow
+    // Run single-agent in background so REPL stays responsive
     const isDesignAgent = (profile.role ?? "").toLowerCase().includes("design");
-    if (isDesignAgent) {
-      await this.executeDesignPreview(agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input, sessionId);
-    } else {
-      await this.executeWithRetry(cmd, agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input, sessionId);
-    }
+    this.singleAgentRunning = true;
+    const execution = isDesignAgent
+      ? this.executeDesignPreview(agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input, sessionId)
+      : this.executeWithRetry(cmd, agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input, sessionId);
+
+    execution
+      .catch(err => this.renderer.error(`Agent error: ${(err as Error).message}`))
+      .finally(() => {
+        this.singleAgentRunning = false;
+        this.renderer.stopSpinner();
+        this.renderer.phaseUpdate("done");
+        this.renderer.notifyIdle();
+        this.currentStreamer = null;
+        this.currentCancellation = null;
+      });
   }
 
   /** Design agent 2-phase flow: plan first, then execute on approval */
@@ -986,6 +996,7 @@ export class ReplController {
   }
 
   private multiAgentRunning = false;
+  private singleAgentRunning = false;
 
   private runMultiAgentBackground(input: string, cancellation: CancellationToken): void {
     this.multiAgentRunning = true;
@@ -1000,8 +1011,8 @@ export class ReplController {
       });
   }
 
-  isMultiAgentRunning(): boolean {
-    return this.multiAgentRunning;
+  isAgentRunning(): boolean {
+    return this.multiAgentRunning || this.singleAgentRunning;
   }
 
   private async handleMultiAgent(
