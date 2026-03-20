@@ -235,8 +235,31 @@ function renderMarkdownLine(line: string): string {
   const h1 = line.match(/^# (.+)/);
   if (h1) return `${BOLD}${WHITE}${h1[1]}${RESET}`;
 
+  // Table row — render with aligned columns
+  if (line.startsWith("|") && line.endsWith("|")) {
+    // Skip separator rows (|---|---|)
+    if (/^\|[\s-:|]+\|$/.test(line)) {
+      const cols = line.split("|").filter(Boolean).length;
+      const w = (process.stdout.columns || 80) - 10;
+      return `${DIM}${"─".repeat(w)}${RESET}`;
+    }
+    // Data/header rows
+    const cells = line.split("|").filter(Boolean).map(c => c.trim());
+    const rendered = cells.map((cell, i) => {
+      // Bold the first column (usually the key)
+      const content = cell
+        .replace(/\*\*(.+?)\*\*/g, `${BOLD}$1${RESET}`)
+        .replace(/`(.+?)`/g, `${CYAN}$1${RESET}`);
+      return i === 0 ? `${BOLD}${content}${RESET}` : content;
+    });
+    return `  ${rendered.join(`${DIM} │ ${RESET}`)}`;
+  }
+
   // Bullet list
   line = line.replace(/^(\s*)- /, "$1• ");
+
+  // Numbered list — dim the number
+  line = line.replace(/^(\s*)(\d+)\. /, `$1${DIM}$2.${RESET} `);
 
   // Bold
   line = line.replace(/\*\*(.+?)\*\*/g, `${BOLD}$1${RESET}`);
