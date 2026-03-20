@@ -1031,16 +1031,29 @@ export class ReplController {
   ): Promise<void> {
     const r = this.renderer;
 
-    // Skip brainstorm for multi-agent — Sonnet decomposition is sufficient.
-    // Brainstorm adds 2-3 min overhead with minimal benefit when workers each get full context.
-    r.phaseUpdate("decomposing");
-
-    // 1. Decompose with Sam (Sonnet) and show plan
     const lang = this.conversation.getLanguage();
     const profileContext = this.orchestrator.buildProfileContext();
-    const decomposition = await decomposeWithSam(input, "preview", lang ?? undefined, profileContext);
+    const claudeProvider = this.config.providers.claude;
+
+    // Run brainstorm + decomposition in parallel — no extra wait time
+    r.phaseUpdate("planning");
+    const brainstormPromise = (claudeProvider && shouldBrainstorm(input, "complex") && !cancellation.cancelled)
+      ? brainstorm(input, claudeProvider, { name: "brainstorm", provider: "claude", model: "sonnet", role: "coder" } as any, cancellation.signal, (round, label) => {
+          r.updateSpinner(`deliberation ${round}: ${label}...`);
+        }).catch(() => null)
+      : Promise.resolve(null);
+
+    const decomposePromise = decomposeWithSam(input, "preview", lang ?? undefined, profileContext);
+
+    const [bsResult, decomposition] = await Promise.all([brainstormPromise, decomposePromise]);
 
     if (cancellation.cancelled) return;
+
+    // Show brainstorm result if available
+    const brainstormContext = bsResult?.synthesized ?? "";
+    if (brainstormContext) {
+      r.brainstormStatus(3, bsResult!.durationMs);
+    }
 
     // Show decomposition plan then proceed (ESC cancels during execution)
     r.stopSpinner();
@@ -1058,7 +1071,7 @@ export class ReplController {
     const unsubscribe = this.subscribeSupervisorEvents();
 
     try {
-      const supervisorInput = brainstormResult ? input + "\n\n" + brainstormResult : input;
+      const supervisorInput = brainstormContext ? input + "\n\n## Deliberation Result\n" + brainstormContext : input;
       const result = await this.orchestrator.executeWithSupervisor(supervisorInput, { lang: lang ?? undefined });
 
       if (cancellation.cancelled) return;
