@@ -1087,31 +1087,13 @@ export class Orchestrator {
     const scanResult = this.codebaseScanner.getScanResult();
     streamerStrategy.setScanResult(scanResult);
 
-    // Skill scouting: resolve skills once for the overall prompt, inject into all workers
-    try {
-      const pseudoSubtask = { agentRole: "coder", prompt: resolvedPrompt } as SubTask;
-      const scoutResult = await scoutSkills(pseudoSubtask, this.skillIndex);
-      if (scoutResult.needed && scoutResult.skills.length > 0) {
-        const bodies = await this.skillIndex.resolve(scoutResult.skills);
-        if (bodies.length > 0) {
-          streamerStrategy.setSkillBodies(bodies.join("\n\n"));
-        }
-      }
-    } catch { /* skill scouting non-fatal */ }
-
-    // MCP scouting: connect servers and pass config path to workers
-    try {
-      const mcpResult = await scoutMcp(resolvedPrompt);
-      if (mcpResult.needed && mcpResult.servers.length > 0) {
-        const connected = await this.mcpManager.connectOnDemand(mcpResult.servers);
-        if (connected.length > 0 && this.mcpManager.getToolCount() > 0) {
-          const configPath = this.mcpManager.generateMcpConfigJson();
-          if (configPath) {
-            streamerStrategy.setMcpConfigPath(configPath);
-          }
-        }
-      }
-    } catch { /* MCP scouting non-fatal */ }
+    // Skip skill/MCP scouting for multi-agent — workers use profile-defined skills.
+    // Each scouting call adds 5-10s latency with Sonnet. Workers get MCP from orchestrator
+    // if servers are already connected.
+    if (this.mcpManager.getToolCount() > 0) {
+      const configPath = this.mcpManager.generateMcpConfigJson();
+      if (configPath) streamerStrategy.setMcpConfigPath(configPath);
+    }
 
     const supervisor = new Supervisor(
       {

@@ -326,6 +326,12 @@ export class ReplController {
       }
 
       r.phaseUpdate("classifying");
+      // Start scouting in parallel with classification — don't wait for profile
+      const scoutPromise = Promise.allSettled([
+        this.skillScoutCache.get<ScoutResult>(input) ?? scoutSkills({ agentRole: "coder", prompt: input } as SubTask, this.orchestrator.getSkillIndex(), cancellation.signal).then(sr => { this.skillScoutCache.set(input, sr); return sr; }),
+        this.mcpScoutCache.get<McpScoutResult>(input) ?? scoutMcp(input, cancellation.signal).then(mr => { this.mcpScoutCache.set(input, mr); return mr; }),
+      ]);
+
       const classification = await classifyWithSam(input, this.lastAgent ?? undefined);
       agentName = classification.agent;
       r.info(classification.reason);
@@ -336,10 +342,12 @@ export class ReplController {
         route.multiAgent = true;
       }
 
-      // Store detected language for system prompt injection
       if (classification.lang) {
         this.conversation.setLanguage(classification.lang);
       }
+
+      // Store early scout results for later use
+      (this as any)._earlyScoutPromise = scoutPromise;
     }
 
     if (route.multiAgent) {
@@ -363,13 +371,15 @@ export class ReplController {
     r.agentHeader(agentName, displayModel, route.reason);
     r.startSpinner(agentName, displayModel);
 
-    // Scout skills + MCP
-    const skillIndex = this.orchestrator.getSkillIndex();
-    const pseudoSubtask = { agentRole: profile.role ?? "coder", prompt: input } as SubTask;
-    const [skillSettled, mcpSettled] = await Promise.allSettled([
-      this.skillScoutCache.get<ScoutResult>(input) ?? scoutSkills(pseudoSubtask, skillIndex, cancellation.signal).then(sr => { this.skillScoutCache.set(input, sr); return sr; }),
-      this.mcpScoutCache.get<McpScoutResult>(input) ?? scoutMcp(input, cancellation.signal).then(mr => { this.mcpScoutCache.set(input, mr); return mr; }),
-    ]);
+    // Scout skills + MCP (use early results if available from parallel classification)
+    const earlyScout = (this as any)._earlyScoutPromise as Promise<PromiseSettledResult<any>[]> | undefined;
+    (this as any)._earlyScoutPromise = undefined;
+    const [skillSettled, mcpSettled] = earlyScout
+      ? await earlyScout
+      : await Promise.allSettled([
+          this.skillScoutCache.get<ScoutResult>(input) ?? scoutSkills({ agentRole: profile.role ?? "coder", prompt: input } as SubTask, this.orchestrator.getSkillIndex(), cancellation.signal).then(sr => { this.skillScoutCache.set(input, sr); return sr; }),
+          this.mcpScoutCache.get<McpScoutResult>(input) ?? scoutMcp(input, cancellation.signal).then(mr => { this.mcpScoutCache.set(input, mr); return mr; }),
+        ]);
     const emptySkill: ScoutResult = { needed: false, skills: [], durationMs: 0 };
     const emptyMcp: McpScoutResult = { needed: false, servers: [], durationMs: 0 };
     const skillScoutResult = skillSettled.status === "fulfilled" ? skillSettled.value : emptySkill;
@@ -1021,28 +1031,8 @@ export class ReplController {
   ): Promise<void> {
     const r = this.renderer;
 
-    // 0. Brainstorm if task is complex enough — run ONCE before decomposition
-    let brainstormResult = "";
-    const claudeProvider = this.config.providers.claude;
-    if (claudeProvider && shouldBrainstorm(input, "complex") && !cancellation.cancelled) {
-      r.phaseUpdate("deliberation");
-      r.startSpinner("orc", "supervisor" as any);
-      r.updateSpinner("deliberation...");
-      try {
-        const minProfile = { name: "brainstorm", provider: "claude", model: "sonnet", role: "coder" } as any;
-        const bsResult = await brainstorm(input, claudeProvider, minProfile, cancellation.signal, (round, label) => {
-          r.updateSpinner(`deliberation round ${round}: ${label}...`);
-        });
-        if (bsResult.synthesized) {
-          brainstormResult = bsResult.synthesized;
-          r.stopSpinner();
-          r.brainstormStatus(3, bsResult.durationMs);
-        }
-      } catch { /* deliberation non-fatal */ }
-    }
-
-    if (cancellation.cancelled) return;
-
+    // Skip brainstorm for multi-agent — Sonnet decomposition is sufficient.
+    // Brainstorm adds 2-3 min overhead with minimal benefit when workers each get full context.
     r.phaseUpdate("decomposing");
 
     // 1. Decompose with Sam (Sonnet) and show plan
