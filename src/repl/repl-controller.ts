@@ -1020,6 +1020,29 @@ export class ReplController {
     cancellation: CancellationToken,
   ): Promise<void> {
     const r = this.renderer;
+
+    // 0. Brainstorm if task is complex enough — run ONCE before decomposition
+    let brainstormResult = "";
+    const claudeProvider = this.config.providers.claude;
+    if (claudeProvider && shouldBrainstorm(input, "complex") && !cancellation.cancelled) {
+      r.phaseUpdate("deliberation");
+      r.startSpinner("orc", "supervisor" as any);
+      r.updateSpinner("deliberation...");
+      try {
+        const minProfile = { name: "brainstorm", provider: "claude", model: "sonnet", role: "coder" } as any;
+        const bsResult = await brainstorm(input, claudeProvider, minProfile, cancellation.signal, (round, label) => {
+          r.updateSpinner(`deliberation round ${round}: ${label}...`);
+        });
+        if (bsResult.synthesized) {
+          brainstormResult = bsResult.synthesized;
+          r.stopSpinner();
+          r.brainstormStatus(3, bsResult.durationMs);
+        }
+      } catch { /* deliberation non-fatal */ }
+    }
+
+    if (cancellation.cancelled) return;
+
     r.phaseUpdate("decomposing");
 
     // 1. Decompose with Sam (Sonnet) and show plan
@@ -1045,7 +1068,8 @@ export class ReplController {
     const unsubscribe = this.subscribeSupervisorEvents();
 
     try {
-      const result = await this.orchestrator.executeWithSupervisor(input, { lang: lang ?? undefined });
+      const supervisorInput = brainstormResult ? input + "\n\n" + brainstormResult : input;
+      const result = await this.orchestrator.executeWithSupervisor(supervisorInput, { lang: lang ?? undefined });
 
       if (cancellation.cancelled) return;
 
@@ -1180,6 +1204,9 @@ export class ReplController {
         r.error(`Worker failed: ${e.error}`);
         r.dim(`  Progress: ${completedWorkers}/${totalWorkers} done, ${failedWorkers} failed`);
         workerTools.delete(e.workerId);
+      }],
+      ["worker:cost", (e) => {
+        r.updateCostLive(e.costUsd);
       }],
       ["feedback:quality_gate", (e) => {
         r.qualityGate(e.passed, e.issues);
