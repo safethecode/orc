@@ -604,8 +604,11 @@ export class ReplController {
     sessionId?: string,
   ): Promise<void> {
     const r = this.renderer;
-    const maxRetries = this.config.supervisor?.maxRetries ?? 2;
-    const maxAttempts = maxRetries + 1;
+    const maxErrorRetries = this.config.supervisor?.maxRetries ?? 2;
+    const maxQualityRetries = 5; // Quality gate retries are separate from error retries
+    let totalAttempts = maxErrorRetries + 1 + maxQualityRetries;
+    let errorRetries = 0;
+    let qualityRetries = 0;
     let currentCmd = initialCmd;
     let currentProfile = profile;
     let currentProviderConfig = providerConfig;
@@ -615,7 +618,7 @@ export class ReplController {
 
     let preRetryDiffHash = "";
 
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    for (let attempt = 0; attempt < totalAttempts; attempt++) {
       if (cancellation.cancelled) break;
 
       if (attempt > 0) {
@@ -886,23 +889,33 @@ export class ReplController {
             }
           }
 
-          // Auto-retry on any quality gate failure with specific issues
-          if (!critique.passes && critique.issues.length > 0 && attempt < maxAttempts - 1) {
+          // Auto-retry on any quality gate failure — keep going until passed
+          if (!critique.passes && critique.issues.length > 0 && qualityRetries < maxQualityRetries) {
+            qualityRetries++;
             // Check if the retry actually changed anything meaningful
             let noRealChanges = false;
+            let currentDiffStat = "";
             if (attempt > 0 && preRetryDiffHash) {
               try {
                 const proc = Bun.spawnSync(["git", "diff", "--stat"], { stdout: "pipe", stderr: "pipe" });
-                const currentDiff = new TextDecoder().decode(proc.stdout).trim();
-                noRealChanges = currentDiff === preRetryDiffHash;
+                currentDiffStat = new TextDecoder().decode(proc.stdout).trim();
+                noRealChanges = currentDiffStat === preRetryDiffHash;
               } catch {}
             }
+            // Get actual git diff to show agent what the current state is
+            let diffContext = "";
+            try {
+              const proc = Bun.spawnSync(["git", "diff", "--name-only"], { stdout: "pipe", stderr: "pipe" });
+              const changedFiles = new TextDecoder().decode(proc.stdout).trim();
+              if (changedFiles) diffContext = `\n\n## Files currently modified (git diff)\n${changedFiles}`;
+              else diffContext = "\n\n## git diff shows NO files were modified. You have not made any changes yet.";
+            } catch {}
             const unchangedWarning = noRealChanges
-              ? "\n\n**WARNING: Your previous retry made NO meaningful file changes. You MUST actually edit the files this time. Read each file, then use the Edit tool to modify it. Do not just describe changes — make them.**"
+              ? "\n\n**CRITICAL: Your previous retry made ZERO file changes. git diff confirms nothing changed. You MUST use the Edit tool to actually modify files. Do NOT describe what you would do — DO IT NOW.**"
               : "";
-            r.info(`auto-retry: quality gate failed — ${critique.issues.slice(0, 2).join(", ")}`);
+            r.info(`auto-retry (${qualityRetries}/${maxQualityRetries}): quality gate failed — ${critique.issues.slice(0, 2).join(", ")}`);
             if (noRealChanges) r.error("⚠ Previous retry made no file changes — reinforcing...");
-            const reinforced = `[QUALITY GATE FAILED]\n\n## Original Task (DO NOT forget this)\n${input}\n\n## Issues to fix\n${critique.issues.map((i: string) => `- ${i}`).join("\n")}${unchangedWarning}\n\nRead the files you created/modified and fix ALL issues above. The original task must still be fully completed.`;
+            const reinforced = `[QUALITY GATE FAILED — Retry ${qualityRetries}/${maxQualityRetries}]\n\n## Original Task (DO NOT forget this)\n${input}\n\n## Issues to fix\n${critique.issues.map((i: string) => `- ${i}`).join("\n")}${diffContext}${unchangedWarning}\n\nRead the files you created/modified and fix ALL issues above. The original task must still be fully completed.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
               prompt: reinforced,
               model: currentProfile.model,
