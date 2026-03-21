@@ -25,7 +25,7 @@ export function AgentHeader({ name, tier, reason }: Props) {
         <text fg="#1a1b26" bg={bg} bold>{` ${tier.charAt(0).toUpperCase() + tier.slice(1)} `}</text>
       )}
       {reason && (
-        <text fg="#565f89" italic>{reason}</text>
+        <text fg="#565f89" italic>{reason.replace(/@([a-z])/g, (_, c) => `@${c.toUpperCase()}`)}</text>
       )}
     </box>
   );

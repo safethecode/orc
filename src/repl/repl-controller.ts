@@ -222,7 +222,7 @@ export class ReplController {
       if (mention) {
         mentionedAgent = mention.agent;
         resolvedInput = mention.cleanedInput;
-        this.renderer.info(`\x1b[36m→ @${mention.agent}\x1b[0m`);
+        this.renderer.info(`\x1b[36m→ @${mention.agent.charAt(0).toUpperCase() + mention.agent.slice(1)}\x1b[0m`);
       } else {
         // Only resolve @file references if no agent mention found
         const refResult = await this.fileRef.resolve(trimmed);
