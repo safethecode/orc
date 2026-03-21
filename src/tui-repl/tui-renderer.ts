@@ -71,7 +71,7 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("separator", "") });
     },
     startSpinner(agentName, tier) {
-      dispatch({ type: "STATUS_UPDATE", partial: { agentState: "thinking", agentName, tier } });
+      dispatch({ type: "STATUS_UPDATE", partial: { agentState: "thinking", agentName, tier, elapsedStart: Date.now(), recentTools: [], liveInputTokens: 0, liveOutputTokens: 0 } });
     },
     updateSpinner(text) {
       if (text) {
