@@ -73,6 +73,7 @@ export class AgentStreamer extends EventEmitter {
       stdout: "pipe",
       stderr: "pipe",
       stdin: "ignore",
+      env: { ...process.env, CLAUDE_CODE_MAX_OUTPUT_TOKENS: "128000" },
     });
 
     // Listen for external abort signal AFTER proc exists so abort() can kill it
