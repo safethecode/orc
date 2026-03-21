@@ -26,36 +26,31 @@ export async function visualVerify(
 
   const screenshotPath = join(screenshotDir, `verify-${Date.now()}.png`);
 
-  // 1. Take screenshot with Playwright
+  // 1. Take screenshot with Playwright (async, 15s timeout)
   try {
-    const proc = Bun.spawnSync([
+    const proc = Bun.spawn([
       "npx", "playwright", "screenshot",
       "--browser", "chromium",
       "--full-page",
       url,
       screenshotPath,
-    ], {
-      stdout: "pipe",
-      stderr: "pipe",
-      timeout: 30_000_000_000, // 30s
-    });
+    ], { stdout: "pipe", stderr: "pipe" });
 
-    if (proc.exitCode !== 0) {
-      const stderr = new TextDecoder().decode(proc.stderr).trim();
-      return {
-        screenshotPath: null,
-        matches: true, // Non-blocking — can't verify, assume OK
-        issues: [],
-        details: `Screenshot failed: ${stderr.slice(0, 200)}`,
-      };
+    const timeout = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 15000));
+    const exited = proc.exited.then(() => "done" as const);
+    const race = await Promise.race([exited, timeout]);
+
+    if (race === "timeout") {
+      try { proc.kill(); } catch {}
+      return { screenshotPath: null, matches: true, issues: [], details: "Screenshot timed out (15s)" };
+    }
+
+    if (await proc.exited !== 0) {
+      const stderr = await new Response(proc.stderr).text();
+      return { screenshotPath: null, matches: true, issues: [], details: `Screenshot failed: ${stderr.slice(0, 200)}` };
     }
   } catch {
-    return {
-      screenshotPath: null,
-      matches: true,
-      issues: [],
-      details: "Playwright not available for screenshot",
-    };
+    return { screenshotPath: null, matches: true, issues: [], details: "Playwright not available" };
   }
 
   // 2. Compare screenshot against design plan using Claude Vision
