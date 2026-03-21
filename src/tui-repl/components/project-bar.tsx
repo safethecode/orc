@@ -56,7 +56,7 @@ export function ProjectBar() {
       )}
       <box flexDirection="row">
         <text fg="#565f89">{" │ "}</text>
-        <text fg="#565f89">{`${tier} default`}</text>
+        <text fg="#565f89">{`${tier.charAt(0).toUpperCase() + tier.slice(1)} default`}</text>
       </box>
       <box flexGrow={1} />
     </box>

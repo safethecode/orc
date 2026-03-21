@@ -407,13 +407,13 @@ export class LayoutManager {
     let leftW: number;
 
     if (this.agentState === "idle") {
-      left = `${FG_DIM}  ○ idle${RESET}`;
+      left = `${FG_DIM}  ○ Idle${RESET}`;
       leftW = 10;
     } else {
       const stateLabel =
-        this.agentState === "thinking" ? "thinking" :
-        this.agentState === "streaming" ? "streaming" :
-        "running tool";
+        this.agentState === "thinking" ? "Thinking" :
+        this.agentState === "streaming" ? "Streaming" :
+        "Running tool";
       const stateColor =
         this.agentState === "thinking" ? FG_YELLOW :
         this.agentState === "streaming" ? FG_GREEN :

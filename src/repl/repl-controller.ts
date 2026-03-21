@@ -526,7 +526,7 @@ export class ReplController {
       sessionId,
     });
 
-    r.info("design preview: generating plan...");
+    r.info("Design preview: Generating plan...");
     const streamer = new AgentStreamer();
     this.currentStreamer = streamer;
     let boxOpen = false;
@@ -564,6 +564,14 @@ export class ReplController {
 
     if (!planResult.text.trim() || cancellation.cancelled) return;
 
+    // Save design plan for visual verify and quality gate comparison
+    const designPlanPath = `${process.cwd()}/.orchestrator/design-plan.md`;
+    try {
+      const { mkdir } = await import("node:fs/promises");
+      await mkdir(`${process.cwd()}/.orchestrator`, { recursive: true });
+      await Bun.write(designPlanPath, planResult.text);
+    } catch { /* non-blocking */ }
+
     // Ask for approval
     const answer = await this.askUser(
       "이 디자인 설계안을 승인하시겠습니까?",
@@ -571,13 +579,13 @@ export class ReplController {
     );
 
     if (!answer || answer.includes("거부") || answer.includes("취소")) {
-      r.info("design preview: plan rejected.");
+      r.info("Design preview: Plan rejected.");
       this.conversation.add({ role: "assistant" as const, content: planResult.text, agentName, tier: route.model, timestamp: new Date().toISOString() });
       return;
     }
 
     // Phase 2: Execute with approved plan (session has full Phase 1 context)
-    r.info("design preview: executing approved plan...");
+    r.info("Design preview: Executing approved plan...");
     r.startSpinner(agentName, route.model);
 
     const execPrompt = "The user approved your design plan. Execute it now. Implement exactly as described.";
@@ -815,7 +823,7 @@ export class ReplController {
           const buildIssues = await this.runSingleAgentBuildCheck();
           if (buildIssues.length > 0 && errorRetries < maxErrorRetries) {
             r.qualityGate(false, buildIssues);
-            r.info("auto-retry: build/test failed, sending fix prompt...");
+            r.info("Auto-retry: Build/test failed, sending fix prompt...");
             const reinforced = `[BUILD FAILED]\n\n## Original Task\n${input}\n\n## Build issues to fix\n${buildIssues.map(i => `- ${i}`).join("\n")}\n\nFix all build issues while keeping the original task completed.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
               prompt: reinforced,
@@ -833,13 +841,18 @@ export class ReplController {
         // Quality gate (LLM-based)
         flushToolGroup();
         if (result.text) {
-          r.info("evaluating quality...");
-          const critique = await runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input, toolUseCount }, result.text);
+          r.info("Evaluating quality...");
+          // Load saved design plan for design role quality evaluation
+          let designPlan: string | undefined;
+          if ((currentProfile.role ?? "").toLowerCase().includes("design")) {
+            try { designPlan = await Bun.file(`${process.cwd()}/.orchestrator/design-plan.md`).text(); } catch { /* no plan saved */ }
+          }
+          const critique = await runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input, toolUseCount, designPlan }, result.text);
           r.qualityGate(critique.passes, critique.issues);
 
           // Auto-retry on intent without action (agent described what it would do but used no tools)
           if (!critique.passes && critique.issues.includes("Intent without action: declared actions but used zero tools") && errorRetries < maxErrorRetries) {
-            r.info("auto-retry: agent declared intent but used no tools, reinforcing...");
+            r.info("Auto-retry: Agent declared intent but used no tools...");
             const reinforced = `[IMPORTANT: Your previous response only described what to do without doing it.]\n\n## Original Task\n${input}\n\nYou MUST use tools (Read, Edit, Bash, etc.) to complete this task. Do not describe — act.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
               prompt: reinforced,
@@ -855,7 +868,7 @@ export class ReplController {
 
           // Auto-retry on suspiciously short response from non-conversational agents
           if (!critique.passes && critique.issues.includes("Result is suspiciously short") && errorRetries < maxErrorRetries) {
-            r.info("auto-retry: response too short, reinforcing prompt...");
+            r.info("Auto-retry: Response too short...");
             const reinforced = `[IMPORTANT: Your previous attempt was incomplete.]\n\n## Original Task\n${input}\n\nYou MUST use tools to actually complete this task fully. Do not just acknowledge — take action.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
               prompt: reinforced,
@@ -875,8 +888,7 @@ export class ReplController {
             const server = await detectDevServer();
             if (server.running) {
               r.info(`visual verify: checking ${server.url}...`);
-              const planText = result.text.slice(0, 3000); // Use agent's output as plan context
-              const visual = await visualVerify(input, { url: server.url });
+              const visual = await visualVerify(designPlan ?? input, { url: server.url });
               if (visual.screenshotPath) {
                 r.info(`screenshot: ${visual.screenshotPath}`);
               }
