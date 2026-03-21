@@ -38,6 +38,8 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
     toolUse(name, detail, _insideBox, _input) {
       const toolLabel = detail ? `${name} ${detail}` : name;
       dispatch({ type: "PUSH_RECENT_TOOL", tool: toolLabel });
+      // Show as compact inline message so it's visible even during streaming
+      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `● ${toolLabel}`) });
     },
     workerToolUse(agentName, toolName, detail) {
       // No APPEND_MESSAGE — worker activity is shown inline in the task tree

@@ -22,7 +22,7 @@ export function ThinkingIndicator() {
     return () => clearInterval(id);
   }, []);
 
-  const isActive = agentState !== "idle" && !state.isStreaming;
+  const isActive = agentState !== "idle";
   if (!isActive) return null;
 
   const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length];
