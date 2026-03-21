@@ -35,10 +35,9 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
     text(content) {
       dispatch({ type: "STREAMING_DELTA", text: content });
     },
-    toolUse(name, detail, _insideBox, input) {
+    toolUse(name, detail, _insideBox, _input) {
       const toolLabel = detail ? `${name} ${detail}` : name;
       dispatch({ type: "PUSH_RECENT_TOOL", tool: toolLabel });
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("tool", "", { toolName: name, toolDetail: detail, toolInput: input }) });
     },
     workerToolUse(agentName, toolName, detail) {
       // No APPEND_MESSAGE — worker activity is shown inline in the task tree
