@@ -24,7 +24,7 @@ export function StreamingBubble({ chunk, tier }: Props) {
         borderColor={borderColor}
         padding={1}
       >
-        <markdown content={chunk + "▍"} syntaxStyle={getMarkdownSyntaxStyle()} conceal streaming />
+        <markdown content={chunk + "▍"} syntaxStyle={getMarkdownSyntaxStyle()} conceal concealCode={false} streaming />
       </box>
     </box>
   );

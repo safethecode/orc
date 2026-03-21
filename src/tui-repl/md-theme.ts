@@ -85,7 +85,24 @@ let currentThemeName = "tokyo";
 
 export function getMarkdownSyntaxStyle(): SyntaxStyle {
   if (!currentStyle) {
-    currentStyle = SyntaxStyle.fromTheme(THEMES[currentThemeName] ?? THEMES.tokyo);
+    const theme = THEMES[currentThemeName] ?? THEMES.tokyo;
+    currentStyle = SyntaxStyle.fromTheme(theme);
+
+    // Register markdown-specific conceal scopes that OpenTUI's parser expects
+    const concealScopes = [
+      "markup.heading.marker",
+      "markup.list.marker",
+      "markup.bold.delimiter",
+      "markup.italic.delimiter",
+      "markup.raw.delimiter",
+      "markup.link.delimiter",
+      "markup.quote.marker",
+    ];
+    for (const scope of concealScopes) {
+      if (!currentStyle.getStyle(scope)) {
+        currentStyle.registerStyle(scope, { dim: true });
+      }
+    }
   }
   return currentStyle;
 }

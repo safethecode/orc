@@ -24,7 +24,7 @@ export function AssistantMessage({ content, tier }: Props) {
         borderColor={borderColor}
         padding={1}
       >
-        <markdown content={content} syntaxStyle={getMarkdownSyntaxStyle()} conceal />
+        <markdown content={content} syntaxStyle={getMarkdownSyntaxStyle()} conceal concealCode={false} />
       </box>
     </box>
   );
