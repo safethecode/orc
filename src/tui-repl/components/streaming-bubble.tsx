@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import type { ModelTier } from "../../config/types.ts";
 import { TIER_HEX } from "../theme-adapter.ts";
+import { getMarkdownSyntaxStyle } from "../md-theme.ts";
 
 interface Props {
   chunk: string;
@@ -23,7 +24,7 @@ export function StreamingBubble({ chunk, tier }: Props) {
         borderColor={borderColor}
         padding={1}
       >
-        <code content={chunk + "▍"} filetype="markdown" streaming />
+        <markdown content={chunk + "▍"} syntaxStyle={getMarkdownSyntaxStyle()} conceal streaming />
       </box>
     </box>
   );

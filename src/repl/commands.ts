@@ -6,7 +6,7 @@ import { ReportGenerator } from "../benchmark/report-generator.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
 import { loadExecPolicy, trustProject, isProjectTrusted } from "../sandbox/rules.ts";
 import { getCatalogEntry } from "../mcp/catalog.ts";
-import { setMarkdownTheme, getMarkdownThemes } from "../tui-repl/markdown.ts";
+import { setMdTheme, getMdThemes, getCurrentMdTheme } from "../tui-repl/md-theme.ts";
 import { selectPhases, buildPhasePrompt, parseSpecResult } from "../core/spec-pipeline.ts";
 import { buildIdeationPrompt, parseIdeationResponse, prioritizeIdeas, DIMENSION_PROMPTS } from "../core/ideation.ts";
 import type { SpecPhase, IdeationDimension } from "../config/types.ts";
@@ -579,11 +579,17 @@ export async function handleCommand(
       if (sub === "markdown") {
         const mdTheme = args[1];
         if (!mdTheme) {
-          r.info("Markdown themes: " + getMarkdownThemes().join(", "));
+          const current = getCurrentMdTheme();
+          const themes = getMdThemes();
+          r.info("Markdown themes:");
+          for (const t of themes) {
+            const mark = t === current ? " \x1b[33m← active\x1b[0m" : "";
+            r.info(`  ${t}${mark}`);
+          }
           return "continue";
         }
-        const ok = setMarkdownTheme(mdTheme);
-        r.info(ok ? `\u2713 Markdown theme: ${mdTheme}` : `Unknown markdown theme: ${mdTheme} (available: ${getMarkdownThemes().join(", ")})`);
+        const ok = setMdTheme(mdTheme);
+        r.info(ok ? `\u2713 Markdown theme: ${mdTheme}` : `Unknown: ${mdTheme} (available: ${getMdThemes().join(", ")})`);
         return "continue";
       }
 
@@ -592,7 +598,7 @@ export async function handleCommand(
         r.info(ok ? `\u2713 Theme: ${sub}` : `Unknown theme: ${sub}`);
       } else {
         r.info(`Current theme: \x1b[1m${themeMgr.get().name}\x1b[0m`);
-        r.info(`Markdown themes: ${getMarkdownThemes().join(", ")}`);
+        r.info(`Markdown theme: ${getCurrentMdTheme()} (${getMdThemes().join(", ")})`);
         r.info("\x1b[2mUsage: /theme <name> | /theme markdown <name> | /theme list\x1b[0m");
       }
       return "continue";
