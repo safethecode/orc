@@ -1028,8 +1028,8 @@ export class ReplController {
       try {
         const proc = Bun.spawnSync(["pnpm", name], { cwd, stderr: "pipe", stdout: "pipe", timeout: TIMEOUT_NS });
         if (proc.exitCode !== 0) {
-          const err = new TextDecoder().decode(proc.stderr).trim();
-          if (err) issues.push(`Typecheck: ${err.split("\n").slice(0, 3).join("; ")}`);
+          const output = (new TextDecoder().decode(proc.stdout).trim() + "\n" + new TextDecoder().decode(proc.stderr).trim()).trim();
+          if (output) issues.push(`Typecheck failed:\n${output}`);
         }
       } catch {}
     }
@@ -1038,8 +1038,8 @@ export class ReplController {
       try {
         const proc = Bun.spawnSync(["pnpm", "lint"], { cwd, stderr: "pipe", stdout: "pipe", timeout: TIMEOUT_NS });
         if (proc.exitCode !== 0) {
-          const out = new TextDecoder().decode(proc.stderr).trim() || new TextDecoder().decode(proc.stdout).trim();
-          if (out) issues.push(`Lint: ${out.split("\n").slice(0, 3).join("; ")}`);
+          const output = (new TextDecoder().decode(proc.stdout).trim() + "\n" + new TextDecoder().decode(proc.stderr).trim()).trim();
+          if (output) issues.push(`Lint failed:\n${output}`);
         }
       } catch {}
     }

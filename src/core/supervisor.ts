@@ -1162,8 +1162,8 @@ export class Supervisor {
       try {
         const proc = Bun.spawnSync(["pnpm", scriptName], { cwd, stderr: "pipe", stdout: "pipe", timeout: TIMEOUT_NS });
         if (proc.exitCode !== 0) {
-          const stderr = new TextDecoder().decode(proc.stderr).trim();
-          if (stderr) issues.push(`Typecheck failed: ${stderr.split("\n").slice(0, 5).join("; ")}`);
+          const output = (new TextDecoder().decode(proc.stdout).trim() + "\n" + new TextDecoder().decode(proc.stderr).trim()).trim();
+          if (output) issues.push(`Typecheck failed:\n${output}`);
         }
       } catch { /* timeout or missing — skip */ }
     }
@@ -1173,8 +1173,8 @@ export class Supervisor {
       try {
         const proc = Bun.spawnSync(["pnpm", "lint"], { cwd, stderr: "pipe", stdout: "pipe", timeout: TIMEOUT_NS });
         if (proc.exitCode !== 0) {
-          const output = new TextDecoder().decode(proc.stderr).trim() || new TextDecoder().decode(proc.stdout).trim();
-          if (output) issues.push(`Lint failed: ${output.split("\n").slice(0, 5).join("; ")}`);
+          const output = (new TextDecoder().decode(proc.stdout).trim() + "\n" + new TextDecoder().decode(proc.stderr).trim()).trim();
+          if (output) issues.push(`Lint failed:\n${output}`);
         }
       } catch { /* timeout or missing — skip */ }
     }
@@ -1184,8 +1184,8 @@ export class Supervisor {
       try {
         const proc = Bun.spawnSync(["pnpm", "build"], { cwd, stderr: "pipe", stdout: "pipe", timeout: TIMEOUT_NS });
         if (proc.exitCode !== 0) {
-          const stderr = new TextDecoder().decode(proc.stderr).trim();
-          if (stderr) issues.push(`Build failed: ${stderr.split("\n").slice(0, 5).join("; ")}`);
+          const output = (new TextDecoder().decode(proc.stdout).trim() + "\n" + new TextDecoder().decode(proc.stderr).trim()).trim();
+          if (output) issues.push(`Build failed:\n${output}`);
         }
       } catch { /* timeout or missing — skip */ }
     }

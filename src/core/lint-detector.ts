@@ -135,7 +135,10 @@ function summarizeLintConfig(tool: string, content: string): string {
   }
 
   lines.push("");
-  lines.push("**Write code that passes `pnpm lint` with zero errors. Check rules above before writing.**");
+  lines.push("**RULES:**");
+  lines.push("- Write code that passes `pnpm lint` with zero errors.");
+  lines.push("- NEVER use suppression comments: `biome-ignore`, `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, `// @ts-nocheck`. Fix the actual code instead.");
+  lines.push("- If a lint rule conflicts with functionality, refactor the code to satisfy both.");
 
   return lines.join("\n");
 }
