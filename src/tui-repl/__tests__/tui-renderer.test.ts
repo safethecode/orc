@@ -66,10 +66,11 @@ describe("createTuiRenderer", () => {
 
   it("dispatches tool message on toolUse", () => {
     const { actions, renderer } = collect();
-    renderer.toolUse("read", "/src/index.ts");
+    renderer.toolUse("Read", "/src/index.ts", false, { file_path: "/src/index.ts" });
     expect(actions[0].type).toBe("PUSH_RECENT_TOOL");
-    expect(actions[0].tool).toBe("read /src/index.ts");
-    expect(actions.length).toBe(1); // No APPEND_MESSAGE — tool shows in thinking indicator only
+    expect(actions[0].tool).toBe("Read index.ts");
+    expect(actions[1].type).toBe("STATUS_UPDATE");
+    expect(actions[2].type).toBe("APPEND_MESSAGE");
   });
 
   it("dispatches CLEAR on separator for visual separation", () => {

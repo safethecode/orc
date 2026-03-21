@@ -5,6 +5,45 @@ import { createMessage } from "./store.ts";
 
 type Action = Parameters<Dispatch<any>>[0];
 
+function formatToolLabel(name: string, detail?: string, input?: Record<string, unknown>): string {
+  if (!input) return detail ? `${name} ${detail}` : name;
+
+  switch (name) {
+    case "Read": {
+      const file = String(input.file_path ?? detail ?? "").split("/").pop() ?? "";
+      const offset = input.offset as number | undefined;
+      const limit = input.limit as number | undefined;
+      const range = offset || limit ? ` (L${offset ?? 1}${limit ? `-${(offset ?? 1) + limit}` : ""})` : "";
+      return `Read ${file}${range}`;
+    }
+    case "Edit":
+    case "MultiEdit": {
+      const file = String(input.file_path ?? detail ?? "").split("/").pop() ?? "";
+      const old = input.old_string as string | undefined;
+      const preview = old ? ` — "${old.slice(0, 30).replace(/\n/g, "↵")}${old.length > 30 ? "…" : ""}"` : "";
+      return `Edit ${file}${preview}`;
+    }
+    case "Write": {
+      const file = String(input.file_path ?? detail ?? "").split("/").pop() ?? "";
+      const content = input.content as string | undefined;
+      const lines = content ? ` (${content.split("\n").length} lines)` : "";
+      return `Write ${file}${lines}`;
+    }
+    case "Bash": {
+      const cmd = String(input.command ?? detail ?? "").slice(0, 60);
+      return `Bash ${cmd}`;
+    }
+    case "Glob":
+      return `Glob ${input.pattern ?? detail ?? ""}`;
+    case "Grep":
+      return `Grep "${input.pattern ?? detail ?? ""}"`;
+    case "TodoWrite":
+      return `TodoWrite ${Array.isArray(input.todos) ? `${input.todos.length} items` : ""}`;
+    default:
+      return detail ? `${name} ${detail}` : name;
+  }
+}
+
 export interface TuiRendererOptions {
   version?: string;
   cwd?: string;
@@ -40,8 +79,8 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
         dispatch({ type: "STATUS_UPDATE", partial: { textPreview: preview.slice(-80), lastActivity: Date.now() } });
       }
     },
-    toolUse(name, detail, _insideBox, _input) {
-      const toolLabel = detail ? `${name} ${detail}` : name;
+    toolUse(name, detail, _insideBox, input) {
+      const toolLabel = formatToolLabel(name, detail, input);
       dispatch({ type: "PUSH_RECENT_TOOL", tool: toolLabel });
       dispatch({ type: "STATUS_UPDATE", partial: { lastActivity: Date.now(), textPreview: "" } });
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `● ${toolLabel}`) });
