@@ -1,6 +1,5 @@
 import { $ } from "bun";
-import { writeFile, chmod, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname } from "node:path";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -9,40 +8,8 @@ export interface AutoCommitResult {
   hash?: string;
   message?: string;
   error?: string;
-}
-
-// ── Co-author constants ─────────────────────────────────────────────────
-
-const CO_AUTHOR = "Co-Authored-By: orc-agent <hello@sson.tech>";
-const CO_AUTHOR_PATTERN = /Co-Authored-By:.*$/gim;
-
-// ── Git commit-msg hook ─────────────────────────────────────────────────
-
-const COMMIT_MSG_HOOK = `#!/bin/sh
-# orc: enforce co-author tag on every commit
-MSG_FILE="$1"
-
-# Strip all existing Co-Authored-By lines
-sed -i '' '/^Co-Authored-By:/d' "$MSG_FILE" 2>/dev/null || sed -i '/^Co-Authored-By:/d' "$MSG_FILE"
-
-# Strip trailing blank lines
-sed -i '' -e :a -e '/^\\n*$/{$d;N;ba' -e '}' "$MSG_FILE" 2>/dev/null || sed -i -e :a -e '/^\\n*$/{$d;N;ba' -e '}' "$MSG_FILE"
-
-# Append our co-author
-printf '\\n\\n${CO_AUTHOR}' >> "$MSG_FILE"
-`;
-
-/**
- * Install a commit-msg git hook that forces the orc-agent co-author tag.
- * Strips any existing Co-Authored-By (Claude, Codex, etc.) and appends ours.
- */
-export async function installCommitHook(repoDir: string): Promise<void> {
-  const hooksDir = join(repoDir, ".git", "hooks");
-  const hookPath = join(hooksDir, "commit-msg");
-
-  await mkdir(hooksDir, { recursive: true });
-  await writeFile(hookPath, COMMIT_MSG_HOOK, "utf-8");
-  await chmod(hookPath, 0o755);
+  /** Number of atomic commits created (for batch results) */
+  commitCount?: number;
 }
 
 // ── Periodic commit watcher ─────────────────────────────────────────────
@@ -68,45 +35,60 @@ export function startCommitWatcher(
   return () => clearInterval(timer);
 }
 
-// ── One-shot auto-commit ────────────────────────────────────────────────
+// ── One-shot auto-commit (atomic) ───────────────────────────────────────
 
 /**
  * Auto-commit any uncommitted changes left by an agent.
- * Runs in the given working directory (main repo or worktree).
+ * Groups files by directory and creates atomic commits per group.
  */
 export async function autoCommit(
-  agentName: string,
+  _agentName: string,
   cwd: string,
 ): Promise<AutoCommitResult> {
   try {
-    // Check for any changes (staged, unstaged, untracked)
     const status = await $`git -C ${cwd} status --porcelain`.text();
     if (!status.trim()) {
       return { committed: false };
     }
 
-    // Build commit message from changed files
     const lines = status.trim().split("\n");
-    const summary = buildCommitSummary(lines);
-    const message = `${summary}\n\n${CO_AUTHOR}`;
+    const groups = groupByDirectory(lines);
+    let lastHash = "";
+    let lastMessage = "";
+    let commitCount = 0;
 
-    // Stage all changes
-    await $`git -C ${cwd} add -A`.quiet();
+    for (const group of groups) {
+      const message = buildGroupCommitMessage(group);
+      const files = group.files.map(f => f.path);
 
-    // Commit (--no-verify to skip our own hook since we already have the right co-author)
-    await $`git -C ${cwd} commit --no-verify -m ${message}`.quiet();
+      // Stage only files in this group
+      for (const file of files) {
+        await $`git -C ${cwd} add -- ${file}`.quiet();
+      }
 
-    // Get the commit hash
-    const hash = (await $`git -C ${cwd} rev-parse --short HEAD`.text()).trim();
+      // Commit
+      try {
+        await $`git -C ${cwd} commit -m ${message}`.quiet();
+        lastHash = (await $`git -C ${cwd} rev-parse --short HEAD`.text()).trim();
+        lastMessage = message;
+        commitCount++;
+      } catch {
+        // Nothing to commit (maybe already staged by previous group)
+      }
+    }
 
-    // Push (best-effort)
+    if (commitCount === 0) {
+      return { committed: false };
+    }
+
+    // Push once after all atomic commits (best-effort)
     try {
       await $`git -C ${cwd} push`.quiet();
     } catch {
       // push failure is non-fatal
     }
 
-    return { committed: true, hash, message: summary };
+    return { committed: true, hash: lastHash, message: lastMessage, commitCount };
   } catch (e) {
     return {
       committed: false,
@@ -115,40 +97,72 @@ export async function autoCommit(
   }
 }
 
-// ── Commit message generation ───────────────────────────────────────────
+// ── File grouping ───────────────────────────────────────────────────────
 
-function buildCommitSummary(statusLines: string[]): string {
-  const added: string[] = [];
-  const modified: string[] = [];
-  const deleted: string[] = [];
+interface FileEntry {
+  path: string;
+  status: "added" | "modified" | "deleted";
+}
+
+interface FileGroup {
+  directory: string;
+  files: FileEntry[];
+}
+
+/**
+ * Group changed files by their immediate parent directory.
+ * Single files get their own group (= their own commit).
+ */
+function groupByDirectory(statusLines: string[]): FileGroup[] {
+  const entries: FileEntry[] = [];
 
   for (const line of statusLines) {
     const code = line.slice(0, 2);
-    const file = line.slice(3).trim();
-    if (code.includes("D")) {
-      deleted.push(file);
-    } else if (code.includes("?") || code.includes("A")) {
-      added.push(file);
-    } else {
-      modified.push(file);
-    }
+    const path = line.slice(3).trim();
+    if (!path) continue;
+
+    let status: FileEntry["status"];
+    if (code.includes("D")) status = "deleted";
+    else if (code.includes("?") || code.includes("A")) status = "added";
+    else status = "modified";
+
+    entries.push({ path, status });
   }
 
-  const total = added.length + modified.length + deleted.length;
-  if (total === 0) return "chore: update files";
+  // Group by parent directory
+  const dirMap = new Map<string, FileEntry[]>();
+  for (const entry of entries) {
+    const dir = dirname(entry.path);
+    const existing = dirMap.get(dir);
+    if (existing) existing.push(entry);
+    else dirMap.set(dir, [entry]);
+  }
+
+  return Array.from(dirMap.entries()).map(([directory, files]) => ({
+    directory,
+    files,
+  }));
+}
+
+/**
+ * Build a commit message for a group of files in the same directory.
+ */
+function buildGroupCommitMessage(group: FileGroup): string {
+  const { files, directory } = group;
+  const scope = directory !== "." ? ` in ${directory}` : "";
 
   // Single file → precise message
-  if (total === 1) {
-    const file = added[0] || modified[0] || deleted[0];
-    if (added.length) return `feat: add ${file}`;
-    if (deleted.length) return `chore: remove ${file}`;
-    return `fix: update ${file}`;
+  if (files.length === 1) {
+    const f = files[0];
+    if (f.status === "added") return `feat: add ${f.path}`;
+    if (f.status === "deleted") return `chore: remove ${f.path}`;
+    return `fix: update ${f.path}`;
   }
 
-  // Detect common directory
-  const allFiles = [...added, ...modified, ...deleted];
-  const commonDir = findCommonDir(allFiles);
-  const scope = commonDir ? ` in ${commonDir}` : "";
+  // Multiple files in same directory
+  const added = files.filter(f => f.status === "added");
+  const modified = files.filter(f => f.status === "modified");
+  const deleted = files.filter(f => f.status === "deleted");
 
   if (added.length && !modified.length && !deleted.length) {
     return `feat: add ${added.length} files${scope}`;
@@ -160,22 +174,5 @@ function buildCommitSummary(statusLines: string[]): string {
     return `fix: update ${modified.length} files${scope}`;
   }
 
-  return `chore: update ${total} files${scope}`;
-}
-
-function findCommonDir(files: string[]): string {
-  if (files.length === 0) return "";
-  const parts = files.map((f) => f.split("/"));
-  const first = parts[0];
-  let depth = 0;
-
-  for (let i = 0; i < first.length - 1; i++) {
-    if (parts.every((p) => p[i] === first[i])) {
-      depth = i + 1;
-    } else {
-      break;
-    }
-  }
-
-  return depth > 0 ? first.slice(0, depth).join("/") : "";
+  return `chore: update ${files.length} files${scope}`;
 }
