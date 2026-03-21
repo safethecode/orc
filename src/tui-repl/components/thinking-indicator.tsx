@@ -14,7 +14,7 @@ function formatElapsed(startMs: number): string {
 
 export function ThinkingIndicator() {
   const { state } = useStore();
-  const { agentState, agentName, phase, recentTools, elapsedStart, liveInputTokens, liveOutputTokens } = state.status;
+  const { agentState, agentName, phase, recentTools, elapsedStart, liveInputTokens, liveOutputTokens, lastActivity, textPreview } = state.status;
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
@@ -45,11 +45,13 @@ export function ThinkingIndicator() {
     : "";
   const stats = [elapsed, tokenStr].filter(Boolean).join(", ");
   const tools = !isPreAgent ? recentTools : [];
+  const idleSeconds = lastActivity > 0 ? Math.floor((Date.now() - lastActivity) / 1000) : 0;
+  const isStale = idleSeconds > 30;
 
   return (
     <box paddingLeft={2} paddingTop={1} flexDirection="column">
       <box flexDirection="row" gap={1}>
-        <text fg="#7aa2f7">{`${spinner} ${label}`}</text>
+        <text fg={isStale ? "#e0af68" : "#7aa2f7"}>{`${spinner} ${label}`}</text>
         {stats && <text fg="#565f89">{`(${stats})`}</text>}
       </box>
       {tools.length > 0 && tools.map((t, i) => (
@@ -57,6 +59,16 @@ export function ThinkingIndicator() {
           <text fg={i === tools.length - 1 ? "#7aa2f7" : "#3d4262"}>{`│ ${t}`}</text>
         </box>
       ))}
+      {textPreview && !isPreAgent && (
+        <box paddingLeft={2}>
+          <text fg="#565f89" italic>{`│ "${textPreview}"`}</text>
+        </box>
+      )}
+      {isStale && (
+        <box paddingLeft={2}>
+          <text fg="#e0af68">{`⚠ No activity for ${idleSeconds}s — API may be slow. Press ESC to cancel.`}</text>
+        </box>
+      )}
     </box>
   );
 }

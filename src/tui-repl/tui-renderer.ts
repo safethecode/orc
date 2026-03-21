@@ -34,11 +34,16 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
     },
     text(content) {
       dispatch({ type: "STREAMING_DELTA", text: content });
+      // Update text preview and activity timestamp for thinking indicator
+      const preview = content.replace(/\n/g, " ").trim();
+      if (preview) {
+        dispatch({ type: "STATUS_UPDATE", partial: { textPreview: preview.slice(-80), lastActivity: Date.now() } });
+      }
     },
     toolUse(name, detail, _insideBox, _input) {
       const toolLabel = detail ? `${name} ${detail}` : name;
       dispatch({ type: "PUSH_RECENT_TOOL", tool: toolLabel });
-      // Show as compact inline message so it's visible even during streaming
+      dispatch({ type: "STATUS_UPDATE", partial: { lastActivity: Date.now(), textPreview: "" } });
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `● ${toolLabel}`) });
     },
     workerToolUse(agentName, toolName, detail) {
@@ -73,7 +78,7 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("separator", "") });
     },
     startSpinner(agentName, tier) {
-      dispatch({ type: "STATUS_UPDATE", partial: { agentState: "thinking", agentName, tier, elapsedStart: Date.now(), recentTools: [], liveInputTokens: 0, liveOutputTokens: 0 } });
+      dispatch({ type: "STATUS_UPDATE", partial: { agentState: "thinking", agentName, tier, elapsedStart: Date.now(), lastActivity: Date.now(), recentTools: [], liveInputTokens: 0, liveOutputTokens: 0, textPreview: "" } });
     },
     updateSpinner(text) {
       if (text) {

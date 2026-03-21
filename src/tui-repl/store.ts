@@ -100,6 +100,8 @@ export interface StatusBarState {
   recentTools: string[];
   liveInputTokens: number;
   liveOutputTokens: number;
+  lastActivity: number;
+  textPreview: string;
 }
 
 export interface ApprovalRequest {
@@ -259,6 +261,8 @@ const INITIAL_STATE: StoreState = {
     recentTools: [],
     liveInputTokens: 0,
     liveOutputTokens: 0,
+    lastActivity: 0,
+    textPreview: "",
   },
 };
 
