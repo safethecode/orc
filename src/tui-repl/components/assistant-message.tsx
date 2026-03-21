@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import type { ModelTier } from "../../config/types.ts";
 import { TIER_HEX } from "../theme-adapter.ts";
+import { renderMarkdown } from "../markdown.ts";
 
 interface Props {
   content: string;
@@ -9,6 +10,7 @@ interface Props {
 
 export function AssistantMessage({ content, tier }: Props) {
   const borderColor = tier ? TIER_HEX[tier as keyof typeof TIER_HEX] ?? "#565f89" : "#565f89";
+  const rendered = renderMarkdown(content);
 
   return (
     <box
@@ -23,7 +25,7 @@ export function AssistantMessage({ content, tier }: Props) {
         borderColor={borderColor}
         padding={1}
       >
-        <code content={content} filetype="markdown" />
+        <text>{rendered}</text>
       </box>
     </box>
   );
