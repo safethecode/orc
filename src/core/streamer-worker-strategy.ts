@@ -7,6 +7,7 @@ import { AgentStreamer, type ToolUseEvent } from "../repl/streamer.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildDynamicHarnessAsync } from "../agents/dynamic-harness.ts";
 import { ContextInjector } from "./context-injector.ts";
+import { detectLintConfig, formatLintForPrompt } from "./lint-detector.ts";
 import { eventBus } from "./events.ts";
 
 interface ActiveWorker {
@@ -72,6 +73,12 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
     const contextBlock = contextInjector.formatForPrompt(contextFiles);
     if (contextBlock) {
       systemPrompt = contextBlock + "\n\n" + systemPrompt;
+    }
+
+    // Inject lint rules so agent writes compliant code from the start
+    const lintConfig = await detectLintConfig(projectDir);
+    if (lintConfig) {
+      systemPrompt += "\n\n" + formatLintForPrompt(lintConfig);
     }
 
     // Inject project context from codebase scan result

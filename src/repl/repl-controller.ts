@@ -1,6 +1,7 @@
 import type { Orchestrator } from "../core/orchestrator.ts";
 import type { OrchestratorConfig, ModelTier, SubTask, ProviderName, DecompositionResult } from "../config/types.ts";
 import { decomposeWithSam } from "../core/decomposer.ts";
+import { detectLintConfig, formatLintForPrompt } from "../core/lint-detector.ts";
 import type { RendererPort } from "./renderer-types.ts";
 import { getLayoutManager } from "./renderer.ts";
 import { routeTask, classifyWithSam, type RouteResult } from "../core/router.ts";
@@ -141,6 +142,11 @@ export class ReplController {
 
   /** Display welcome info on startup */
   async initialize(): Promise<void> {
+    // Detect lint config once at startup
+    detectLintConfig(process.cwd()).then(config => {
+      if (config) (this as any)._cachedLintConfig = config;
+    }).catch(() => {});
+
     const profiles = this.orchestrator.getRegistry().list().map(p => p.name);
     this.renderer.welcome(profiles);
 
@@ -1335,6 +1341,11 @@ export class ReplController {
     }
 
     if (skillBodies.length > 0) sp += "\n\n" + skillBodies.join("\n\n");
+
+    // Inject lint rules so agent writes compliant code
+    if ((this as any)._cachedLintConfig) {
+      sp += "\n\n" + formatLintForPrompt((this as any)._cachedLintConfig);
+    }
 
     const lang = this.conversation.getLanguage();
     if (lang && lang !== "en") sp += `\n\n[LANGUAGE] The user writes in ${lang}. Always respond in the same language.`;
