@@ -74,8 +74,10 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
     startSpinner(agentName, tier) {
       dispatch({ type: "STATUS_UPDATE", partial: { agentState: "thinking", agentName, tier } });
     },
-    updateSpinner(_text) {
-      // Status bar auto-updates from state
+    updateSpinner(text) {
+      if (text) {
+        dispatch({ type: "PUSH_RECENT_TOOL", tool: text });
+      }
     },
     stopSpinner() {
       dispatch({ type: "STATUS_UPDATE", partial: { agentState: "idle", currentTool: "", recentTools: [] } });
