@@ -490,7 +490,21 @@ export class ReplController {
       : this.executeWithRetry(cmd, agentName, route, profile, providerConfig, systemPrompt, fullPrompt, mcpConfigPath, cancellation, input, sessionId);
 
     execution
-      .catch(err => this.renderer.error(`Agent error: ${(err as Error).message}`))
+      .then(() => {
+        // Check if agent produced any visible output
+        const lastMsg = this.conversation.getTurns().slice(-1)[0];
+        if (!lastMsg || lastMsg.role !== "assistant" || !lastMsg.content?.trim()) {
+          this.renderer.error("Agent finished without producing output. Try again or check the task.");
+        }
+      })
+      .catch(err => {
+        const msg = (err as Error).message ?? String(err);
+        this.renderer.error(`Agent error: ${msg}`);
+        // Show stderr hint if it looks like a CLI issue
+        if (msg.includes("spawn") || msg.includes("ENOENT")) {
+          this.renderer.error("Claude CLI may not be available. Check `claude --version`.");
+        }
+      })
       .finally(() => {
         this.singleAgentRunning = false;
         this.renderer.stopSpinner();
