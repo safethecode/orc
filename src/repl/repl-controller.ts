@@ -187,12 +187,10 @@ export class ReplController {
     const trimmed = input.trim();
     if (!trimmed) return;
 
-    // During background execution: route natural input to Sam for status/questions
-    let savedPin: string | null = null;
-    if ((this.multiAgentRunning || this.singleAgentRunning) && !isCommand(trimmed)) {
-      savedPin = this.pinnedAgent;
-      this.pinnedAgent = "Sam";
-    }
+    // During background execution: let normal routing handle it.
+    // If user was @design, sticky agent keeps routing to design.
+    // User can explicitly @Sam for status questions.
+    const savedPin: string | null = null;
 
     // Commands
     if (isCommand(trimmed)) {
@@ -627,7 +625,7 @@ export class ReplController {
           const proc = Bun.spawnSync(["git", "diff", "--stat"], { stdout: "pipe", stderr: "pipe" });
           preRetryDiffHash = new TextDecoder().decode(proc.stdout).trim();
         } catch {}
-        r.retryAttempt(attempt, maxRetries, lastError ?? "unknown");
+        r.retryAttempt(attempt, maxErrorRetries, lastError ?? "unknown");
         r.startSpinner(agentName, route.model);
       }
 
