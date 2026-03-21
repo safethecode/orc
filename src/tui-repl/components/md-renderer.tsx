@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import { getCurrentMdTheme, getMarkdownSyntaxStyle } from "../md-theme.ts";
+import { getTreeSitterClient } from "@opentui/core";
 
 // Theme color palettes
 const PALETTES: Record<string, { heading: string; headingSub: string; bold: string; italic: string; code: string; codeBg: string; link: string; quote: string; quoteBorder: string; bullet: string; dim: string; text: string; hr: string }> = {
@@ -193,7 +194,7 @@ export function MarkdownContent({ content }: MdProps) {
               <box key={i} paddingBottom={1} flexDirection="column">
                 {block.lang && <text fg={p.dim} italic>{` ${block.lang}`}</text>}
                 <box border borderColor={p.hr} borderStyle="single" padding={1} bg={p.codeBg}>
-                  <code content={block.lines.join("\n")} filetype={block.lang || "text"} syntaxStyle={getMarkdownSyntaxStyle()} />
+                  <code content={block.lines.join("\n")} filetype={block.lang || "text"} syntaxStyle={getMarkdownSyntaxStyle()} treeSitterClient={getTreeSitterClient()} />
                 </box>
               </box>
             );
