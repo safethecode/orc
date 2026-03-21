@@ -47,7 +47,9 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
     const providerConfig = this.config.providers[subtask.provider];
     if (!providerConfig) throw new Error(`Unknown provider: ${subtask.provider}`);
 
-    // Use user-defined profile if available, otherwise fall back to dynamic harness
+    // System prompt = PROFILE ONLY. Nothing else.
+    // All other context (lint, project structure, worker rules) goes into
+    // a generated CLAUDE.md that Claude CLI reads naturally.
     const userProfile = this.registry.get(subtask.agentRole);
     const projectDir = options?.workdir ?? process.cwd();
     let systemPrompt: string;
@@ -67,56 +69,8 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       systemPrompt = harnessResult.systemPrompt;
     }
 
-    // Inject CLAUDE.md / AGENTS.md / CONVENTIONS.md
-    const contextInjector = new ContextInjector(projectDir);
-    const contextFiles = contextInjector.collect();
-    const contextBlock = contextInjector.formatForPrompt(contextFiles);
-    if (contextBlock) {
-      systemPrompt = contextBlock + "\n\n" + systemPrompt;
-    }
-
-    // Inject lint rules so agent writes compliant code from the start
-    const lintConfig = await detectLintConfig(projectDir);
-    if (lintConfig) {
-      systemPrompt += "\n\n" + formatLintForPrompt(lintConfig);
-    }
-
-    // Inject project context from codebase scan result
-    if (this.scanResult) {
-      const projectContext = this.formatProjectContext(this.scanResult);
-      if (projectContext) {
-        systemPrompt = systemPrompt + "\n\n" + projectContext;
-      }
-    }
-
-    // Worker override: role-aware — design agents keep their full workflow
-    const NON_INTERACTIVE_GUARD = "Do NOT run interactive commands (vim, nano, less, more, ssh, mysql, psql, mongo, python REPL, irb, node REPL, etc.). Use non-interactive alternatives only.";
-    const isDesignRole = subtask.agentRole === "design" || subtask.agentRole === "architect";
-    const workerOverride = isDesignRole
-      ? [
-          "[WORKER MODE]",
-          "You are a multi-agent worker. The project file tree is provided in the user message — use it instead of running find/ls.",
-          "Follow your profile instructions completely — reference-based design, screenshots, quality checks.",
-          "Your profile rules (below) take HIGHEST PRIORITY. Do not skip any step in your design process.",
-          "IMPORTANT: Do NOT use AskUserQuestion or ask for user approval. You cannot receive user input.",
-          "Output your design plan as text, then implement it immediately. Auto-approve your own designs.",
-          NON_INTERACTIVE_GUARD,
-        ].join("\n")
-      : [
-          "[WORKER MODE — HIGHEST PRIORITY]",
-          "You are a multi-agent worker. The project structure and file tree are ALREADY provided in the user message.",
-          "SKIP all exploration: do NOT run find, ls, ls -la, or tree commands.",
-          "SKIP reading files for analysis. Only Read a file immediately before you Edit it.",
-          "Go STRAIGHT to creating and editing files. Start implementation within your first 3 tool calls.",
-          "Do NOT use AskUserQuestion — you cannot receive user input. Make decisions autonomously.",
-          NON_INTERACTIVE_GUARD,
-        ].join("\n");
-    systemPrompt = workerOverride + "\n\n" + systemPrompt;
-
-    // Inject skill bodies from scouting
-    if (this.skillBodies) {
-      systemPrompt += "\n\n" + this.skillBodies;
-    }
+    // Generate orc CLAUDE.md in the working directory for Claude CLI to read
+    await this.generateOrcClaudeMd(projectDir, subtask);
 
     const profile = {
       name: agentName,
@@ -335,5 +289,61 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
   async sendInput(_handle: WorkerHandle, _message: string): Promise<void> {
     // AgentStreamer uses stdin: "ignore" — mid-run corrections are not supported.
     // Corrections are handled post-completion via quality gate and retry.
+  }
+
+  /**
+   * Generate a temporary CLAUDE.md in the working directory so Claude CLI
+   * picks it up naturally. Contains orc rules, lint config, project context.
+   * Keeps system prompt clean (profile only).
+   */
+  private async generateOrcClaudeMd(projectDir: string, subtask: SubTask): Promise<void> {
+    const sections: string[] = [];
+
+    // 1. Worker identity
+    sections.push([
+      "# Orc Worker Rules",
+      "",
+      "You are an autonomous worker agent. You cannot receive user input.",
+      "- Do NOT use AskUserQuestion — make all decisions independently.",
+      "- Do NOT run interactive commands (vim, nano, less, ssh, mysql, python REPL, etc.).",
+      "- Commit with Karma convention: `feat:`, `fix:`, `refactor:`, `test:`, `chore:`.",
+      "- No co-author tags. One logical change per commit.",
+    ].join("\n"));
+
+    // 2. Lint rules (read from config files)
+    const lintConfig = await detectLintConfig(projectDir);
+    if (lintConfig) {
+      sections.push(formatLintForPrompt(lintConfig));
+    }
+
+    // 3. Project context from codebase scan
+    if (this.scanResult) {
+      const ctx = this.formatProjectContext(this.scanResult);
+      if (ctx) sections.push(ctx);
+    }
+
+    // 4. Read existing CLAUDE.md and merge (don't overwrite user's)
+    const claudeMdPath = `${projectDir}/CLAUDE.md`;
+    let existingContent = "";
+    try {
+      existingContent = await Bun.file(claudeMdPath).text();
+    } catch { /* no existing CLAUDE.md */ }
+
+    // Only write if there's something to add and we're in a worktree (don't pollute main)
+    // For main dir: prepend orc section to existing, separated clearly
+    const orcMarker = "<!-- ORC-GENERATED: DO NOT EDIT BELOW -->";
+    const orcSection = `${orcMarker}\n${sections.join("\n\n")}\n<!-- /ORC-GENERATED -->`;
+
+    if (existingContent.includes(orcMarker)) {
+      // Replace existing orc section
+      const cleaned = existingContent.replace(/<!-- ORC-GENERATED: DO NOT EDIT BELOW -->[\s\S]*?<!-- \/ORC-GENERATED -->/, "").trim();
+      await Bun.write(claudeMdPath, cleaned + "\n\n" + orcSection + "\n");
+    } else if (existingContent) {
+      // Append to existing
+      await Bun.write(claudeMdPath, existingContent + "\n\n" + orcSection + "\n");
+    } else {
+      // Create new
+      await Bun.write(claudeMdPath, orcSection + "\n");
+    }
   }
 }

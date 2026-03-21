@@ -194,23 +194,17 @@ export class ContextPropagator {
     language: string = "",
     preloaded: string = "",
   ): string {
-    // Priority order: original > lang > codebase > preloaded > parent > completed > resolutions > sibling > knowledge > bus > protocol
+    // Clean prompt: task + user request + minimal context. No behavioral overrides.
+    // All rules (lint, worker mode, project context) are in CLAUDE.md, not here.
     const fullContext = this.fullUserPrompt && this.fullUserPrompt !== original
-      ? `## FULL USER REQUEST (follow ALL requirements below)\n\n${this.fullUserPrompt}\n\n## YOUR SPECIFIC ASSIGNMENT\n\n${original}`
+      ? `${this.fullUserPrompt}\n\n---\n\nYour specific assignment: ${original}`
       : original;
-    const taskInstruction = `## YOUR TASK — Execute this immediately\n\n${fullContext}\n\n**CRITICAL RULES:**\n- **DO NOT run \`find\`, \`ls\`, \`ls -la\`, or explore directories.** The project structure is already provided below.\n- **DO NOT read files unless you are about to edit them.** Only Read a file right before you Edit it.\n- **Start writing code IMMEDIATELY.** Skip analysis — go straight to creating/editing files.\n- **Never ask clarifying questions.** Make reasonable assumptions and implement.\n- **DO NOT modify shared config files** (package.json, tsconfig.json, .env, next.config.*). Only modify files in your assigned domain. If you need a dependency, note it in your output and a setup step will handle it.`;
+    const langHint = language ? `\n\n${language}` : "";
+    const taskInstruction = `${fullContext}${langHint}`;
     const sections = [
       { text: taskInstruction, priority: 0 },
-      { text: language, priority: 1 },
-      { text: this.codebaseContext, priority: 2 },
-      { text: preloaded, priority: 3 },
-      { text: parent, priority: 4 },
-      { text: completed, priority: 5 },
-      { text: resolutions, priority: 6 },
-      { text: sibling, priority: 7 },
-      { text: knowledge, priority: 8 },
-      { text: bus, priority: 9 },
-      { text: protocol, priority: 10 },
+      { text: completed, priority: 1 },
+      { text: resolutions, priority: 2 },
     ].filter(s => s.text.length > 0);
 
     let result = "";
