@@ -974,6 +974,24 @@ export class ReplController {
         this.forkManager.addTurn(assistantTurn);
         this.rollout.append({ type: "turn", timestamp: assistantTurn.timestamp, data: assistantTurn });
         this.lastAgent = agentName;
+
+        // Detect handoff: agent says "코더에게 맡길게요" or similar → auto-route to target agent
+        const handoffMatch = result.text.match(/(?:코더|coder|개발\s*에이전트).*맡길게|hand(?:off|ing).*(?:to|over)\s+(\w+)/i);
+        if (handoffMatch && toolUseCount <= 2) {
+          const targetAgent = handoffMatch[1]?.toLowerCase() ?? "coder";
+          const targetProfile = this.orchestrator.getRegistry().get(targetAgent);
+          if (targetProfile) {
+            r.info(`Handoff → @${targetAgent.charAt(0).toUpperCase() + targetAgent.slice(1)}`);
+            this.pinnedAgent = targetAgent;
+            this.stickyAgent = targetAgent;
+            // Re-run original input with target agent
+            const handoffCancellation = new CancellationToken();
+            this.currentCancellation = handoffCancellation;
+            this.handleNaturalInput(input, handoffCancellation, targetAgent).catch(() => {});
+            return;
+          }
+        }
+
         break; // success
       } catch (e) {
         // If aborted for approval, don't count as error
