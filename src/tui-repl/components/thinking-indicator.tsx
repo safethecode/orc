@@ -22,11 +22,12 @@ export function ThinkingIndicator() {
 
   let label: string;
   if (isPreAgent) {
-    label = `${phase}...`;
+    label = `${phase.charAt(0).toUpperCase() + phase.slice(1)}...`;
   } else if (agentName) {
-    label = `${agentName} is thinking...`;
+    const capitalized = agentName.charAt(0).toUpperCase() + agentName.slice(1);
+    label = `${capitalized} is thinking...`;
   } else {
-    label = "thinking...";
+    label = "Thinking...";
   }
 
   return (

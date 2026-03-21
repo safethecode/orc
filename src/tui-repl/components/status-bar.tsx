@@ -30,7 +30,7 @@ export function StatusBar() {
     // Idle state
     return (
       <box height={1} flexShrink={0} flexDirection="row" paddingLeft={1}>
-        <text fg="#565f89">{"○ idle"}</text>
+        <text fg="#565f89">{"○ Idle"}</text>
         <text fg="#3d4262">{" │ "}</text>
         <text fg="#565f89">/help for commands</text>
         <text fg="#3d4262">{" │ "}</text>
@@ -66,7 +66,7 @@ export function StatusBar() {
       {phase && phase !== "idle" && phase !== "done" && (
         <box flexDirection="row">
           <text fg="#3d4262">{" │ "}</text>
-          <text fg="#7aa2f7">{phase}</text>
+          <text fg="#7aa2f7">{phase.charAt(0).toUpperCase() + phase.slice(1)}</text>
           {phaseDetail ? <text fg="#565f89">{` ${phaseDetail}`}</text> : null}
         </box>
       )}

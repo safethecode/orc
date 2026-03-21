@@ -20,9 +20,9 @@ export function AgentHeader({ name, tier, reason }: Props) {
 
   return (
     <box flexDirection="row" gap={1} paddingTop={1} paddingLeft={2}>
-      <text fg={color} bold>{name}</text>
+      <text fg={color} bold>{name.charAt(0).toUpperCase() + name.slice(1)}</text>
       {tier && (
-        <text fg="#1a1b26" bg={bg} bold>{` ${tier} `}</text>
+        <text fg="#1a1b26" bg={bg} bold>{` ${tier.charAt(0).toUpperCase() + tier.slice(1)} `}</text>
       )}
       {reason && (
         <text fg="#565f89" italic>{reason}</text>

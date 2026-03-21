@@ -98,25 +98,25 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
       dispatch({ type: "UPDATE_WELCOME_META", partial: { mcpServers: serverNames } });
     },
     mcpScout(names, durationMs) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `mcp scout: ${names.join(", ")} (${durationMs}ms)`) });
+      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `MCP Scout: ${names.join(", ")} (${durationMs}ms)`) });
     },
     skillScout(names, durationMs) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `skills: ${names.join(", ")} (${durationMs}ms)`) });
+      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `Skills: ${names.join(", ")} (${durationMs}ms)`) });
     },
     retryAttempt(attempt, maxAttempts, reason) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `retry ${attempt}/${maxAttempts}: ${reason}`) });
+      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `Retry ${attempt}/${maxAttempts}: ${reason}`) });
     },
     qualityGate(passes, issues) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", passes ? "quality: passed" : `quality: failed — ${issues.join(", ")}`, { passed: passes, issues }) });
+      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", passes ? "Quality: PASSED" : `Quality: FAILED — ${issues.join(", ")}`, { passed: passes, issues }) });
     },
     costEstimate(single, multi, recommendation) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `cost estimate: $${single.toFixed(4)} single / $${multi.toFixed(4)} multi — ${recommendation}`) });
+      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `Cost estimate: $${single.toFixed(4)} single / $${multi.toFixed(4)} multi — ${recommendation}`) });
     },
     conflictWarning(conflicts) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `conflicts: ${conflicts.join(", ")}`) });
+      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `Conflicts: ${conflicts.join(", ")}`) });
     },
     riskAssessment(risks) {
-      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `risks: ${risks.join(", ")}`) });
+      dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `Risks: ${risks.join(", ")}`) });
     },
     phaseStart(phaseNum, name, target) {
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `phase ${phaseNum}: ${name} (target: ${target})`) });

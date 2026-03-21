@@ -34,9 +34,9 @@ export function WelcomeScreen({ profiles, meta }: Props) {
         <box flexDirection="column" flexGrow={1} paddingTop={1} paddingBottom={1} paddingLeft={1}>
           <ascii-font text="orc" font="slick" color="#bb9af7" />
           <box paddingTop={1} flexDirection="row" gap={1}>
-            <text fg="#9ece6a">{defaultTier}</text>
+            <text fg="#9ece6a">{defaultTier.charAt(0).toUpperCase() + defaultTier.slice(1)}</text>
             <text fg="#565f89">·</text>
-            <text fg="#565f89">default</text>
+            <text fg="#565f89">Default</text>
           </box>
           <text fg="#565f89">{shortCwd}</text>
           {mcpServers.length > 0 && (
@@ -67,7 +67,7 @@ export function WelcomeScreen({ profiles, meta }: Props) {
           </box>
           <box border={["top"]} borderColor="#3d4262" />
           <text fg="#c0caf5" bold>Agents</text>
-          <text fg="#7dcfff">{names.length > 4 ? names.slice(0, 4).join(", ") + ", ..." : names.join(", ")}</text>
+          <text fg="#7dcfff">{(names.length > 4 ? names.slice(0, 4) : names).map(n => n.charAt(0).toUpperCase() + n.slice(1)).join(", ")}{names.length > 4 ? ", ..." : ""}</text>
         </box>
       </box>
     </box>
