@@ -20,6 +20,15 @@ function isDesignRole(role: string): boolean {
   return role.toLowerCase().includes("design");
 }
 
+function isCoderRole(role: string): boolean {
+  const lower = role.toLowerCase();
+  return lower.includes("coder") || lower.includes("engineer") || lower.includes("developer");
+}
+
+function isArchitectRole(role: string): boolean {
+  return role.toLowerCase().includes("architect");
+}
+
 function runHeuristicChecks(
   context: { agentRole: string; prompt: string; toolUseCount?: number },
   result: string,
@@ -101,7 +110,7 @@ function runHeuristicChecks(
 }
 
 export async function runQualityGate(
-  context: { agentRole: string; prompt: string; toolUseCount?: number },
+  context: { agentRole: string; prompt: string; toolUseCount?: number; designPlan?: string },
   result: string,
 ): Promise<CritiqueResult> {
   const heuristic = runHeuristicChecks(context, result);
@@ -115,11 +124,11 @@ export async function runQualityGate(
 }
 
 async function runLLMEvaluation(
-  context: { agentRole: string; prompt: string },
+  context: { agentRole: string; prompt: string; designPlan?: string },
   result: string,
 ): Promise<CritiqueResult> {
   const truncated = result.length > 8000 ? `${result.slice(0, 8000)}\n...[truncated]` : result;
-  const prompt = buildQualityPrompt(context.agentRole, context.prompt, truncated);
+  const prompt = buildQualityPrompt(context.agentRole, context.prompt, truncated, context.designPlan);
   const model = nextModel();
 
   const proc = Bun.spawn(
@@ -139,8 +148,24 @@ async function runLLMEvaluation(
   return parseCritiqueResponse(stdout);
 }
 
-function buildQualityPrompt(agentRole: string, task: string, result: string): string {
-  const designRules = isDesignRole(agentRole) ? `
+function buildRoleCriteria(agentRole: string, designPlan?: string): string {
+  if (isCoderRole(agentRole)) {
+    return `
+4. CODER CRITERIA — Check these specific items:
+   - Does the code compile? Any broken imports or type errors visible in the output?
+   - Are there TODO/FIXME/placeholder comments left in the code?
+   - Are all imports actually used? Any unused imports visible?
+   - Did tests pass? If tests were run, did they all succeed?
+   - Any console.log/debug statements left in production code?
+   - Are error paths handled (no empty catch blocks, no unhandled rejections)?`;
+  }
+
+  if (isDesignRole(agentRole)) {
+    const planSection = designPlan ? `
+   - PLAN ADHERENCE: The agent declared this design plan:
+     ${designPlan.slice(0, 1500)}
+     Verify the implementation matches the declared plan. Are all sections implemented?` : "";
+    return `
 4. DESIGN RULES — Check for these specific violations:
    - Missing reference declaration (must cite a real product as reference before generating UI)
    - Gradient abuse (linear-gradient, radial-gradient, bg-gradient — real SaaS uses flat solid colors)
@@ -149,7 +174,24 @@ function buildQualityPrompt(agentRole: string, task: string, result: string): st
    - Oversized border-radius (rounded-2xl, rounded-3xl, rounded-full on containers)
    - scale() hover effects (use bg-color shift only, never scale() on cards)
    - Heavy shadows (shadow-lg, shadow-xl — use border-gray-200 instead)
-   - Hand-written SVG icons (must use lucide-react, never hand-write <svg>/<path>)` : "";
+   - Hand-written SVG icons (must use lucide-react, never hand-write <svg>/<path>)${planSection}`;
+  }
+
+  if (isArchitectRole(agentRole)) {
+    return `
+4. ARCHITECT CRITERIA — Check these specific items:
+   - Are interfaces/types defined before implementation?
+   - Are all consumers of modified interfaces updated?
+   - Is there a clear migration path for breaking changes?
+   - Are module boundaries clean (no circular dependencies introduced)?
+   - Did the agent verify compilation after interface changes?`;
+  }
+
+  return "";
+}
+
+function buildQualityPrompt(agentRole: string, task: string, result: string, designPlan?: string): string {
+  const roleCriteria = buildRoleCriteria(agentRole, designPlan);
 
   return `You are a code quality reviewer. Evaluate if the agent completed the task correctly.
 
@@ -162,7 +204,7 @@ ${result}
 Evaluate:
 1. COMPLETION — Did the agent actually complete the requested task, or just describe/plan it?
 2. CORRECTNESS — If code was written, is it likely correct? Any obvious bugs or logic errors?
-3. RELEVANCE — Does the output match what was asked? Did the agent go off-track?${designRules}
+3. RELEVANCE — Does the output match what was asked? Did the agent go off-track?${roleCriteria}
 
 Respond in JSON only:
 {"passes":true/false,"issues":["..."],"improvements":["..."],"confidence":"low"|"medium"|"high"}`;
