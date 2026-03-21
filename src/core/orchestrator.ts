@@ -128,7 +128,7 @@ import { StuckDetector } from "./stuck-detector.ts";
 import { EscalationManager } from "./escalation-manager.ts";
 import { DistributedTracer } from "./distributed-trace.ts";
 import { HarnessEnforcer } from "./harness-enforcer.ts";
-import { autoCommit, installCommitHook, startCommitWatcher } from "./auto-commit.ts";
+import { autoCommit, startCommitWatcher } from "./auto-commit.ts";
 
 const MAX_AGENT_DEPTH = 5;
 
@@ -532,8 +532,7 @@ export class Orchestrator {
     });
     this.fileWatcher.start();
 
-    // Install commit-msg hook to enforce co-author tag on all commits
-    await installCommitHook(process.cwd()).catch(() => {});
+    // co-author hook removed — no co-author tags on commits
 
     // Ghost commit: snapshot working tree at session start
     this.ghostSha = await createGhostCommit("orc session start");
@@ -1482,15 +1481,36 @@ export class Orchestrator {
 
 const GLOBAL_COMMIT_RULES = `
 
-## Commit Rules (Global)
+## Commit Rules (Global — CRITICAL)
 
-- Commit atomically after each logical unit of work. Do NOT batch — commit as you go.
-- Karma convention: \`<type>: <subject>\` (feat, fix, refactor, test, docs, chore). Lowercase, imperative, no period.
-- One logical change per commit.
-- Always add: \`Co-Authored-By: orc-agent <hello@sson.tech>\`
-- Push after each commit.
+**Atomic commits are mandatory.** Commit after EVERY small, self-contained change. Never batch.
+
+### What "atomic" means:
+- One new file → one commit
+- One new function/component → one commit
+- One config or dependency change → one commit
+- One bug fix → one commit
+
+### Bad (batched):
+\`feat: add Instagram newsletter studio with AI editor\` ← bundles templates, routes, AI panel, store, styles into one commit
+
+### Good (atomic):
+\`feat: add newsletter page route\`
+\`feat: add editorial template component\`
+\`feat: add minimal template component\`
+\`feat: add bold template component\`
+\`feat: add AI chat panel with Claude Haiku\`
+\`feat: add useTemplateStore with patch validation\`
+\`feat: add color preset system\`
+
+### Format:
+- Karma convention: \`<type>: <subject>\` (feat, fix, refactor, test, docs, chore)
+- Lowercase, imperative mood, no period at end
+- No co-author tags
+- Push after each commit
+- Stage only the files relevant to that one change — never \`git add -A\` or \`git add .\`
 - You are responsible for your own commits. Do NOT delegate to other agents.
-- If you finish without committing, the orchestrator will auto-commit your changes. Prefer committing yourself for better messages.`;
+- If you finish without committing, the orchestrator will auto-commit — but your own atomic commits are always better.`;
 
 function appendGlobalRules(systemPrompt: string): string {
   return systemPrompt + GLOBAL_COMMIT_RULES;

@@ -306,8 +306,17 @@ export class StreamerWorkerStrategy implements WorkerExecutionStrategy {
       "You are an autonomous worker agent. You cannot receive user input.",
       "- Do NOT use AskUserQuestion — make all decisions independently.",
       "- Do NOT run interactive commands (vim, nano, less, ssh, mysql, python REPL, etc.).",
-      "- Commit with Karma convention: `feat:`, `fix:`, `refactor:`, `test:`, `chore:`.",
-      "- No co-author tags. One logical change per commit.",
+      "",
+      "## Commit Rules (CRITICAL — Atomic Commits)",
+      "",
+      "Commit after EVERY small, self-contained change. Never batch multiple changes into one commit.",
+      "- One new file = one commit. One function/component = one commit. One config change = one commit.",
+      "- Karma convention: `feat:`, `fix:`, `refactor:`, `test:`, `chore:`. Lowercase, imperative, no period.",
+      "- No co-author tags.",
+      "- Stage only relevant files per commit — never `git add -A` or `git add .`.",
+      "- Push after each commit.",
+      "- Bad: `feat: add newsletter studio with AI editor` (too many changes bundled)",
+      "- Good: `feat: add newsletter page route`, then `feat: add editorial template`, then `feat: add AI chat panel`",
     ].join("\n"));
 
     // 2. Lint rules (read from config files)
