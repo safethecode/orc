@@ -14,9 +14,7 @@ function formatElapsed(startMs: number): string {
 
 export function ThinkingIndicator() {
   const { state } = useStore();
-  const { agentState, agentName, phase, currentTool, elapsedStart, cost } = state.status;
-  const inputTokens = (state as any).status.inputTokens ?? 0;
-  const outputTokens = (state as any).status.outputTokens ?? 0;
+  const { agentState, agentName, phase, currentTool, elapsedStart, liveInputTokens, liveOutputTokens } = state.status;
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
@@ -41,8 +39,11 @@ export function ThinkingIndicator() {
   }
 
   const elapsed = formatElapsed(elapsedStart);
-  const tokens = inputTokens + outputTokens;
-  const stats = [elapsed, tokens > 0 ? `${tokens.toLocaleString()} tokens` : ""].filter(Boolean).join(", ");
+  const totalTokens = liveInputTokens + liveOutputTokens;
+  const tokenStr = totalTokens > 0
+    ? `${liveInputTokens.toLocaleString()} → ${liveOutputTokens.toLocaleString()} tokens`
+    : "";
+  const stats = [elapsed, tokenStr].filter(Boolean).join(", ");
   const toolLine = currentTool && !isPreAgent ? currentTool : "";
 
   return (

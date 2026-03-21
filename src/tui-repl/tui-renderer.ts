@@ -83,8 +83,11 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
     notifyIdle() {
       dispatch({ type: "STATUS_UPDATE", partial: { agentState: "idle", currentTool: "" } });
     },
-    updateCostLive(usd) {
-      dispatch({ type: "STATUS_UPDATE", partial: { cost: usd } });
+    updateCostLive(usd, inputTokens?: number, outputTokens?: number) {
+      const partial: Record<string, any> = { cost: usd };
+      if (inputTokens != null) partial.liveInputTokens = inputTokens;
+      if (outputTokens != null) partial.liveOutputTokens = outputTokens;
+      dispatch({ type: "STATUS_UPDATE", partial });
     },
     brainstormStatus(count, durationMs) {
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("system", `deliberation: ${count} rounds in ${(durationMs / 1000).toFixed(1)}s`) });

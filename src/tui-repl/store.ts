@@ -97,6 +97,8 @@ export interface StatusBarState {
   phase: WorkflowPhase;
   phaseDetail: string;
   currentTool: string;
+  liveInputTokens: number;
+  liveOutputTokens: number;
 }
 
 export interface ApprovalRequest {
@@ -248,6 +250,8 @@ const INITIAL_STATE: StoreState = {
     phase: "idle",
     phaseDetail: "",
     currentTool: "",
+    liveInputTokens: 0,
+    liveOutputTokens: 0,
   },
 };
 

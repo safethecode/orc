@@ -676,8 +676,8 @@ export class ReplController {
         r.startSpinner(agentName, route.model);
       });
 
-      streamer.on("usage", (usage: { costUsd: number }) => {
-        r.updateCostLive(usage.costUsd);
+      streamer.on("usage", (usage: { costUsd: number; inputTokens?: number; outputTokens?: number }) => {
+        r.updateCostLive(usage.costUsd, usage.inputTokens, usage.outputTokens);
       });
 
       streamer.on("tool_use", (tool: ToolUseEvent) => {

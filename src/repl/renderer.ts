@@ -391,7 +391,7 @@ export function notifyIdle(): void {
   layoutManager?.updateAgentState("idle");
 }
 
-export function updateCostLive(usd: number): void {
+export function updateCostLive(usd: number, _inputTokens?: number, _outputTokens?: number): void {
   layoutManager?.updateCost(usd);
 }
 

@@ -19,7 +19,7 @@ export interface RendererPort {
   updateSpinner(text: string): void;
   stopSpinner(): void;
   notifyIdle(): void;
-  updateCostLive(usd: number): void;
+  updateCostLive(usd: number, inputTokens?: number, outputTokens?: number): void;
   brainstormStatus(count: number, durationMs: number): void;
   planSummary(subtasks: SubTask[], plan: ExecutionPlan): void;
   phaseHeader(name: string, count: number, parallel: boolean): void;
