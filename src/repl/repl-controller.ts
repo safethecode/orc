@@ -386,6 +386,7 @@ export class ReplController {
     const skillScoutResult = skillSettled.status === "fulfilled" ? skillSettled.value : emptySkill;
     const mcpScoutResult = mcpSettled.status === "fulfilled" ? mcpSettled.value : emptyMcp;
 
+    const skillIndex = this.orchestrator.getSkillIndex();
     const baselineEntries = (profile.skills ?? [])
       .map(name => skillIndex.getByName(name))
       .filter((e): e is NonNullable<typeof e> => e != null);
