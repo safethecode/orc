@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/react */
 import type { ModelTier } from "../../config/types.ts";
 import { TIER_HEX } from "../theme-adapter.ts";
-import { getMarkdownSyntaxStyle } from "../md-theme.ts";
+import { MarkdownContent } from "./md-renderer.tsx";
 
 interface Props {
   content: string;
@@ -24,7 +24,7 @@ export function AssistantMessage({ content, tier }: Props) {
         borderColor={borderColor}
         padding={1}
       >
-        <markdown content={content} syntaxStyle={getMarkdownSyntaxStyle()} conceal concealCode={false} />
+        <MarkdownContent content={content} />
       </box>
     </box>
   );
