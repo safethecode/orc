@@ -605,8 +605,8 @@ export class ReplController {
   ): Promise<void> {
     const r = this.renderer;
     const maxErrorRetries = this.config.supervisor?.maxRetries ?? 2;
-    const maxQualityRetries = 5; // Quality gate retries are separate from error retries
-    let totalAttempts = maxErrorRetries + 1 + maxQualityRetries;
+    const maxQualityRetries = Infinity; // Keep retrying until quality gate passes
+    let totalAttempts = Infinity; // No hard limit — quality gate drives termination
     let errorRetries = 0;
     let qualityRetries = 0;
     let currentCmd = initialCmd;
@@ -809,7 +809,7 @@ export class ReplController {
         // Build/test verification (before LLM quality gate)
         if (toolUseCount > 0) {
           const buildIssues = await this.runSingleAgentBuildCheck();
-          if (buildIssues.length > 0 && attempt < maxAttempts - 1) {
+          if (buildIssues.length > 0 && errorRetries < maxErrorRetries) {
             r.qualityGate(false, buildIssues);
             r.info("auto-retry: build/test failed, sending fix prompt...");
             const reinforced = `[BUILD FAILED]\n\n## Original Task\n${input}\n\n## Build issues to fix\n${buildIssues.map(i => `- ${i}`).join("\n")}\n\nFix all build issues while keeping the original task completed.`;
@@ -834,7 +834,7 @@ export class ReplController {
           r.qualityGate(critique.passes, critique.issues);
 
           // Auto-retry on intent without action (agent described what it would do but used no tools)
-          if (!critique.passes && critique.issues.includes("Intent without action: declared actions but used zero tools") && attempt < maxAttempts - 1) {
+          if (!critique.passes && critique.issues.includes("Intent without action: declared actions but used zero tools") && errorRetries < maxErrorRetries) {
             r.info("auto-retry: agent declared intent but used no tools, reinforcing...");
             const reinforced = `[IMPORTANT: Your previous response only described what to do without doing it.]\n\n## Original Task\n${input}\n\nYou MUST use tools (Read, Edit, Bash, etc.) to complete this task. Do not describe — act.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
@@ -850,7 +850,7 @@ export class ReplController {
           }
 
           // Auto-retry on suspiciously short response from non-conversational agents
-          if (!critique.passes && critique.issues.includes("Result is suspiciously short") && attempt < maxAttempts - 1) {
+          if (!critique.passes && critique.issues.includes("Result is suspiciously short") && errorRetries < maxErrorRetries) {
             r.info("auto-retry: response too short, reinforcing prompt...");
             const reinforced = `[IMPORTANT: Your previous attempt was incomplete.]\n\n## Original Task\n${input}\n\nYou MUST use tools to actually complete this task fully. Do not just acknowledge — take action.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
@@ -866,7 +866,7 @@ export class ReplController {
           }
 
           // Auto-retry on design quality violations
-          if (!critique.passes && (currentProfile.role ?? "").toLowerCase().includes("design") && attempt < maxAttempts - 1) {
+          if (!critique.passes && (currentProfile.role ?? "").toLowerCase().includes("design") && errorRetries < maxErrorRetries) {
             const designIssues = critique.issues.filter((i: string) =>
               i.includes("reference declaration") || i.includes("Gradient") ||
               i.includes("Rainbow") || i.includes("Glassmorphism") ||
@@ -890,7 +890,7 @@ export class ReplController {
           }
 
           // Auto-retry on any quality gate failure — keep going until passed
-          if (!critique.passes && critique.issues.length > 0 && qualityRetries < maxQualityRetries) {
+          if (!critique.passes && critique.issues.length > 0) {
             qualityRetries++;
             // Check if the retry actually changed anything meaningful
             let noRealChanges = false;
@@ -913,9 +913,9 @@ export class ReplController {
             const unchangedWarning = noRealChanges
               ? "\n\n**CRITICAL: Your previous retry made ZERO file changes. git diff confirms nothing changed. You MUST use the Edit tool to actually modify files. Do NOT describe what you would do — DO IT NOW.**"
               : "";
-            r.info(`auto-retry (${qualityRetries}/${maxQualityRetries}): quality gate failed — ${critique.issues.slice(0, 2).join(", ")}`);
+            r.info(`auto-retry (#${qualityRetries}): quality gate failed — ${critique.issues.slice(0, 2).join(", ")}`);
             if (noRealChanges) r.error("⚠ Previous retry made no file changes — reinforcing...");
-            const reinforced = `[QUALITY GATE FAILED — Retry ${qualityRetries}/${maxQualityRetries}]\n\n## Original Task (DO NOT forget this)\n${input}\n\n## Issues to fix\n${critique.issues.map((i: string) => `- ${i}`).join("\n")}${diffContext}${unchangedWarning}\n\nRead the files you created/modified and fix ALL issues above. The original task must still be fully completed.`;
+            const reinforced = `[QUALITY GATE FAILED — Retry #${qualityRetries}]\n\n## Original Task (DO NOT forget this)\n${input}\n\n## Issues to fix\n${critique.issues.map((i: string) => `- ${i}`).join("\n")}${diffContext}${unchangedWarning}\n\nRead the files you created/modified and fix ALL issues above. The original task must still be fully completed.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
               prompt: reinforced,
               model: currentProfile.model,
@@ -973,10 +973,12 @@ export class ReplController {
         }
 
         lastError = (e as Error).message;
+        errorRetries++;
         r.stopSpinner();
         if (boxOpen) r.endBox();
-        if (attempt === maxAttempts - 1) {
-          r.error(`All ${maxAttempts} attempts failed: ${lastError}`);
+        if (errorRetries > maxErrorRetries) {
+          r.error(`All ${errorRetries} error retries exhausted: ${lastError}`);
+          break;
         }
       }
     }
