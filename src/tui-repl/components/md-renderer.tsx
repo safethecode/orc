@@ -193,7 +193,7 @@ export function MarkdownContent({ content }: MdProps) {
               <box key={i} paddingBottom={1} flexDirection="column">
                 {block.lang && <text fg={p.dim} italic>{` ${block.lang}`}</text>}
                 <box border borderColor={p.hr} borderStyle="single" padding={1} bg={p.codeBg}>
-                  <text fg={p.text}>{block.lines.join("\n")}</text>
+                  <code content={block.lines.join("\n")} filetype={block.lang || "text"} />
                 </box>
               </box>
             );
