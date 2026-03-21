@@ -18,8 +18,15 @@ export async function visualVerify(
     url?: string;
     port?: number;
     screenshotDir?: string;
+    designPlanPath?: string;
   },
 ): Promise<VisualVerifyResult> {
+  // If no designPlan provided (empty/short), try loading from saved file
+  let plan = designPlan;
+  if (!plan || plan.trim().length < 50) {
+    const planPath = options?.designPlanPath ?? join(process.cwd(), ".orchestrator", "design-plan.md");
+    try { plan = await Bun.file(planPath).text(); } catch { /* use original */ }
+  }
   const url = options?.url ?? `http://localhost:${options?.port ?? 3000}`;
   const screenshotDir = options?.screenshotDir ?? join(process.cwd(), ".orchestrator", "screenshots");
   await mkdir(screenshotDir, { recursive: true });
@@ -59,7 +66,7 @@ export async function visualVerify(
       "You are a design QA reviewer. Compare this screenshot against the design plan below.",
       "",
       "## Design Plan",
-      designPlan.slice(0, 3000),
+      plan.slice(0, 3000),
       "",
       "## Instructions",
       "List SPECIFIC differences between the screenshot and the design plan:",
