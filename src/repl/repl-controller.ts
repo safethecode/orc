@@ -865,6 +865,25 @@ export class ReplController {
             continue;
           }
 
+          // Visual verification for design agents — screenshot + compare
+          if ((currentProfile.role ?? "").toLowerCase().includes("design") && toolUseCount > 0) {
+            const { detectDevServer, visualVerify } = await import("../core/visual-verify.ts");
+            const server = await detectDevServer();
+            if (server.running) {
+              r.info(`visual verify: checking ${server.url}...`);
+              const planText = result.text.slice(0, 3000); // Use agent's output as plan context
+              const visual = await visualVerify(input, { url: server.url });
+              if (visual.screenshotPath) {
+                r.info(`screenshot: ${visual.screenshotPath}`);
+              }
+              if (!visual.matches && visual.issues.length > 0) {
+                critique.passes = false;
+                critique.issues.push(...visual.issues.map(i => `[VISUAL] ${i}`));
+                r.qualityGate(false, visual.issues);
+              }
+            }
+          }
+
           // Auto-retry on design quality violations
           if (!critique.passes && (currentProfile.role ?? "").toLowerCase().includes("design") && errorRetries < maxErrorRetries) {
             const designIssues = critique.issues.filter((i: string) =>
