@@ -659,6 +659,9 @@ export class ReplController {
         }
       };
 
+      let estimatedOutputChars = 0;
+      let lastInputTokens = 0;
+
       streamer.on("text_delta", (delta: string) => {
         if (!boxOpen) {
           flushToolGroup();
@@ -669,6 +672,10 @@ export class ReplController {
           boxOpen = true;
         }
         r.text(delta);
+        // Real-time token estimation (~4 chars per token)
+        estimatedOutputChars += delta.length;
+        const estimatedOut = Math.round(estimatedOutputChars / 4);
+        r.updateCostLive(0, lastInputTokens, estimatedOut);
       });
 
       streamer.on("text_complete", () => {
@@ -677,6 +684,8 @@ export class ReplController {
       });
 
       streamer.on("usage", (usage: { costUsd: number; inputTokens?: number; outputTokens?: number }) => {
+        // Correct with actual values from API
+        if (usage.inputTokens) lastInputTokens = usage.inputTokens;
         r.updateCostLive(usage.costUsd, usage.inputTokens, usage.outputTokens);
       });
 
