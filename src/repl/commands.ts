@@ -6,6 +6,7 @@ import { ReportGenerator } from "../benchmark/report-generator.ts";
 import { diffFromGhost } from "../utils/ghost-commit.ts";
 import { loadExecPolicy, trustProject, isProjectTrusted } from "../sandbox/rules.ts";
 import { getCatalogEntry } from "../mcp/catalog.ts";
+import { setMarkdownTheme, getMarkdownThemes } from "../tui-repl/markdown.ts";
 import { selectPhases, buildPhasePrompt, parseSpecResult } from "../core/spec-pipeline.ts";
 import { buildIdeationPrompt, parseIdeationResponse, prioritizeIdeas, DIMENSION_PROMPTS } from "../core/ideation.ts";
 import type { SpecPhase, IdeationDimension } from "../config/types.ts";
@@ -575,12 +576,24 @@ export async function handleCommand(
         return "continue";
       }
 
+      if (sub === "markdown") {
+        const mdTheme = args[1];
+        if (!mdTheme) {
+          r.info("Markdown themes: " + getMarkdownThemes().join(", "));
+          return "continue";
+        }
+        const ok = setMarkdownTheme(mdTheme);
+        r.info(ok ? `\u2713 Markdown theme: ${mdTheme}` : `Unknown markdown theme: ${mdTheme} (available: ${getMarkdownThemes().join(", ")})`);
+        return "continue";
+      }
+
       if (sub) {
         const ok = themeMgr.switch(sub);
-        r.info(ok ? `\u2713 theme switched to ${sub}` : `unknown theme: ${sub}`);
+        r.info(ok ? `\u2713 Theme: ${sub}` : `Unknown theme: ${sub}`);
       } else {
-        r.info(`current theme: \x1b[1m${themeMgr.get().name}\x1b[0m`);
-        r.info("\x1b[2musage: /theme <name> | /theme list | /theme preview\x1b[0m");
+        r.info(`Current theme: \x1b[1m${themeMgr.get().name}\x1b[0m`);
+        r.info(`Markdown themes: ${getMarkdownThemes().join(", ")}`);
+        r.info("\x1b[2mUsage: /theme <name> | /theme markdown <name> | /theme list\x1b[0m");
       }
       return "continue";
     }
