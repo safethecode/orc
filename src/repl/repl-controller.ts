@@ -802,7 +802,7 @@ export class ReplController {
           if (buildIssues.length > 0 && attempt < maxAttempts - 1) {
             r.qualityGate(false, buildIssues);
             r.info("auto-retry: build/test failed, sending fix prompt...");
-            const reinforced = `[BUILD FAILED] Fix these issues:\n${buildIssues.map(i => `- ${i}`).join("\n")}`;
+            const reinforced = `[BUILD FAILED]\n\n## Original Task\n${input}\n\n## Build issues to fix\n${buildIssues.map(i => `- ${i}`).join("\n")}\n\nFix all build issues while keeping the original task completed.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
               prompt: reinforced,
               model: currentProfile.model,
@@ -826,7 +826,7 @@ export class ReplController {
           // Auto-retry on intent without action (agent described what it would do but used no tools)
           if (!critique.passes && critique.issues.includes("Intent without action: declared actions but used zero tools") && attempt < maxAttempts - 1) {
             r.info("auto-retry: agent declared intent but used no tools, reinforcing...");
-            const reinforced = "[IMPORTANT: Your previous response only described what you would do without actually doing it. You MUST use tools (Read, Edit, Bash, etc.) to complete the task. Do not describe — act.]";
+            const reinforced = `[IMPORTANT: Your previous response only described what to do without doing it.]\n\n## Original Task\n${input}\n\nYou MUST use tools (Read, Edit, Bash, etc.) to complete this task. Do not describe — act.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
               prompt: reinforced,
               model: currentProfile.model,
@@ -842,7 +842,7 @@ export class ReplController {
           // Auto-retry on suspiciously short response from non-conversational agents
           if (!critique.passes && critique.issues.includes("Result is suspiciously short") && attempt < maxAttempts - 1) {
             r.info("auto-retry: response too short, reinforcing prompt...");
-            const reinforced = "[IMPORTANT: Your previous attempt produced an incomplete response. You MUST use tools (Read, Edit, Bash, etc.) to actually complete the task. Do not just acknowledge — take action immediately.]";
+            const reinforced = `[IMPORTANT: Your previous attempt was incomplete.]\n\n## Original Task\n${input}\n\nYou MUST use tools to actually complete this task fully. Do not just acknowledge — take action.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
               prompt: reinforced,
               model: currentProfile.model,
@@ -865,9 +865,7 @@ export class ReplController {
             );
             if (designIssues.length > 0) {
               r.info(`auto-retry: design violations — ${designIssues.join(", ")}`);
-              const reinforced = "[DESIGN VIOLATION] Your previous output violates production design rules:\n" +
-                designIssues.map((i: string) => `- ${i}`).join("\n") +
-                "\n\nFix ALL issues. Reference-First Protocol is MANDATORY. No gradients, no glassmorphism, no rainbow badges, no oversized radius, no scale() hover, no heavy shadows, no hand-written SVG.";
+              const reinforced = `[DESIGN VIOLATION]\n\n## Original Task\n${input}\n\n## Violations to fix\n${designIssues.map((i: string) => `- ${i}`).join("\n")}\n\nFix ALL violations while keeping the original task completed. Reference-First Protocol is MANDATORY.`;
               currentCmd = buildCommand(currentProviderConfig, currentProfile, {
                 prompt: reinforced,
                 model: currentProfile.model,
@@ -884,7 +882,7 @@ export class ReplController {
           // Auto-retry on any quality gate failure with specific issues
           if (!critique.passes && critique.issues.length > 0 && attempt < maxAttempts - 1) {
             r.info(`auto-retry: quality gate failed — ${critique.issues.slice(0, 2).join(", ")}`);
-            const reinforced = `[QUALITY GATE FAILED] Fix these issues in your previous output:\n${critique.issues.map((i: string) => `- ${i}`).join("\n")}\n\nRead the files you created/modified and fix ALL issues now.`;
+            const reinforced = `[QUALITY GATE FAILED]\n\n## Original Task (DO NOT forget this)\n${input}\n\n## Issues to fix\n${critique.issues.map((i: string) => `- ${i}`).join("\n")}\n\nRead the files you created/modified and fix ALL issues above. The original task must still be fully completed.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
               prompt: reinforced,
               model: currentProfile.model,
