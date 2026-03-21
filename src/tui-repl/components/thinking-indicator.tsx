@@ -14,7 +14,7 @@ function formatElapsed(startMs: number): string {
 
 export function ThinkingIndicator() {
   const { state } = useStore();
-  const { agentState, agentName, phase, currentTool, elapsedStart, liveInputTokens, liveOutputTokens } = state.status;
+  const { agentState, agentName, phase, recentTools, elapsedStart, liveInputTokens, liveOutputTokens } = state.status;
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export function ThinkingIndicator() {
     ? `${liveInputTokens.toLocaleString()} → ${liveOutputTokens.toLocaleString()} tokens`
     : "";
   const stats = [elapsed, tokenStr].filter(Boolean).join(", ");
-  const toolLine = currentTool && !isPreAgent ? currentTool : "";
+  const tools = !isPreAgent ? recentTools : [];
 
   return (
     <box paddingLeft={2} paddingTop={1} flexDirection="column">
@@ -52,11 +52,11 @@ export function ThinkingIndicator() {
         <text fg="#7aa2f7">{`${spinner} ${label}`}</text>
         {stats && <text fg="#565f89">{`(${stats})`}</text>}
       </box>
-      {toolLine && (
-        <box paddingLeft={2}>
-          <text fg="#565f89">{`│ ${toolLine}`}</text>
+      {tools.length > 0 && tools.map((t, i) => (
+        <box key={i} paddingLeft={2}>
+          <text fg={i === tools.length - 1 ? "#7aa2f7" : "#3d4262"}>{`│ ${t}`}</text>
         </box>
-      )}
+      ))}
     </box>
   );
 }

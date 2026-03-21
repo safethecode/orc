@@ -97,6 +97,7 @@ export interface StatusBarState {
   phase: WorkflowPhase;
   phaseDetail: string;
   currentTool: string;
+  recentTools: string[];
   liveInputTokens: number;
   liveOutputTokens: number;
 }
@@ -135,6 +136,7 @@ type Action =
   | { type: "STREAMING_DELTA"; text: string }
   | { type: "STREAMING_COMMIT" }
   | { type: "STATUS_UPDATE"; partial: Partial<StatusBarState> }
+  | { type: "PUSH_RECENT_TOOL"; tool: string }
   | { type: "SHOW_APPROVAL"; command: string; message: string }
   | { type: "RESOLVE_APPROVAL" }
   | { type: "SHOW_QUESTION"; question: string; options?: string[] }
@@ -218,6 +220,10 @@ function reducer(state: StoreState, action: Action): StoreState {
     }
     case "STATUS_UPDATE":
       return { ...state, status: { ...state.status, ...action.partial } };
+    case "PUSH_RECENT_TOOL": {
+      const recent = [...state.status.recentTools, action.tool].slice(-3);
+      return { ...state, status: { ...state.status, currentTool: action.tool, recentTools: recent } };
+    }
     case "SHOW_APPROVAL":
       return { ...state, approval: { command: action.command, message: action.message } };
     case "RESOLVE_APPROVAL":
@@ -250,6 +256,7 @@ const INITIAL_STATE: StoreState = {
     phase: "idle",
     phaseDetail: "",
     currentTool: "",
+    recentTools: [],
     liveInputTokens: 0,
     liveOutputTokens: 0,
   },
