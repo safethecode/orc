@@ -613,10 +613,17 @@ export class ReplController {
 
     const enforcer = this.orchestrator.getHarnessEnforcer();
 
+    let preRetryDiffHash = "";
+
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (cancellation.cancelled) break;
 
       if (attempt > 0) {
+        // Snapshot git state before retry to detect if retry actually changes anything
+        try {
+          const proc = Bun.spawnSync(["git", "diff", "--stat"], { stdout: "pipe", stderr: "pipe" });
+          preRetryDiffHash = new TextDecoder().decode(proc.stdout).trim();
+        } catch {}
         r.retryAttempt(attempt, maxRetries, lastError ?? "unknown");
         r.startSpinner(agentName, route.model);
       }
@@ -881,8 +888,21 @@ export class ReplController {
 
           // Auto-retry on any quality gate failure with specific issues
           if (!critique.passes && critique.issues.length > 0 && attempt < maxAttempts - 1) {
+            // Check if the retry actually changed anything meaningful
+            let noRealChanges = false;
+            if (attempt > 0 && preRetryDiffHash) {
+              try {
+                const proc = Bun.spawnSync(["git", "diff", "--stat"], { stdout: "pipe", stderr: "pipe" });
+                const currentDiff = new TextDecoder().decode(proc.stdout).trim();
+                noRealChanges = currentDiff === preRetryDiffHash;
+              } catch {}
+            }
+            const unchangedWarning = noRealChanges
+              ? "\n\n**WARNING: Your previous retry made NO meaningful file changes. You MUST actually edit the files this time. Read each file, then use the Edit tool to modify it. Do not just describe changes — make them.**"
+              : "";
             r.info(`auto-retry: quality gate failed — ${critique.issues.slice(0, 2).join(", ")}`);
-            const reinforced = `[QUALITY GATE FAILED]\n\n## Original Task (DO NOT forget this)\n${input}\n\n## Issues to fix\n${critique.issues.map((i: string) => `- ${i}`).join("\n")}\n\nRead the files you created/modified and fix ALL issues above. The original task must still be fully completed.`;
+            if (noRealChanges) r.error("⚠ Previous retry made no file changes — reinforcing...");
+            const reinforced = `[QUALITY GATE FAILED]\n\n## Original Task (DO NOT forget this)\n${input}\n\n## Issues to fix\n${critique.issues.map((i: string) => `- ${i}`).join("\n")}${unchangedWarning}\n\nRead the files you created/modified and fix ALL issues above. The original task must still be fully completed.`;
             currentCmd = buildCommand(currentProviderConfig, currentProfile, {
               prompt: reinforced,
               model: currentProfile.model,
