@@ -30,6 +30,8 @@ interface CmdHintState {
 const EMPTY_PICKER: PickerState = { active: false, atIndex: 0, matches: [], selected: 0 };
 const EMPTY_HINT: CmdHintState = { active: false, matches: [], selected: 0 };
 
+const MAX_HISTORY = 100;
+
 export function InputArea({ onSubmit, agents = [] }: Props) {
   const textareaRef = useRef<any>(null);
   const fileRef = useRef(new FileRefResolver(process.cwd()));
@@ -44,6 +46,11 @@ export function InputArea({ onSubmit, agents = [] }: Props) {
   const [cmdHint, setCmdHint] = useState<CmdHintState>(EMPTY_HINT);
   const cmdHintRef = useRef<CmdHintState>(EMPTY_HINT);
   cmdHintRef.current = cmdHint;
+
+  // Input history (up/down arrow)
+  const historyRef = useRef<string[]>([]);
+  const historyIndexRef = useRef(-1);
+  const savedInputRef = useRef("");
 
   // Warm file cache
   useEffect(() => {
@@ -60,8 +67,15 @@ export function InputArea({ onSubmit, agents = [] }: Props) {
       const text = (ta.plainText ?? "").trim();
       if (!text) return;
 
-      // If command hint active and Tab was used to fill, don't submit
-      // (Tab fills command, Enter submits — this is the normal flow)
+      // Save to history
+      const hist = historyRef.current;
+      if (hist[hist.length - 1] !== text) {
+        hist.push(text);
+        if (hist.length > MAX_HISTORY) hist.shift();
+      }
+      historyIndexRef.current = -1;
+      savedInputRef.current = "";
+
       onSubmit(text);
       ta.setText("");
       setPicker(EMPTY_PICKER);
@@ -243,6 +257,32 @@ export function InputArea({ onSubmit, agents = [] }: Props) {
           key.preventDefault?.();
           return true;
         }
+      }
+
+      // ── History navigation (up/down when no picker/hint active) ──
+      const hist = historyRef.current;
+      if (key.name === "up" && hist.length > 0) {
+        const currentText = ta.plainText ?? "";
+        if (historyIndexRef.current === -1) {
+          savedInputRef.current = currentText;
+          historyIndexRef.current = hist.length - 1;
+        } else if (historyIndexRef.current > 0) {
+          historyIndexRef.current--;
+        }
+        ta.setText(hist[historyIndexRef.current] ?? "");
+        key.preventDefault?.();
+        return true;
+      }
+      if (key.name === "down" && historyIndexRef.current >= 0) {
+        historyIndexRef.current++;
+        if (historyIndexRef.current >= hist.length) {
+          historyIndexRef.current = -1;
+          ta.setText(savedInputRef.current);
+        } else {
+          ta.setText(hist[historyIndexRef.current] ?? "");
+        }
+        key.preventDefault?.();
+        return true;
       }
 
       return origHandleKeyPress(key);
