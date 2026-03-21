@@ -28,13 +28,10 @@ export async function visualVerify(
 
   // 1. Take screenshot with Playwright (async, 15s timeout)
   try {
-    const proc = Bun.spawn([
-      "npx", "playwright", "screenshot",
-      "--browser", "chromium",
-      "--full-page",
-      url,
-      screenshotPath,
-    ], { stdout: "pipe", stderr: "pipe" });
+    const proc = Bun.spawn(["bunx", "playwright", "screenshot", "--browser", "chromium", "--full-page", url, screenshotPath], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
 
     const timeout = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 15000));
     const exited = proc.exited.then(() => "done" as const);
