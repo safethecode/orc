@@ -4,9 +4,19 @@ import { useStore } from "../store.ts";
 
 const SPINNER_FRAMES = ["\u280B", "\u2819", "\u2839", "\u2838", "\u283C", "\u2834", "\u2826", "\u2827", "\u2807", "\u280F"];
 
+function formatElapsed(startMs: number): string {
+  if (!startMs) return "";
+  const sec = Math.floor((Date.now() - startMs) / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  return `${min}m${sec % 60}s`;
+}
+
 export function ThinkingIndicator() {
   const { state } = useStore();
-  const { agentState, agentName, phase } = state.status;
+  const { agentState, agentName, phase, currentTool, elapsedStart, cost } = state.status;
+  const inputTokens = (state as any).status.inputTokens ?? 0;
+  const outputTokens = (state as any).status.outputTokens ?? 0;
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
@@ -30,9 +40,22 @@ export function ThinkingIndicator() {
     label = "Thinking...";
   }
 
+  const elapsed = formatElapsed(elapsedStart);
+  const tokens = inputTokens + outputTokens;
+  const stats = [elapsed, tokens > 0 ? `${tokens.toLocaleString()} tokens` : ""].filter(Boolean).join(", ");
+  const toolLine = currentTool && !isPreAgent ? currentTool : "";
+
   return (
-    <box paddingLeft={2} paddingTop={1}>
-      <text fg="#7aa2f7">{`${spinner} ${label}`}</text>
+    <box paddingLeft={2} paddingTop={1} flexDirection="column">
+      <box flexDirection="row" gap={1}>
+        <text fg="#7aa2f7">{`${spinner} ${label}`}</text>
+        {stats && <text fg="#565f89">{`(${stats})`}</text>}
+      </box>
+      {toolLine && (
+        <box paddingLeft={2}>
+          <text fg="#565f89">{`│ ${toolLine}`}</text>
+        </box>
+      )}
     </box>
   );
 }

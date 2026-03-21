@@ -67,9 +67,10 @@ describe("createTuiRenderer", () => {
   it("dispatches tool message on toolUse", () => {
     const { actions, renderer } = collect();
     renderer.toolUse("read", "/src/index.ts");
-    expect(actions[0].message.type).toBe("tool");
-    expect(actions[0].message.meta.toolName).toBe("read");
-    expect(actions[0].message.meta.toolDetail).toBe("/src/index.ts");
+    expect(actions[0].type).toBe("STATUS_UPDATE");
+    expect(actions[1].message.type).toBe("tool");
+    expect(actions[1].message.meta.toolName).toBe("read");
+    expect(actions[1].message.meta.toolDetail).toBe("/src/index.ts");
   });
 
   it("dispatches CLEAR on separator for visual separation", () => {

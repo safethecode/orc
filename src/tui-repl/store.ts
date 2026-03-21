@@ -96,6 +96,7 @@ export interface StatusBarState {
   workers: Map<string, WorkerEntry>;
   phase: WorkflowPhase;
   phaseDetail: string;
+  currentTool: string;
 }
 
 export interface ApprovalRequest {
@@ -246,6 +247,7 @@ const INITIAL_STATE: StoreState = {
     workers: new Map(),
     phase: "idle",
     phaseDetail: "",
+    currentTool: "",
   },
 };
 

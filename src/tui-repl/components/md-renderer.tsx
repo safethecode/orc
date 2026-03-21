@@ -172,10 +172,12 @@ export function MarkdownContent({ content }: MdProps) {
   return (
     <box flexDirection="column">
       {blocks.map((block, i) => {
+        const isLast = i === blocks.length - 1;
+        const gap = isLast ? 0 : 1;
         switch (block.type) {
           case "heading":
             return (
-              <box key={i} paddingBottom={block.level === 1 ? 1 : 0}>
+              <box key={i} paddingBottom={block.level === 1 && !isLast ? 1 : 0}>
                 <text bold fg={block.level === 1 ? p.heading : p.headingSub}>
                   {block.lines[0]}
                 </text>
@@ -184,14 +186,14 @@ export function MarkdownContent({ content }: MdProps) {
 
           case "paragraph":
             return (
-              <box key={i} paddingBottom={1}>
+              <box key={i} paddingBottom={gap}>
                 <InlineText text={block.lines.join(" ")} />
               </box>
             );
 
           case "code":
             return (
-              <box key={i} paddingBottom={1} flexDirection="column">
+              <box key={i} paddingBottom={gap} flexDirection="column">
                 {block.lang && <text fg={p.dim} italic>{` ${block.lang}`}</text>}
                 <box border borderColor={p.hr} borderStyle="single" padding={1} bg={p.codeBg}>
                   <code content={block.lines.join("\n")} filetype={block.lang || "text"} syntaxStyle={getMarkdownSyntaxStyle()} treeSitterClient={getTreeSitterClient()} />
@@ -201,7 +203,7 @@ export function MarkdownContent({ content }: MdProps) {
 
           case "quote":
             return (
-              <box key={i} paddingBottom={1} flexDirection="row">
+              <box key={i} paddingBottom={gap} flexDirection="row">
                 <text fg={p.quoteBorder}>{"┃ "}</text>
                 <box flexDirection="column">
                   {block.lines.map((l, j) => (
@@ -213,14 +215,14 @@ export function MarkdownContent({ content }: MdProps) {
 
           case "hr":
             return (
-              <box key={i} paddingTop={1} paddingBottom={1}>
+              <box key={i} paddingTop={1} paddingBottom={gap}>
                 <text fg={p.hr}>{"─".repeat(60)}</text>
               </box>
             );
 
           case "list":
             return (
-              <box key={i} paddingBottom={1} flexDirection="column">
+              <box key={i} paddingBottom={gap} flexDirection="column">
                 {block.lines.map((l, j) => {
                   const indent = l.match(/^(\s*)/)?.[1]?.length ?? 0;
                   const cleaned = l.replace(/^\s*[-*]\s/, "").replace(/^\s*\d+\.\s/, "");
@@ -237,7 +239,7 @@ export function MarkdownContent({ content }: MdProps) {
 
           case "table":
             return (
-              <box key={i} paddingBottom={1}>
+              <box key={i} paddingBottom={gap}>
                 <markdown
                   content={block.lines.join("\n")}
                   syntaxStyle={getMarkdownSyntaxStyle()}

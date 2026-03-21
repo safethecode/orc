@@ -36,6 +36,8 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
       dispatch({ type: "STREAMING_DELTA", text: content });
     },
     toolUse(name, detail, _insideBox, input) {
+      const toolLabel = detail ? `${name} ${detail}` : name;
+      dispatch({ type: "STATUS_UPDATE", partial: { currentTool: toolLabel } });
       dispatch({ type: "APPEND_MESSAGE", message: createMessage("tool", "", { toolName: name, toolDetail: detail, toolInput: input }) });
     },
     workerToolUse(agentName, toolName, detail) {
@@ -76,10 +78,10 @@ export function createTuiRenderer(dispatch: (action: any) => void, opts: TuiRend
       // Status bar auto-updates from state
     },
     stopSpinner() {
-      dispatch({ type: "STATUS_UPDATE", partial: { agentState: "idle" } });
+      dispatch({ type: "STATUS_UPDATE", partial: { agentState: "idle", currentTool: "" } });
     },
     notifyIdle() {
-      dispatch({ type: "STATUS_UPDATE", partial: { agentState: "idle" } });
+      dispatch({ type: "STATUS_UPDATE", partial: { agentState: "idle", currentTool: "" } });
     },
     updateCostLive(usd) {
       dispatch({ type: "STATUS_UPDATE", partial: { cost: usd } });
