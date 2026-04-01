@@ -185,8 +185,8 @@ export async function* queryLoop(
 
     const streamer = new AgentStreamer();
     let toolUseCount = 0;
-    let pendingApproval: { command: string; message: string } | null = null;
-    let pendingQuestion: { question: string; options?: string[] } | null = null;
+    let pendingApproval: { command: string; message: string } | null = null as { command: string; message: string } | null;
+    let pendingQuestion: { question: string; options?: string[] } | null = null as { question: string; options?: string[] } | null;
     let abortedByInterception = false;
 
     // Wire streaming events to yield QueryEvents

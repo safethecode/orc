@@ -406,7 +406,7 @@ export class ReplController {
 
     if (skillScoutResult.needed && skillScoutResult.skills.length > 0) {
       r.stopSpinner();
-      r.skillScout(skillScoutResult.skills.map(s => s.name), skillScoutResult.durationMs);
+      r.skillScout(skillScoutResult.skills.map((s: { name: string }) => s.name), skillScoutResult.durationMs);
       r.startSpinner(agentName, route.model);
     }
 
@@ -1051,7 +1051,7 @@ export class ReplController {
 
       // Show conflicts if any
       if (result.conflicts.length > 0) {
-        r.conflictWarning(result.conflicts.map(c =>
+        r.conflictWarning(result.conflicts.map((c: any) =>
           typeof c === "string" ? c : `Conflict: ${c.description ?? c.id ?? "unknown"}`,
         ));
       }
