@@ -17,7 +17,7 @@ const DEFAULT_CONFIG: CompressorConfig = {
   protectedTools: ["skill", "lsp", "read"],
 };
 
-export class ContextCompressor {
+export class ConversationCompressor {
   private config: CompressorConfig;
   private compactor: ContextCompactor;
 

@@ -1,5 +1,5 @@
 import { AgentStreamer, type ToolUseEvent, type StreamResult, type ToolStartEvent, type ToolInputPreviewEvent } from "../repl/streamer.ts";
-import { ContextCompressor } from "./context-compressor.ts";
+import { ConversationCompressor } from "./context-compressor.ts";
 import type {
   QueryState,
   QueryEvent,
@@ -146,7 +146,7 @@ export async function* queryLoop(
     snipAt: 0.7,
     autocompactAt: 0.85,
   };
-  const compressor = new ContextCompressor({
+  const compressor = new ConversationCompressor({
     contextWindow,
     snipThreshold: thresholds.snipAt,
     autocompactThreshold: thresholds.autocompactAt,

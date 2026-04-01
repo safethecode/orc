@@ -19,7 +19,7 @@ import { scoutMcp, type McpScoutResult } from "../mcp/mcp-scout.ts";
 import { ScoutCache } from "./scout-cache.ts";
 import { runQualityGate } from "./quality-gate.ts";
 import { ContextCompactor } from "../core/compaction.ts";
-import { ContextCompressor } from "../core/context-compressor.ts";
+import { ConversationCompressor } from "../core/context-compressor.ts";
 import { RuntimeFallbackManager } from "../core/runtime-fallback.ts";
 import { PlanMode } from "./plan-mode.ts";
 import { FileRefResolver } from "./file-ref.ts";
@@ -421,7 +421,7 @@ export class ReplController {
     }
 
     // Multi-stage context compression
-    const compressor = new ContextCompressor();
+    const compressor = new ConversationCompressor();
     if (compressor.needsCompression(this.conversation.getTurns())) {
       const compressResult = await compressor.compress(this.conversation.getTurns());
       this.conversation.clear();
