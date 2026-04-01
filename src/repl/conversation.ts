@@ -1,9 +1,26 @@
 import type { ConversationTurn } from "../config/types.ts";
 import {
   buildWindowedContext,
+  estimateTokens,
   TIER_BUDGETS,
   type TokenBudget,
 } from "../memory/token-optimizer.ts";
+
+/**
+ * Truncate a long content string, keeping head + tail with an omission notice.
+ * Exported so ContextCompressor and other modules can reuse this logic.
+ */
+export function truncateTurnContent(content: string, maxLines = 15): string {
+  const lines = content.split("\n");
+  if (lines.length <= maxLines) return content;
+
+  const headCount = Math.ceil(maxLines * 0.67);
+  const tailCount = maxLines - headCount;
+  const head = lines.slice(0, headCount).join("\n");
+  const tail = lines.slice(-tailCount).join("\n");
+  const omitted = lines.length - maxLines;
+  return `${head}\n\n[... ${omitted} lines omitted ...]\n\n${tail}`;
+}
 
 export class Conversation {
   private turns: ConversationTurn[] = [];
@@ -35,7 +52,7 @@ export class Conversation {
     if (turn.role === "assistant") this.lastTier = turn.tier;
 
     if (turn.role === "assistant" && turn.content.length > 2000) {
-      this.turns.push({ ...turn, content: this.compressTurn(turn.content) });
+      this.turns.push({ ...turn, content: truncateTurnContent(turn.content) });
     } else {
       this.turns.push(turn);
     }
@@ -45,6 +62,17 @@ export class Conversation {
   // If an assistant turn references a tool call, the preceding user turn must also be included.
   getTurns(): ConversationTurn[] {
     return this.turns;
+  }
+
+  /**
+   * Estimate the total token usage of the current conversation.
+   */
+  getTokenUsage(): number {
+    let total = 0;
+    for (const turn of this.turns) {
+      total += estimateTokens(turn.content);
+    }
+    return total;
   }
 
   buildPrompt(userInput: string): string {
@@ -101,15 +129,4 @@ export class Conversation {
       .join(", ");
   }
 
-  // ── Private helpers ─────────────────────────────────────────────────
-
-  private compressTurn(content: string): string {
-    const lines = content.split("\n");
-    if (lines.length <= 15) return content;
-
-    const head = lines.slice(0, 10).join("\n");
-    const tail = lines.slice(-5).join("\n");
-    const omitted = lines.length - 15;
-    return `${head}\n\n[... ${omitted} lines omitted ...]\n\n${tail}`;
-  }
 }
