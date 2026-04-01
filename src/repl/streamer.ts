@@ -16,6 +16,16 @@ export interface ToolUseEvent {
   input?: Record<string, unknown>;
 }
 
+export interface ToolStartEvent {
+  name: string;
+  id?: string;
+}
+
+export interface ToolInputPreviewEvent {
+  id: string;
+  preview: string;
+}
+
 interface StreamJsonMessage {
   type: string;
   subtype?: string;
@@ -174,11 +184,15 @@ export class AgentStreamer extends EventEmitter {
       this.currentBlockType = msg.content_block.type ?? null;
       if (this.currentBlockType === "tool_use") {
         // Buffer tool — collect input from deltas, emit at content_block_stop
+        const toolName = msg.content_block.name ?? "unknown";
+        const toolId = msg.content_block.id;
         this.pendingTool = {
-          name: msg.content_block.name ?? "unknown",
-          id: msg.content_block.id,
+          name: toolName,
+          id: toolId,
           inputJson: "",
         };
+        // Immediately notify consumers that a tool call has started
+        this.emit("tool_start", { name: toolName, id: toolId } satisfies ToolStartEvent);
       } else {
         // text block — reset buffer
         this.textBuffer = "";
@@ -191,7 +205,14 @@ export class AgentStreamer extends EventEmitter {
       if (this.currentBlockType === "tool_use" && this.pendingTool) {
         // input_json_delta — accumulate JSON string
         const partial = (msg.delta as any)?.partial_json ?? (msg.delta as any)?.input_json_delta ?? "";
-        if (partial) this.pendingTool.inputJson += partial;
+        if (partial) {
+          this.pendingTool.inputJson += partial;
+          // Try to extract preview info (file path, command) from partial JSON
+          const preview = this.extractToolPreview(this.pendingTool.name, this.pendingTool.inputJson);
+          if (preview && this.pendingTool.id) {
+            this.emit("tool_input_preview", { id: this.pendingTool.id, preview } satisfies ToolInputPreviewEvent);
+          }
+        }
       } else if (msg.delta?.text) {
         this.textBuffer += msg.delta.text;
         this.emit("text_delta", msg.delta.text);
@@ -274,6 +295,30 @@ export class AgentStreamer extends EventEmitter {
       });
       return;
     }
+  }
+
+  /**
+   * Extract a human-readable preview from partial tool JSON input.
+   * Returns null if no useful preview can be extracted yet.
+   */
+  private extractToolPreview(toolName: string, partialJson: string): string | null {
+    try {
+      // Try to extract key fields even from incomplete JSON
+      const lower = toolName.toLowerCase();
+      if (lower === "read" || lower === "edit" || lower === "write" || lower === "glob") {
+        const pathMatch = partialJson.match(/"(?:file_path|path|pattern)"\s*:\s*"([^"]+)"/);
+        if (pathMatch) return pathMatch[1];
+      }
+      if (lower === "bash") {
+        const cmdMatch = partialJson.match(/"command"\s*:\s*"([^"]{1,80})/);
+        if (cmdMatch) return cmdMatch[1];
+      }
+      if (lower === "grep") {
+        const patternMatch = partialJson.match(/"pattern"\s*:\s*"([^"]{1,60})/);
+        if (patternMatch) return patternMatch[1];
+      }
+    } catch { /* partial JSON, ignore parse errors */ }
+    return null;
   }
 
   abort(): void {
