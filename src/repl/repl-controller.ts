@@ -7,7 +7,7 @@ import { getLayoutManager } from "./renderer.ts";
 import { routeTask, classifyWithSam, type RouteResult } from "../core/router.ts";
 import { buildCommand } from "../agents/provider.ts";
 import { buildHarness } from "../agents/harness.ts";
-import { AgentStreamer, type ToolUseEvent, type StreamResult } from "./streamer.ts";
+import { AgentStreamer, type ToolUseEvent, type StreamResult, type ToolStartEvent, type ToolInputPreviewEvent } from "./streamer.ts";
 import { Conversation } from "./conversation.ts";
 import { isCommand, handleCommand } from "./commands.ts";
 import { TIER_BUDGETS } from "../memory/token-optimizer.ts";
@@ -19,12 +19,15 @@ import { scoutMcp, type McpScoutResult } from "../mcp/mcp-scout.ts";
 import { ScoutCache } from "./scout-cache.ts";
 import { runQualityGate } from "./quality-gate.ts";
 import { ContextCompactor } from "../core/compaction.ts";
+import { ContextCompressor } from "../core/context-compressor.ts";
 import { RuntimeFallbackManager } from "../core/runtime-fallback.ts";
 import { PlanMode } from "./plan-mode.ts";
 import { FileRefResolver } from "./file-ref.ts";
 import { HashlineEditor } from "../core/hashline.ts";
 import { SessionForkManager } from "../core/session-fork.ts";
 import { shouldBrainstorm, brainstorm } from "../core/brainstorm.ts";
+import { queryLoop, type StreamerCallbacks } from "../core/query-loop.ts";
+import type { QueryEvent, Terminal } from "../core/terminal.ts";
 import type { AgentRegistry } from "../agents/registry.ts";
 
 function formatToolDetail(tool: string, input?: Record<string, unknown>): string {
@@ -417,13 +420,15 @@ export class ReplController {
       }
     }
 
-    // Auto-compact
-    const compactor = new ContextCompactor();
-    if (compactor.needsCompaction(this.conversation.getTurns())) {
-      const { turns, result } = compactor.compact(this.conversation.getTurns());
+    // Multi-stage context compression
+    const compressor = new ContextCompressor();
+    if (compressor.needsCompression(this.conversation.getTurns())) {
+      const compressResult = await compressor.compress(this.conversation.getTurns());
       this.conversation.clear();
-      for (const t of turns) this.conversation.add(t);
-      r.info(`auto-compacted: ${result.originalTurns} → ${result.compactedTurns} turns`);
+      for (const t of compressResult.messages) this.conversation.add(t);
+      for (const stage of compressResult.stages) {
+        r.info(`context ${stage.stage}: freed ~${stage.freedTokens} tokens`);
+      }
     }
 
     // Build prompt
@@ -615,7 +620,7 @@ export class ReplController {
     await this.executeWithRetry(execCmd, agentName, route, profile, providerConfig, systemPrompt, execPrompt, mcpConfigPath, cancellation, input, sessionId);
   }
 
-  /** Execute streamer with retry and fallback */
+  /** Execute agent via query loop state machine */
   private async executeWithRetry(
     initialCmd: string[],
     agentName: string,
@@ -630,118 +635,57 @@ export class ReplController {
     sessionId?: string,
   ): Promise<void> {
     const r = this.renderer;
+    const enforcer = this.orchestrator.getHarnessEnforcer();
     const maxErrorRetries = this.config.supervisor?.maxRetries ?? 2;
-    const maxQualityRetries = Infinity; // Keep retrying until quality gate passes
-    let totalAttempts = Infinity; // No hard limit — quality gate drives termination
     let errorRetries = 0;
     let qualityRetries = 0;
-    let currentCmd = initialCmd;
-    let currentProfile = profile;
-    let currentProviderConfig = providerConfig;
-    let lastError: string | null = null;
+    let toolUseCount = 0;
+    let boxOpen = false;
+    let toolGroupCount = 0;
+    let toolGroupShown = 0;
+    const MAX_TOOLS_VISIBLE = 3;
+    const startTime = Date.now();
 
-    const enforcer = this.orchestrator.getHarnessEnforcer();
+    // Track current session for resume
+    let currentSessionId = sessionId;
 
-    let preRetryDiffHash = "";
-
-    for (let attempt = 0; attempt < totalAttempts; attempt++) {
-      if (cancellation.cancelled) break;
-
-      if (attempt > 0) {
-        // Snapshot git state before retry to detect if retry actually changes anything
-        try {
-          const proc = Bun.spawnSync(["git", "diff", "--stat"], { stdout: "pipe", stderr: "pipe" });
-          preRetryDiffHash = new TextDecoder().decode(proc.stdout).trim();
-        } catch {}
-        r.retryAttempt(attempt, maxErrorRetries, lastError ?? "unknown");
-        r.startSpinner(agentName, route.model);
+    const flushToolGroup = () => {
+      if (toolGroupCount > toolGroupShown) {
+        r.dim(`  \x1b[2m+${toolGroupCount - toolGroupShown} more tool uses\x1b[0m`);
       }
+    };
 
-      const streamer = new AgentStreamer();
-      this.currentStreamer = streamer;
-      let boxOpen = false;
-      let toolUseCount = 0;
-      let toolGroupCount = 0;
-      let toolGroupShown = 0;
-      const MAX_TOOLS_VISIBLE = 3;
-      let pendingApproval: { command: string; message: string } | null = null;
-      let pendingQuestion: { question: string; options?: string[] } | null = null;
-
-      const flushToolGroup = () => {
-        if (toolGroupCount > toolGroupShown) {
-          r.dim(`  \x1b[2m+${toolGroupCount - toolGroupShown} more tool uses\x1b[0m`);
-        }
-      };
-
-      streamer.on("text_delta", (delta: string) => {
-        if (!boxOpen) {
-          flushToolGroup();
-          toolGroupCount = 0;
-          toolGroupShown = 0;
-          r.stopSpinner();
-          r.startBox(route.model);
-          boxOpen = true;
-        }
-        r.text(delta);
-      });
-
-      streamer.on("text_complete", () => {
-        if (boxOpen) { r.endBox(); boxOpen = false; }
-        r.startSpinner(agentName, route.model);
-      });
-
-      streamer.on("usage", (usage: { costUsd: number; inputTokens?: number; outputTokens?: number }) => {
-        r.updateCostLive(usage.costUsd, usage.inputTokens, usage.outputTokens);
-      });
-
-      streamer.on("tool_use", (tool: ToolUseEvent) => {
-        toolUseCount++;
-        toolGroupCount++;
+    // Build the tool interception callback
+    const toolCallbacks: StreamerCallbacks = {
+      onToolUse: (tool: ToolUseEvent) => {
         const inp = tool.input ?? {};
         const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
-        r.stopSpinner();
-        if (boxOpen) { r.endBox(); boxOpen = false; }
 
-        // Intercept AskUserQuestion — abort and relay to user
+        // Intercept AskUserQuestion
         if (tool.name === "AskUserQuestion") {
           const questions = inp.questions as Array<{ question: string; options?: Array<{ label: string }> }> | undefined;
           const q = questions?.[0];
           const questionText = q?.question ?? (inp.question as string) ?? "Agent has a question";
           const options = q?.options?.map((o: any) => o.label);
-          pendingQuestion = { question: questionText, options };
-          r.info(`❓ ${questionText}`);
+          r.info(`\u2753 ${questionText}`);
           if (options?.length) r.info(`   ${options.map((o: string, i: number) => `${i + 1}. ${o}`).join("  ")}`);
-          streamer.abort();
-          return;
+          return { abort: true, pendingQuestion: { question: questionText, options } };
         }
 
-        // Non-interactive env guard for bash commands
+        // Non-interactive env guard
         if (tool.name === "bash" && inp.command) {
           const niGuard = this.orchestrator.getNonInteractiveGuard();
           if (niGuard.isInteractive(inp.command as string)) {
-            const warning = niGuard.getWarning(inp.command as string);
-            r.error(`\x1b[33m⚠ non-interactive:\x1b[0m ${warning}`);
+            r.error(`\x1b[33m\u26a0 non-interactive:\x1b[0m ${niGuard.getWarning(inp.command as string)}`);
           }
         }
 
-        if (toolGroupShown < MAX_TOOLS_VISIBLE) {
-          r.toolUse(tool.name, detail, false, inp);
-          toolGroupShown++;
-        }
-        r.startSpinner(agentName, route.model);
-        eventBus.publish({ type: "agent:tool", agent: agentName, tool: tool.name, detail });
-
-        // Harness enforcer: pre-execution validation
+        // Harness enforcer
         const enforcement = enforcer.check(tool.name, inp as Record<string, unknown>);
-
         if (enforcement.askRequired) {
           const cmd = (inp.command as string) ?? tool.name;
           const v = enforcement.violations.find(v => v.severity === "ask");
-          pendingApproval = { command: cmd, message: v?.message ?? cmd };
-          r.stopSpinner();
-          if (boxOpen) { r.endBox(); boxOpen = false; }
-          streamer.abort();
-          return;
+          return { abort: true, pendingApproval: { command: cmd, message: v?.message ?? cmd } };
         }
 
         if (!enforcement.allowed) {
@@ -749,303 +693,206 @@ export class ReplController {
             r.error(`ENFORCER [${v.ruleId}]: ${v.message}`);
           }
         }
-
         for (const v of enforcement.violations.filter(v => v.severity === "warn")) {
           r.info(`${v.ruleId}: ${v.message}`);
         }
-
         enforcer.record(tool.name, inp as Record<string, unknown>);
-      });
 
-      streamer.on("error", (msg: string) => {
+        return { abort: false };
+      },
+      onError: (msg: string) => {
         r.stopSpinner();
-        if (boxOpen) r.endBox();
+        if (boxOpen) { r.endBox(); boxOpen = false; }
         r.error(msg);
-      });
+      },
+    };
 
-      const startTime = Date.now();
-      try {
-        const result = await streamer.run(currentCmd, cancellation.signal);
-        r.stopSpinner();
-        const durationMs = Date.now() - startTime;
-        if (boxOpen) r.endBox();
-
-        // Enforcer approval flow: abort-ask-retry
-        if (pendingApproval) {
-          const { command, message } = pendingApproval;
+    // Run the query loop and consume its events
+    const loop = queryLoop(
+      {
+        prompt: fullPrompt,
+        buildCommand: (_messages, state) => {
+          return buildCommand(providerConfig, profile, {
+            prompt: fullPrompt,
+            model: profile.model,
+            systemPrompt,
+            maxTurns: profile.maxTurns,
+            mcpConfig: mcpConfigPath,
+            sessionId: currentSessionId,
+          });
+        },
+        signal: cancellation.signal,
+        maxTurns: profile.maxTurns,
+        onApproval: async (command: string, message: string) => {
           r.error(`ENFORCER [command-safety]: ${message}`);
           r.info(command.slice(0, 200));
-
           const approved = await this.approve(command, message);
           if (approved) {
             enforcer.approve(command);
-            r.info("Approved. Retrying...");
-            pendingApproval = null;
-
-            // Preserve Claude's partial output in conversation
-            if (result.text) {
-              const partialTurn = { role: "assistant" as const, content: result.text, agentName, tier: route.model, timestamp: new Date().toISOString() };
-              this.conversation.add(partialTurn);
-              this.forkManager.addTurn(partialTurn);
-            }
-
-            // Continue session with approval context
-            const approvalMsg = `The user approved the command: \`${command}\`. Execute it now and continue from where you left off.`;
-            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: approvalMsg,
-              model: currentProfile.model,
-              systemPrompt,
-              maxTurns: currentProfile.maxTurns,
-              mcpConfig: mcpConfigPath,
-              resumeSession: sessionId,
-            });
-            attempt--; // Retry same attempt
-            continue;
+            r.info("Approved. Continuing...");
           } else {
             r.info("Denied. Command was not executed.");
-            this.conversation.add({ role: "assistant" as const, content: "(user denied the command)", agentName, tier: route.model, timestamp: new Date().toISOString() });
-            return;
           }
-        }
+          return approved;
+        },
+        onQuestion: async (question: string, options?: string[]) => {
+          return await this.askUser(question, options) || null;
+        },
+      },
+      toolCallbacks,
+    );
 
-        // AskUserQuestion flow: relay question to user, retry with answer
-        if (pendingQuestion) {
-          const { question, options } = pendingQuestion;
-          const answer = await this.askUser(question, options);
-          pendingQuestion = null;
-          if (answer) {
-            // Continue session with user's answer
-            const withAnswer = `[The agent asked: "${question}" — User answered: "${answer}". Continue with this answer.]`;
-            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: withAnswer,
-              model: currentProfile.model,
-              systemPrompt,
-              maxTurns: currentProfile.maxTurns,
-              mcpConfig: mcpConfigPath,
-              resumeSession: sessionId,
-            });
-            attempt--; // Don't count as retry
-            continue;
-          } else {
-            r.info("No answer provided.");
-            return;
+    let lastText = "";
+
+    for await (const event of loop) {
+      switch (event.type) {
+        case "turn_start":
+          if (event.turnCount > 0) {
+            r.startSpinner(agentName, route.model);
           }
-        }
-
-        // Build/test verification (before LLM quality gate)
-        if (toolUseCount > 0) {
-          const buildIssues = await this.runSingleAgentBuildCheck();
-          if (buildIssues.length > 0 && errorRetries < maxErrorRetries) {
-            r.qualityGate(false, buildIssues);
-            r.info("Auto-retry: Build/test failed, sending fix prompt...");
-            const reinforced = `[BUILD FAILED]\n\n## Original Task\n${input}\n\n## Build issues to fix\n${buildIssues.map(i => `- ${i}`).join("\n")}\n\nFix all build issues while keeping the original task completed.`;
-            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: reinforced,
-              model: currentProfile.model,
-              systemPrompt,
-              maxTurns: currentProfile.maxTurns,
-              mcpConfig: mcpConfigPath,
-              resumeSession: sessionId,
-            });
-            lastError = "build/test failed";
-            continue;
-          }
-        }
-
-        // Quality gate (LLM-based)
-        flushToolGroup();
-        if (result.text) {
-          r.info("Evaluating quality...");
-          // Load saved design plan for design role quality evaluation
-          let designPlan: string | undefined;
-          if ((currentProfile.role ?? "").toLowerCase().includes("design")) {
-            try { designPlan = await Bun.file(`${process.cwd()}/.orchestrator/design-plan.md`).text(); } catch { /* no plan saved */ }
-          }
-          const critique = await runQualityGate({ agentRole: currentProfile.role ?? "coder", prompt: input, toolUseCount, designPlan }, result.text);
-          r.qualityGate(critique.passes, critique.issues);
-
-          // Auto-retry on intent without action (agent described what it would do but used no tools)
-          if (!critique.passes && critique.issues.includes("Intent without action: declared actions but used zero tools") && errorRetries < maxErrorRetries) {
-            r.info("Auto-retry: Agent declared intent but used no tools...");
-            const reinforced = `[IMPORTANT: Your previous response only described what to do without doing it.]\n\n## Original Task\n${input}\n\nYou MUST use tools (Read, Edit, Bash, etc.) to complete this task. Do not describe — act.`;
-            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: reinforced,
-              model: currentProfile.model,
-              systemPrompt,
-              maxTurns: currentProfile.maxTurns,
-              mcpConfig: mcpConfigPath,
-              resumeSession: sessionId,
-            });
-            lastError = "intent without action";
-            continue;
-          }
-
-          // Auto-retry on suspiciously short response from non-conversational agents
-          if (!critique.passes && critique.issues.includes("Result is suspiciously short") && errorRetries < maxErrorRetries) {
-            r.info("Auto-retry: Response too short...");
-            const reinforced = `[IMPORTANT: Your previous attempt was incomplete.]\n\n## Original Task\n${input}\n\nYou MUST use tools to actually complete this task fully. Do not just acknowledge — take action.`;
-            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: reinforced,
-              model: currentProfile.model,
-              systemPrompt,
-              maxTurns: currentProfile.maxTurns,
-              mcpConfig: mcpConfigPath,
-              resumeSession: sessionId,
-            });
-            lastError = "suspiciously short response";
-            continue;
-          }
-
-          // Visual verification for design agents — screenshot + compare
-          if ((currentProfile.role ?? "").toLowerCase().includes("design") && toolUseCount > 0) {
-            const { detectDevServer, visualVerify } = await import("../core/visual-verify.ts");
-            const server = await detectDevServer();
-            if (server.running) {
-              r.info(`visual verify: checking ${server.url}...`);
-              const visual = await visualVerify(designPlan ?? input, { url: server.url });
-              if (visual.screenshotPath) {
-                r.info(`screenshot: ${visual.screenshotPath}`);
-              }
-              if (!visual.matches && visual.issues.length > 0) {
-                critique.passes = false;
-                critique.issues.push(...visual.issues.map(i => `[VISUAL] ${i}`));
-                r.qualityGate(false, visual.issues);
-              }
-            }
-          }
-
-          // Auto-retry on design quality violations
-          if (!critique.passes && (currentProfile.role ?? "").toLowerCase().includes("design") && errorRetries < maxErrorRetries) {
-            const designIssues = critique.issues.filter((i: string) =>
-              i.includes("reference declaration") || i.includes("Gradient") ||
-              i.includes("Rainbow") || i.includes("Glassmorphism") ||
-              i.includes("border-radius") || i.includes("scale()") ||
-              i.includes("shadows") || i.includes("SVG icons")
-            );
-            if (designIssues.length > 0) {
-              r.info(`auto-retry: design violations — ${designIssues.join(", ")}`);
-              const reinforced = `[DESIGN VIOLATION]\n\n## Original Task\n${input}\n\n## Violations to fix\n${designIssues.map((i: string) => `- ${i}`).join("\n")}\n\nFix ALL violations while keeping the original task completed. Reference-First Protocol is MANDATORY.`;
-              currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-                prompt: reinforced,
-                model: currentProfile.model,
-                systemPrompt,
-                maxTurns: currentProfile.maxTurns,
-                mcpConfig: mcpConfigPath,
-                resumeSession: sessionId,
-              });
-              lastError = "design quality violations";
-              continue;
-            }
-          }
-
-          // Auto-retry on any quality gate failure — keep going until passed
-          if (!critique.passes && critique.issues.length > 0) {
-            qualityRetries++;
-            // Check if the retry actually changed anything meaningful
-            let noRealChanges = false;
-            let currentDiffStat = "";
-            if (attempt > 0 && preRetryDiffHash) {
-              try {
-                const proc = Bun.spawnSync(["git", "diff", "--stat"], { stdout: "pipe", stderr: "pipe" });
-                currentDiffStat = new TextDecoder().decode(proc.stdout).trim();
-                noRealChanges = currentDiffStat === preRetryDiffHash;
-              } catch {}
-            }
-            // Get actual git diff to show agent what the current state is
-            let diffContext = "";
-            try {
-              const proc = Bun.spawnSync(["git", "diff", "--name-only"], { stdout: "pipe", stderr: "pipe" });
-              const changedFiles = new TextDecoder().decode(proc.stdout).trim();
-              if (changedFiles) diffContext = `\n\n## Files currently modified (git diff)\n${changedFiles}`;
-              else diffContext = "\n\n## git diff shows NO files were modified. You have not made any changes yet.";
-            } catch {}
-            const unchangedWarning = noRealChanges
-              ? "\n\n**CRITICAL: Your previous retry made ZERO file changes. git diff confirms nothing changed. You MUST use the Edit tool to actually modify files. Do NOT describe what you would do — DO IT NOW.**"
-              : "";
-            r.info(`auto-retry (#${qualityRetries}): quality gate failed — ${critique.issues.slice(0, 2).join(", ")}`);
-            if (noRealChanges) r.error("⚠ Previous retry made no file changes — reinforcing...");
-            const reinforced = `[QUALITY GATE FAILED — Retry #${qualityRetries}]\n\n## Original Task (DO NOT forget this)\n${input}\n\n## Issues to fix\n${critique.issues.map((i: string) => `- ${i}`).join("\n")}${diffContext}${unchangedWarning}\n\nRead the files you created/modified and fix ALL issues above. The original task must still be fully completed.`;
-            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: reinforced,
-              model: currentProfile.model,
-              systemPrompt,
-              maxTurns: currentProfile.maxTurns,
-              mcpConfig: mcpConfigPath,
-              resumeSession: sessionId,
-            });
-            lastError = "quality gate failed";
-            continue;
-          }
-        }
-
-        if (result.inputTokens > 0 || result.outputTokens > 0) {
-          r.cost(result.costUsd, result.inputTokens, result.outputTokens, durationMs);
-          eventBus.publish({ type: "agent:done", agent: agentName, cost: result.costUsd, inputTokens: result.inputTokens, outputTokens: result.outputTokens, durationMs });
-        }
-
-        const assistantTurn = { role: "assistant" as const, content: result.text, agentName, tier: route.model, timestamp: new Date().toISOString() };
-        this.conversation.add(assistantTurn);
-        this.forkManager.addTurn(assistantTurn);
-        this.rollout.append({ type: "turn", timestamp: assistantTurn.timestamp, data: assistantTurn });
-        this.lastAgent = agentName;
-
-        // Detect handoff: agent says "코더에게 맡길게요" or similar → auto-route to target agent
-        const handoffMatch = result.text.match(/(?:코더|coder|개발\s*에이전트).*맡길게|hand(?:off|ing).*(?:to|over)\s+(\w+)/i);
-        if (handoffMatch && toolUseCount <= 2) {
-          const targetAgent = handoffMatch[1]?.toLowerCase() ?? "coder";
-          const targetProfile = this.orchestrator.getRegistry().get(targetAgent);
-          if (targetProfile) {
-            r.info(`Handoff → @${targetAgent.charAt(0).toUpperCase() + targetAgent.slice(1)}`);
-            this.pinnedAgent = targetAgent;
-            this.stickyAgent = targetAgent;
-            // Re-run original input with target agent
-            const handoffCancellation = new CancellationToken();
-            this.currentCancellation = handoffCancellation;
-            this.handleNaturalInput(input, handoffCancellation, targetAgent).catch(() => {});
-            return;
-          }
-        }
-
-        break; // success
-      } catch (e) {
-        // If aborted for approval, don't count as error
-        if (pendingApproval) {
-          const { command, message } = pendingApproval;
-          r.error(`ENFORCER [command-safety]: ${message}`);
-          r.info(command.slice(0, 200));
-
-          const approved = await this.approve(command, message);
-          if (approved) {
-            enforcer.approve(command);
-            r.info("Approved. Retrying...");
-            pendingApproval = null;
-
-            // Continue session with approval context
-            const approvalMsg = `The user approved the command: \`${command}\`. Execute it now and continue from where you left off.`;
-            currentCmd = buildCommand(currentProviderConfig, currentProfile, {
-              prompt: approvalMsg,
-              model: currentProfile.model,
-              systemPrompt,
-              maxTurns: currentProfile.maxTurns,
-              mcpConfig: mcpConfigPath,
-              resumeSession: sessionId,
-            });
-            attempt--; // Retry same attempt
-            continue;
-          } else {
-            r.info("Denied. Command was not executed.");
-            this.conversation.add({ role: "assistant" as const, content: "(user denied the command)", agentName, tier: route.model, timestamp: new Date().toISOString() });
-            return;
-          }
-        }
-
-        lastError = (e as Error).message;
-        errorRetries++;
-        r.stopSpinner();
-        if (boxOpen) r.endBox();
-        if (errorRetries > maxErrorRetries) {
-          r.error(`All ${errorRetries} error retries exhausted: ${lastError}`);
+          // Reset tool group tracking per turn
+          toolGroupCount = 0;
+          toolGroupShown = 0;
           break;
+
+        case "text_delta":
+          if (!boxOpen) {
+            flushToolGroup();
+            toolGroupCount = 0;
+            toolGroupShown = 0;
+            r.stopSpinner();
+            r.startBox(route.model);
+            boxOpen = true;
+          }
+          r.text(event.text);
+          break;
+
+        case "text_complete":
+          if (boxOpen) { r.endBox(); boxOpen = false; }
+          r.startSpinner(agentName, route.model);
+          lastText = event.text;
+          break;
+
+        case "tool_start":
+          r.stopSpinner();
+          if (boxOpen) { r.endBox(); boxOpen = false; }
+          r.startSpinner(agentName, route.model);
+          // Show tool name immediately (before input is parsed)
+          if (toolGroupShown < MAX_TOOLS_VISIBLE) {
+            r.updateSpinner(`${event.name}...`);
+          }
+          break;
+
+        case "tool_input_preview":
+          // Update spinner with more specific info
+          r.updateSpinner(`${event.preview}`);
+          break;
+
+        case "tool_use":
+          toolUseCount++;
+          toolGroupCount++;
+          if (toolGroupShown < MAX_TOOLS_VISIBLE) {
+            const inp = event.tool.input ?? {};
+            const detail = (inp.file_path as string) ?? (inp.command as string) ?? (inp.pattern as string) ?? undefined;
+            r.toolUse(event.tool.name, detail, false, inp);
+            toolGroupShown++;
+          }
+          r.startSpinner(agentName, route.model);
+          eventBus.publish({ type: "agent:tool", agent: agentName, tool: event.tool.name });
+          break;
+
+        case "usage":
+          r.updateCostLive(event.costUsd, event.inputTokens, event.outputTokens);
+          break;
+
+        case "error":
+          r.stopSpinner();
+          if (boxOpen) { r.endBox(); boxOpen = false; }
+          r.error(event.message);
+          break;
+
+        case "error_recovery":
+          r.stopSpinner();
+          if (boxOpen) { r.endBox(); boxOpen = false; }
+          r.info(`Recovery: ${event.recovery.type} (${event.transition.reason})`);
+          r.startSpinner(agentName, route.model);
+          break;
+
+        case "context_compact":
+          r.info(`Context ${event.stage}: freed ~${event.freedTokens} tokens`);
+          break;
+
+        case "turn_end":
+          break;
+      }
+    }
+
+    // The loop returned a Terminal — process the final result
+    const terminal = (loop as any).return?.value as Terminal | undefined;
+    const durationMs = Date.now() - startTime;
+    r.stopSpinner();
+    if (boxOpen) r.endBox();
+    flushToolGroup();
+
+    // Post-loop: build check + quality gate (preserves existing behavior)
+    if (toolUseCount > 0 && lastText) {
+      const buildIssues = await this.runSingleAgentBuildCheck();
+      if (buildIssues.length > 0) {
+        r.qualityGate(false, buildIssues);
+      }
+
+      r.info("Evaluating quality...");
+      let designPlan: string | undefined;
+      if ((profile.role ?? "").toLowerCase().includes("design")) {
+        try { designPlan = await Bun.file(`${process.cwd()}/.orchestrator/design-plan.md`).text(); } catch {}
+      }
+      const critique = await runQualityGate({ agentRole: profile.role ?? "coder", prompt: input, toolUseCount, designPlan }, lastText);
+      r.qualityGate(critique.passes, critique.issues);
+
+      // Visual verification for design agents
+      if ((profile.role ?? "").toLowerCase().includes("design") && toolUseCount > 0) {
+        try {
+          const { detectDevServer, visualVerify } = await import("../core/visual-verify.ts");
+          const server = await detectDevServer();
+          if (server.running) {
+            r.info(`visual verify: checking ${server.url}...`);
+            const visual = await visualVerify(designPlan ?? input, { url: server.url });
+            if (visual.screenshotPath) r.info(`screenshot: ${visual.screenshotPath}`);
+            if (!visual.matches && visual.issues.length > 0) {
+              r.qualityGate(false, visual.issues);
+            }
+          }
+        } catch {}
+      }
+    }
+
+    // Record final result
+    if (lastText) {
+      const usage = terminal?.usage;
+      if (usage && (usage.inputTokens > 0 || usage.outputTokens > 0)) {
+        r.cost(usage.costUsd, usage.inputTokens, usage.outputTokens, durationMs);
+        eventBus.publish({ type: "agent:done", agent: agentName, cost: usage.costUsd, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, durationMs });
+      }
+
+      const assistantTurn = { role: "assistant" as const, content: lastText, agentName, tier: route.model, timestamp: new Date().toISOString() };
+      this.conversation.add(assistantTurn);
+      this.forkManager.addTurn(assistantTurn);
+      this.rollout.append({ type: "turn", timestamp: assistantTurn.timestamp, data: assistantTurn });
+      this.lastAgent = agentName;
+
+      // Detect handoff
+      const handoffMatch = lastText.match(/(?:\ucf54\ub354|\ucf54\ub354|coder|\uac1c\ubc1c\s*\uc5d0\uc774\uc804\ud2b8).*\ub9e1\uae38\uac8c|hand(?:off|ing).*(?:to|over)\s+(\w+)/i);
+      if (handoffMatch && toolUseCount <= 2) {
+        const targetAgent = handoffMatch[1]?.toLowerCase() ?? "coder";
+        const targetProfile = this.orchestrator.getRegistry().get(targetAgent);
+        if (targetProfile) {
+          r.info(`Handoff \u2192 @${targetAgent.charAt(0).toUpperCase() + targetAgent.slice(1)}`);
+          this.pinnedAgent = targetAgent;
+          this.stickyAgent = targetAgent;
+          const handoffCancellation = new CancellationToken();
+          this.currentCancellation = handoffCancellation;
+          this.handleNaturalInput(input, handoffCancellation, targetAgent).catch(() => {});
+          return;
         }
       }
     }
