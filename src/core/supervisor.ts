@@ -859,6 +859,21 @@ export class Supervisor {
       // Classify error before deciding retry strategy
       const isTransient = /529|503|429|overloaded|rate.limit|timeout/i.test(lastError ?? "");
       const isAuth = /401|403|unauthorized|forbidden|invalid.key/i.test(lastError ?? "");
+      const isContextExhausted = /context|token|limit|overflow|prompt.*too.*long/i.test(lastError ?? "");
+
+      if (isContextExhausted) {
+        // Context exhaustion: classify and let recovery manager decide
+        const failureType = this.deps.recoveryManager.classifyFailure(lastError ?? "", { taskId: subtask.id });
+        const decision = this.deps.recoveryManager.decide(subtask.id, failureType);
+        eventBus.publish({
+          type: "feedback:recovery",
+          workerId: `worker-${subtask.id.slice(0, 8)}`,
+          subtaskId: subtask.id,
+          failureType,
+          action: decision.action,
+        });
+        if (decision.action === "skip") break;
+      }
 
       if (isAuth) {
         // Don't retry — permanent error

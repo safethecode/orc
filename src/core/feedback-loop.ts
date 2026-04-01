@@ -621,6 +621,7 @@ export class FeedbackLoop {
       { pattern: /npm ERR!|bun install.*failed/i, label: "Package install failure" },
       { pattern: /FATAL|panic|segfault/i, label: "Fatal error" },
       { pattern: /compilation? (?:error|failed)|build failed/i, label: "Build failure" },
+      { pattern: /prompt.*too.*long|context.*(?:limit|overflow|exhausted)|token.*limit/i, label: "Context exhausted" },
     ];
 
     for (const { pattern, label } of patterns) {
