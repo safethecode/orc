@@ -617,7 +617,7 @@ export class ReplController {
       resumeSession: sessionId,
     });
 
-    await this.executeWithRetry(execCmd, agentName, route, profile, providerConfig, systemPrompt, execPrompt, mcpConfigPath, cancellation, input, sessionId);
+    await this.executeWithRetry(execCmd, agentName, route, profile, providerConfig, systemPrompt, execPrompt, mcpConfigPath, cancellation, input, sessionId, true);
   }
 
   /** Execute agent via query loop state machine */
@@ -633,6 +633,7 @@ export class ReplController {
     cancellation: CancellationToken,
     input: string,
     sessionId?: string,
+    isResume?: boolean,
   ): Promise<void> {
     const r = this.renderer;
     const enforcer = this.orchestrator.getHarnessEnforcer();
@@ -712,13 +713,18 @@ export class ReplController {
       {
         prompt: fullPrompt,
         buildCommand: (_messages, state) => {
+          // Use --resume if: (a) resuming a prior phase's session, or
+          // (b) a previous turn already created this session
+          const shouldResume = isResume || state.sessionId != null;
           return buildCommand(providerConfig, profile, {
             prompt: fullPrompt,
             model: profile.model,
             systemPrompt,
             maxTurns: profile.maxTurns,
             mcpConfig: mcpConfigPath,
-            sessionId: currentSessionId,
+            ...(shouldResume
+              ? { resumeSession: currentSessionId }
+              : { sessionId: currentSessionId }),
           });
         },
         signal: cancellation.signal,
